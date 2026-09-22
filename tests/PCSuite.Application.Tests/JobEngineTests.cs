@@ -141,14 +141,17 @@ public sealed class JobEngineTests
     }
 
     [Fact]
-    public async Task RunAsync_RequiresElevation_FailsJobWithTask005Message()
+    public async Task RunAsync_RequiresElevation_FailsJobWithControlledMessage()
     {
+        // Task 005: la validación de elevación se aplica antes de lanzar; el
+        // motor adjunta siempre callbacks de línea y la elevación los rechaza.
         var (engine, _, _) = Create();
         var request = new ProcessRequest { FileName = "pcsuite-mock", RequiresElevation = true };
 
         var job = await engine.RunAsync("mock.elevated", request);
 
         Assert.Equal(JobStatus.Failed, job.Status);
-        Assert.Contains("Task 005", job.Error);
+        Assert.Contains("callbacks", job.Error);
+        Assert.DoesNotContain("   at ", job.Error);
     }
 }

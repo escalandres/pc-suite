@@ -17,8 +17,10 @@ public sealed record ProcessRequest
     public TimeSpan? Timeout { get; init; }
 
     /// <summary>
-    /// Reservado para la Task 005 (Elevation Framework). El runner actual
-    /// rechaza estas solicitudes: la app jamás se ejecuta elevada por completo.
+    /// Elevación por operación (Task 005): ShellExecute con "runas" — el
+    /// prompt UAC lo genera Windows—, sin redirección de streams ni modo
+    /// interactivo, y FileName obligatoriamente en ruta absoluta. La app
+    /// completa jamás corre elevada.
     /// </summary>
     public bool RequiresElevation { get; init; }
 

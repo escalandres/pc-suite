@@ -15,4 +15,13 @@ public static class BridgeErrorCodes
     public const string UpdateFailed = "UPDATE_FAILED";
     public const string UpdateTimeout = "UPDATE_TIMEOUT";
     public const string LaunchFailed = "LAUNCH_FAILED";
+
+    // Códigos del marco de elevación (Task 005): describen el resultado de
+    // pedir UAC y del IPC con el proceso elevado, siempre sin stack traces.
+    public const string ElevationCancelled = "ELEVATION_CANCELLED";
+    public const string ElevationTimeout = "ELEVATION_TIMEOUT";
+    public const string ElevationFailed = "ELEVATION_FAILED";
+
+    /// <summary>Identidad de cliente o token de sesión IPC no válidos.</summary>
+    public const string Unauthorized = "UNAUTHORIZED";
 }

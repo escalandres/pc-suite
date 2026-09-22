@@ -147,14 +147,16 @@ public sealed class ProcessRunnerTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_RequiresElevation_IsRejected()
+    public async Task ExecuteAsync_RequiresElevation_ConRutaRelativa_SinLanzar()
     {
+        // Task 005: la validación de elevación ocurre antes de tocar el SO
+        // (rutas relativas se rechazan sin llegar a mostrar UAC).
         var request = new ProcessRequest { FileName = "pcsuite-mock", RequiresElevation = true };
 
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
             () => Runner.ExecuteAsync(request, CancellationToken.None));
 
-        Assert.Contains("Task 005", exception.Message);
+        Assert.Contains("absoluta", exception.Message);
     }
 
     [Fact]

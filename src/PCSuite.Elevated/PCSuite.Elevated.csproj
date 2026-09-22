@@ -1,7 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <!-- El helper reutiliza registro/operaciones/IPC tal cual los define
+         Infrastructure: una sola copia de la lógica de la lista blanca. -->
+    <ProjectReference Include="..\PCSuite.Infrastructure\PCSuite.Infrastructure.csproj" />
+  </ItemGroup>
+
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- WinExe: sin ventana de consola parpadeando mientras vive el hijo. -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

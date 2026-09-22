@@ -37,8 +37,8 @@ dotnet run --project src/PCSuite.Desktop
 
 La app abre una ventana de escritorio con la pantalla Inicio de PCSuite.
 
-**Nunca ejecutar la app como Administrador.** La elevación es por operación y
-llega en la Task 005.
+**Nunca ejecutar la app como Administrador.** La elevación es puntual, por
+operación y con UAC (ver «Elevación por operación» más abajo).
 
 ### Desarrollo (hot reload de la UI)
 
@@ -65,7 +65,7 @@ El proceso de escritorio es el centro; todo lo demás son sus capas:
 | `PCSuite.Core` | Abstracciones: `IOperation`, `OperationContext`, `OperationResult` |
 | `PCSuite.Application` | `CommandRouter`: enrutado de operaciones con allow-list, nunca lanza excepciones |
 | `PCSuite.Infrastructure` | Logging a archivo y operaciones concretas (`system.info`) |
-| `PCSuite.Elevated` | Proceso auxiliar para operaciones elevadas (Task 005) |
+| `PCSuite.Elevated` | Proceso auxiliar elevado (UAC) para operaciones puntuales |
 | `tests/PCSuite.Application.Tests` | Tests xUnit |
 | `frontend/` | UI embebida (React + TS + Tailwind v4/Vite); compila a `dist/` para el WebView2 |
 
@@ -88,14 +88,37 @@ desarrollador: `NOT_SUPPORTED`, `NOT_INSTALLED`, `ELEVATION_REQUIRED`,
 `UPDATE_FAILED`, `UPDATE_TIMEOUT`, `LAUNCH_FAILED`.
 La UI jamás muestra stack traces.
 
+### Elevación por operación (Task 005)
+
+La app **nunca** se ejecuta como Administrador: cada operación que lo exige se
+eleva puntualmente vía UAC (verb `runas`; el diálogo lo genera Windows — la app
+no lo simula ni lo automatiza):
+
+- `IElevationManager` (Core) lanza `PCSuite.Elevated.exe` **solo** si el
+  identificador está en la allow-list `ElevatedOperationIds`: las operaciones
+  desconocidas se rechazan en el proceso padre con **cero** prompts UAC.
+- El proceso elevado (auxiliar de vida corta) expone un pipe nombrado con ACL
+  restringida al SID del usuario actual (una sola instancia), valida la
+  identidad del cliente y un nonce de 32 bytes comparado en tiempo constante,
+  y habla JSON-lines con tope de 1 MiB por mensaje. No existe shell genérico:
+  solo las operaciones registradas en el hijo pueden ejecutarse.
+- Operación PoC: `elevated.adminInfo` (solo lectura: usuario, grupos del
+  token y si el token elevado es administrador real).
+- Códigos de error del protocolo elevado: `ELEVATION_CANCELLED`,
+  `ELEVATION_TIMEOUT`, `ELEVATION_FAILED` y `UNAUTHORIZED`.
+
+Los tests cubren autorización, allow-list, payload inválido, framing/tope e
+IPC completo (servidor y cliente en el mismo proceso, sin pasar por UAC).
+
 ## Tests
 
 ```powershell
 dotnet test PCSuite.sln
 ```
 
-Cubren serialización del protocolo, enrutado del comando y la operación
-`system.info` (incluida la política de allow-list).
+Cubren serialización del protocolo (puente y elevación), enrutado con
+allow-list, el motor de procesos/jobs, los providers de desarrollador, las
+herramientas y el framework de elevación (autorización, IPC, payload inválido).
 
 ## Logs
 

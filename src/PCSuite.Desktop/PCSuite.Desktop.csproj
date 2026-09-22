@@ -5,6 +5,11 @@
     <ProjectReference Include="..\PCSuite.Infrastructure\PCSuite.Infrastructure.csproj" />
     <ProjectReference Include="..\PCSuite.Core\PCSuite.Core.csproj" />
     <ProjectReference Include="..\PCSuite.Contracts\PCSuite.Contracts.csproj" />
+
+    <!-- Solo para orden de build: el helper se copia junto al ejecutable
+         más abajo (Task 005); su ensamblado no se referencia. -->
+    <ProjectReference Include="..\PCSuite.Elevated\PCSuite.Elevated.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,5 +23,17 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+
+  <!-- Task 005: PCSuite.Elevated.exe debe quedar al lado de la app para que
+       ElevationManager pueda lanzarlo con runas (misma configuración). -->
+  <Target Name="CopyElevatedHelper" AfterTargets="Build">
+    <ItemGroup>
+      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0\**\*.*"
+                            Exclude="..\PCSuite.Elevated\bin\$(Configuration)\net10.0\**\*.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ElevatedHelperFiles)"
+          DestinationFiles="@(_ElevatedHelperFiles->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>
