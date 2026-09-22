@@ -2,10 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-// En producción el backend sirve frontend/dist mediante el host virtual
-// https://app.pcsuite.local. En desarrollo (PCSUITE_DEV_URL) se usa el
-// dev server de Vite con HMR. base './' mantiene rutas relativas para
-// que el WebView cargue https://app.pcsuite.local/index.html sin fallos.
+// La app de escritorio (host WebView2) sirve frontend/dist mediante el host
+// virtual https://app.pcsuite.local. En desarrollo (PCSUITE_DEV_URL) se usa el
+// dev server de Vite con HMR solo para iterar la UI. base './' mantiene rutas
+// relativas para que el WebView cargue https://app.pcsuite.local/index.html.
 export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],

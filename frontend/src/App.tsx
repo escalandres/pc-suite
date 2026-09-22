@@ -11,7 +11,7 @@ export default function App() {
   // Al cargar, informa disponibilidad del host y escucha app.ready.
   useEffect(() => {
     if (!bridge.isNativeHostAvailable) {
-      setReadyNotice('Modo navegador: el host nativo no está disponible.');
+      setReadyNotice('UI sin host nativo: abre la app de escritorio de PCSuite.');
       return;
     }
 
