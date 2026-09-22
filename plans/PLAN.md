@@ -11,7 +11,7 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 |---|---|---|
 | Task 001 — Bootstrap de la app de escritorio (sln + 6 proyectos .NET 10 + WebView2 + puente `getSystemInfo` + Home + logging + tests) | ✅ Completado | 2026-09-21 |
 | Task 002 — Tool Framework (ITool, IModule, ToolRegistry, ToolSearchService + JSON Formatter, UUID, Base64, Hash, Password Generator) | ✅ Completado | 2026-09-22 |
-| Task 003 — Process & Job Engine (IProcessRunner, IJobManager, IJobEventPublisher) | ⏳ Pendiente | — |
+| Task 003 — Process & Job Engine (IProcessRunner, IJobManager, IJobEventPublisher) | ✅ Completada | 2026-09-22 |
 | Task 004 — Developer Providers (Node, npm, pnpm, Bun, Claude Code — detección y versión) | ⏳ Pendiente | — |
 | Task 005 — Elevation Framework (IElevationManager, PCSuite.Elevated, PoC + tests de seguridad) | ⏳ Pendiente | — |
 | Task 006 — WinGet (IWinGetService, operaciones estructuradas, UAC) | ⏳ Pendiente | — |

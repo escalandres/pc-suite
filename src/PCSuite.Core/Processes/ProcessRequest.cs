@@ -1,0 +1,30 @@
+namespace PCSuite.Core.Processes;
+
+/// <summary>
+/// Solicitud tipada de ejecución de un proceso. Los argumentos viajan como
+/// lista (se pasan al sistema sin pasar por un shell: sin injection de
+/// comandos). Los callbacks permiten recibir la salida en streaming.
+/// </summary>
+public sealed record ProcessRequest
+{
+    public required string FileName { get; init; }
+
+    public IReadOnlyList<string> Arguments { get; init; } = [];
+
+    public string? WorkingDirectory { get; init; }
+
+    /// <summary>Si el proceso excede este tiempo, se termina y se lanza <see cref="ProcessTimeoutException"/>.</summary>
+    public TimeSpan? Timeout { get; init; }
+
+    /// <summary>
+    /// Reservado para la Task 005 (Elevation Framework). El runner actual
+    /// rechaza estas solicitudes: la app jamás se ejecuta elevada por completo.
+    /// </summary>
+    public bool RequiresElevation { get; init; }
+
+    /// <summary>Se invoca por cada línea de stdout conforme llega (streaming).</summary>
+    public Action<string>? OnStandardOutput { get; init; }
+
+    /// <summary>Se invoca por cada línea de stderr conforme llega (streaming).</summary>
+    public Action<string>? OnStandardError { get; init; }
+}

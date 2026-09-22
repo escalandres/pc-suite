@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\PCSuite.Core\PCSuite.Core.csproj" />
     <ProjectReference Include="..\..\src\PCSuite.Contracts\PCSuite.Contracts.csproj" />
     <ProjectReference Include="..\..\src\PCSuite.Infrastructure\PCSuite.Infrastructure.csproj" />
+    <ProjectReference Include="..\PCSuite.MockProcess\PCSuite.MockProcess.csproj" />
   </ItemGroup>
 
 </Project>
