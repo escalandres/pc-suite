@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { AppLayout } from './layouts/AppLayout';
+import type { PageId } from './layouts/AppLayout';
 import { Home } from './pages/Home';
-import { bridge, BridgeError } from './services/pcsuiteBridge';
+import { Tools } from './pages/Tools';
+import { bridge } from './services/pcsuiteBridge';
 import type { AppReadyEvent } from './types/bridge';
 import { EventIds } from './types/bridge';
 
 export default function App() {
+  const [page, setPage] = useState<PageId>('home');
   const [readyNotice, setReadyNotice] = useState<string | null>(null);
 
   // Al cargar, informa disponibilidad del host y escucha app.ready.
@@ -23,10 +26,8 @@ export default function App() {
   }, []);
 
   return (
-    <AppLayout readyNotice={readyNotice}>
-      <Home />
+    <AppLayout page={page} onNavigate={setPage} readyNotice={readyNotice}>
+      {page === 'tools' ? <Tools /> : <Home />}
     </AppLayout>
   );
 }
-
-export { BridgeError };

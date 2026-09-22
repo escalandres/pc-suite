@@ -46,8 +46,33 @@ export interface AppReadyEvent {
 
 export const OperationIds = {
   systemInfo: 'system.info',
+  toolsList: 'tools.list',
+  toolsSearch: 'tools.search',
+  toolExecute: 'tool.execute',
 } as const;
 
 export const EventIds = {
   appReady: 'app.ready',
 } as const;
+
+/** Metadato de una tool tal como lo devuelve el nativo. */
+export interface ToolInfo {
+  id: string;
+  moduleId: string;
+  name: string;
+  description: string;
+  keywords: string[];
+  /** Ejemplo de payload para precargar la UI genérica. */
+  exampleInput?: unknown;
+}
+
+/** Resultado de tools.list / tools.search. */
+export interface ToolCollectionResult {
+  tools: ToolInfo[];
+}
+
+/** Resultado de tool.execute. */
+export interface ToolExecuteResult {
+  toolId: string;
+  output?: unknown;
+}

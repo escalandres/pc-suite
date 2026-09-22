@@ -5,15 +5,20 @@ import {
   Wrench,
   Terminal,
   Puzzle,
+  Sparkles,
 } from 'lucide-react';
+
+export type PageId = 'home' | 'tools' | 'cleaner' | 'security' | 'devtools' | 'plugins';
 
 interface AppLayoutProps {
   children: ReactNode;
+  page: PageId;
+  onNavigate: (page: PageId) => void;
   readyNotice?: string | null;
 }
 
 interface NavItem {
-  id: string;
+  id: PageId;
   label: string;
   icon: typeof Home;
   enabled: boolean;
@@ -21,17 +26,18 @@ interface NavItem {
 
 /**
  * Layout principal (plan §17.2): sidebar de navegación + área de contenido.
- * Los módulos no implementados quedan deshabilitados hasta su task.
+ * Solo las páginas implementadas están habilitadas.
  */
 const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Inicio', icon: Home, enabled: true },
-  { id: 'cleaner', label: 'Limpiador', icon: Wrench, enabled: false },
+  { id: 'tools', label: 'Herramientas', icon: Wrench, enabled: true },
+  { id: 'cleaner', label: 'Limpiador', icon: Sparkles, enabled: false },
   { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: false },
   { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: false },
   { id: 'plugins', label: 'Plugins', icon: Puzzle, enabled: false },
 ];
 
-export function AppLayout({ children, readyNotice }: AppLayoutProps) {
+export function AppLayout({ children, page, onNavigate, readyNotice }: AppLayoutProps) {
   return (
     <div className="flex h-full min-h-screen">
       {/* Sidebar */}
@@ -52,23 +58,29 @@ export function AppLayout({ children, readyNotice }: AppLayoutProps) {
         <nav className="flex-1 space-y-1 px-2">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
+            const active = item.id === page;
             return (
               <button
                 key={item.id}
                 type="button"
                 disabled={!item.enabled}
-                aria-current={item.id === 'home' ? 'page' : undefined}
+                aria-current={active ? 'page' : undefined}
+                onClick={() => item.enabled && onNavigate(item.id)}
                 className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors disabled:opacity-40"
-                style={
-                  item.enabled
-                    ? { color: 'var(--pcs-text)' }
-                    : { color: 'var(--pcs-text-muted)', cursor: 'not-allowed' }
-                }
+                style={{
+                  color: item.enabled
+                    ? active
+                      ? '#fff'
+                      : 'var(--pcs-text)'
+                    : 'var(--pcs-text-muted)',
+                  cursor: item.enabled ? 'pointer' : 'not-allowed',
+                  background: active ? 'var(--pcs-accent)' : 'transparent',
+                }}
                 onMouseEnter={(e) => {
-                  if (item.enabled) e.currentTarget.style.background = 'var(--pcs-surface-2)';
+                  if (item.enabled && !active) e.currentTarget.style.background = 'var(--pcs-surface-2)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
+                  if (!active) e.currentTarget.style.background = 'transparent';
                 }}
               >
                 <Icon size={16} aria-hidden />
@@ -93,7 +105,7 @@ export function AppLayout({ children, readyNotice }: AppLayoutProps) {
 
       {/* Contenido */}
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-8 py-8">{children}</div>
+        <div className="mx-auto max-w-6xl px-8 py-8">{children}</div>
       </main>
     </div>
   );

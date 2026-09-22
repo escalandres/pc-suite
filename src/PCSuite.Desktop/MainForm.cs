@@ -2,11 +2,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using PCSuite.Application;
+using PCSuite.Application.Tools;
 using PCSuite.Contracts;
 using PCSuite.Desktop.Bridge;
 using PCSuite.Infrastructure;
 using PCSuite.Infrastructure.Logging;
 using PCSuite.Infrastructure.Operations;
+using PCSuite.Infrastructure.Tools;
 
 namespace PCSuite.Desktop;
 
@@ -61,8 +63,20 @@ public partial class MainForm : Form
         });
 
         _logger = _loggerFactory.CreateLogger<MainForm>();
+
+        // Tool Framework (Task 002): registro + búsqueda; la UI descubre
+        // las tools por metadatos y nunca las tiene hardcodeadas.
+        var toolRegistry = new ToolRegistry();
+        toolRegistry.RegisterModule(new ToolsModule());
+        var toolSearch = new ToolSearchService(toolRegistry);
+
         _router = new CommandRouter(
-            [new GetSystemInfoOperation()],
+            [
+                new GetSystemInfoOperation(),
+                new ToolsListOperation(toolRegistry),
+                new ToolsSearchOperation(toolSearch),
+                new ToolExecuteOperation(toolRegistry),
+            ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());
 
