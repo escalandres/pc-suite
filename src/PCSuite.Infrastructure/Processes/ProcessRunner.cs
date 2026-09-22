@@ -22,6 +22,16 @@ public sealed class ProcessRunner : IProcessRunner
             throw new ArgumentException("FileName no puede estar vacío.", nameof(request));
         }
 
+        if (request.Interactive &&
+            (request.Timeout is not null || request.OnStandardOutput is not null || request.OnStandardError is not null))
+        {
+            // El modo interactivo no redirige: no hay streams que leer con
+            // timeout ni callbacks que notificar.
+            throw new ArgumentException(
+                "Interactive no admite timeout ni callbacks de línea.",
+                nameof(request));
+        }
+
         if (request.RequiresElevation)
         {
             // La elevación llega con la Task 005; jamás elevamos por nuestra cuenta.
@@ -37,9 +47,13 @@ public sealed class ProcessRunner : IProcessRunner
         {
             FileName = request.FileName,
             UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
+
+            // Interactive: sin redirección y con ventana de consola propia
+            // (creada aquí o heredada), para que la herramienta hable con el
+            // usuario directamente. El resto de solicitudes son invisibles.
+            RedirectStandardOutput = !request.Interactive,
+            RedirectStandardError = !request.Interactive,
+            CreateNoWindow = !request.Interactive,
             WorkingDirectory = request.WorkingDirectory ?? "",
         };
 
@@ -61,8 +75,15 @@ public sealed class ProcessRunner : IProcessRunner
 
         var stdoutBuffer = new StringBuilder();
         var stderrBuffer = new StringBuilder();
-        var stdoutPump = PumpAsync(process.StandardOutput, stdoutBuffer, request.OnStandardOutput);
-        var stderrPump = PumpAsync(process.StandardError, stderrBuffer, request.OnStandardError);
+
+        // En modo interactivo no hay streams propias que bombear (la salida
+        // va a la consola del proceso); los pumps quedan completados.
+        var stdoutPump = request.Interactive
+            ? Task.CompletedTask
+            : PumpAsync(process.StandardOutput, stdoutBuffer, request.OnStandardOutput);
+        var stderrPump = request.Interactive
+            ? Task.CompletedTask
+            : PumpAsync(process.StandardError, stderrBuffer, request.OnStandardError);
 
         try
         {

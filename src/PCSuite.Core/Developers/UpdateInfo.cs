@@ -1,9 +1,9 @@
 namespace PCSuite.Core.Developers;
 
 /// <summary>
-/// Información de una comprobación de actualización. La Task 004 solo
-/// detecta e informa versión; este modelo se usará cuando se implementen
-/// las actualizaciones.
+/// Información de una comprobación de actualización de una herramienta de
+/// desarrollador: versión instalada, última publicada y si hay actualización
+/// disponible.
 /// </summary>
 public sealed class UpdateInfo
 {

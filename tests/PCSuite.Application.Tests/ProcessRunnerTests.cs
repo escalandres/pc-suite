@@ -165,4 +165,49 @@ public sealed class ProcessRunnerTests
         await Assert.ThrowsAsync<ArgumentException>(
             () => Runner.ExecuteAsync(request, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task ExecuteAsync_Interactive_DoesNotCaptureStreams()
+    {
+        // Sin redirección, la salida va a la consola heredada — en la app
+        // WinForms de producción (sin consola propia), a la ventana de consola
+        // que se abre para la herramienta — por lo que el resultado está vacío.
+        var result = await Runner.ExecuteAsync(
+            MockProcess.Request("all", "0") with { Interactive = true },
+            CancellationToken.None);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("", result.StandardOutput);
+        Assert.Equal("", result.StandardError);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_InteractiveWithTimeout_ThrowsArgumentException()
+    {
+        var request = MockProcess.Request("sleep", "100") with
+        {
+            Interactive = true,
+            Timeout = TimeSpan.FromSeconds(1),
+        };
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => Runner.ExecuteAsync(request, CancellationToken.None));
+
+        Assert.Contains("Interactive", exception.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_InteractiveWithCallback_ThrowsArgumentException()
+    {
+        var request = MockProcess.Request("echo", "x") with
+        {
+            Interactive = true,
+            OnStandardOutput = _ => { },
+        };
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => Runner.ExecuteAsync(request, CancellationToken.None));
+
+        Assert.Contains("Interactive", exception.Message);
+    }
 }

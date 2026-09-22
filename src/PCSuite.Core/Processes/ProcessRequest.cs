@@ -22,6 +22,15 @@ public sealed record ProcessRequest
     /// </summary>
     public bool RequiresElevation { get; init; }
 
+    /// <summary>
+    /// Lanzamiento interactivo visible (Task 004, "Launch where applicable"):
+    /// sin redirección de streams y con ventana de consola propia, para que la
+    /// herramienta se comunique directamente con el usuario (REPL, TUI).
+    /// Incompatible con <see cref="Timeout"/> y con los callbacks de línea
+    /// (el proceso vive hasta que el usuario lo cierre).
+    /// </summary>
+    public bool Interactive { get; init; }
+
     /// <summary>Se invoca por cada línea de stdout conforme llega (streaming).</summary>
     public Action<string>? OnStandardOutput { get; init; }
 
