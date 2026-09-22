@@ -1,0 +1,195 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+using PCSuite.Application;
+using PCSuite.Contracts;
+using PCSuite.Desktop.Bridge;
+using PCSuite.Infrastructure;
+using PCSuite.Infrastructure.Logging;
+using PCSuite.Infrastructure.Operations;
+
+namespace PCSuite.Desktop;
+
+/// <summary>
+/// Main window. Hosts WebView2, wires the message bridge to the command
+/// router and loads the local React frontend. Runs unprivileged.
+/// </summary>
+public partial class MainForm : Form
+{
+    private const string VirtualHost = "app.pcsuite.local";
+
+    private const string MissingFrontendHtml = """
+        <!doctype html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>PCSuite</title>
+          <style>
+            body { font-family: "Segoe UI", system-ui, sans-serif; background: #0d1117; color: #e6edf3;
+                   display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+            .box { text-align: center; max-width: 32rem; padding: 2rem; }
+            code { background: #161b22; color: #4c8dff; padding: .15rem .4rem; border-radius: 4px; }
+            h1 { font-weight: 600; }
+            p { color: #8b949e; line-height: 1.6; }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <h1>Frontend not built</h1>
+            <p>Build the React frontend and restart PCSuite:</p>
+            <p><code>npm --prefix frontend install</code><br /><code>npm --prefix frontend run build</code></p>
+          </div>
+        </body>
+        </html>
+        """;
+
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger<MainForm> _logger;
+    private readonly CommandRouter _router;
+    private readonly WebViewBridge _bridge;
+    private readonly WebView2 _webView;
+    private readonly List<string> _allowedOrigins = [];
+
+    public MainForm()
+    {
+        InitializeComponent();
+
+        _loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Information);
+            builder.AddProvider(new FileLoggerProvider(PCSuitePaths.LogDirectory));
+        });
+
+        _logger = _loggerFactory.CreateLogger<MainForm>();
+        _router = new CommandRouter(
+            [new GetSystemInfoOperation()],
+            _loggerFactory.CreateLogger<CommandRouter>());
+        _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());
+
+        _webView = new WebView2 { Dock = DockStyle.Fill };
+        Controls.Add(_webView);
+
+        _logger.LogInformation("PCSuite {Version} starting.", AppInfo.Version);
+    }
+
+    protected override async void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+
+        try
+        {
+            await InitializeWebViewAsync();
+        }
+        catch (WebView2RuntimeNotFoundException)
+        {
+            _logger.LogCritical("WebView2 runtime is not installed.");
+            MessageBox.Show(
+                this,
+                "PCSuite requires the Microsoft Edge WebView2 Runtime.\n\n"
+                    + "Install it from https://developer.microsoft.com/microsoft-edge/webview2/ and try again.",
+                "PCSuite",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            Close();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogCritical(exception, "WebView2 initialization failed.");
+            MessageBox.Show(
+                this,
+                "PCSuite could not initialize the interface. See logs for details.",
+                "PCSuite",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            Close();
+        }
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        _logger.LogInformation("PCSuite stopping.");
+        _loggerFactory.Dispose();
+        base.OnFormClosed(e);
+    }
+
+    private async Task InitializeWebViewAsync()
+    {
+        await _webView.EnsureCoreWebView2Async();
+
+        var core = _webView.CoreWebView2;
+        core.Settings.AreDefaultContextMenusEnabled = false;
+        core.Settings.IsStatusBarEnabled = false;
+#if !DEBUG
+        core.Settings.AreDevToolsEnabled = false;
+#endif
+        core.NewWindowRequested += (_, args) => args.Handled = true;
+
+        core.NavigationStarting += (_, args) =>
+        {
+            if (!IsAllowedNavigation(args.Uri))
+            {
+                _logger.LogWarning("Blocked navigation to {Uri}", args.Uri);
+                args.Cancel = true;
+            }
+        };
+
+        core.NavigationCompleted += (_, args) =>
+        {
+            if (args.IsSuccess)
+            {
+                _bridge.SendEvent(
+                    EventIds.AppReady,
+                    new AppReadyEvent
+                    {
+                        AppVersion = AppInfo.Version,
+                        Timestamp = DateTimeOffset.Now,
+                    });
+            }
+        };
+
+        var devUrl = Environment.GetEnvironmentVariable("PCSUITE_DEV_URL")?.TrimEnd('/');
+        if (!string.IsNullOrWhiteSpace(devUrl))
+        {
+            _allowedOrigins.Add(devUrl);
+            _bridge.Attach(core, _allowedOrigins);
+            _logger.LogInformation("Loading frontend from dev server {Url}", devUrl);
+            core.Navigate(devUrl);
+            return;
+        }
+
+        var distDirectory = FrontendLocator.FindDistDirectory();
+        if (distDirectory is null)
+        {
+            _logger.LogError("Frontend build not found. Run 'npm --prefix frontend run build'.");
+            core.NavigateToString(MissingFrontendHtml);
+            return;
+        }
+
+        core.SetVirtualHostNameToFolderMapping(
+            VirtualHost,
+            distDirectory,
+            CoreWebView2HostResourceAccessKind.Allow);
+
+        var origin = $"https://{VirtualHost}";
+        _allowedOrigins.Add(origin);
+        _bridge.Attach(core, _allowedOrigins);
+        _logger.LogInformation("Loading frontend from {Directory}", distDirectory);
+        core.Navigate($"{origin}/index.html");
+    }
+
+    private bool IsAllowedNavigation(string uri)
+    {
+        // Placeholder page (no origins configured yet) allows anything it shows.
+        if (_allowedOrigins.Count == 0)
+        {
+            return true;
+        }
+
+        if (uri.StartsWith("about:blank", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return _allowedOrigins.Any(origin => BridgeOriginPolicy.Matches(uri, origin));
+    }
+}

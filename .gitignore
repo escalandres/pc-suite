@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+.vs/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
