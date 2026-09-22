@@ -16,4 +16,16 @@ public static class OperationIds
 
     /// <summary>Ejecuta una tool por su id con un payload tipado.</summary>
     public const string ToolExecute = "tool.execute";
+
+    /// <summary>Estado (instalación, versión, ruta) de las tools de desarrollador.</summary>
+    public const string DeveloperList = "developer.list";
+
+    /// <summary>Comprueba actualizaciones de una tool de desarrollador.</summary>
+    public const string DeveloperCheckUpdate = "developer.checkUpdate";
+
+    /// <summary>Ejecuta el self-update nativo de una tool de desarrollador.</summary>
+    public const string DeveloperUpdate = "developer.update";
+
+    /// <summary>Lanza la interfaz interactiva (REPL/TUI) de una tool.</summary>
+    public const string DeveloperLaunch = "developer.launch";
 }

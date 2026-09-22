@@ -49,6 +49,10 @@ export const OperationIds = {
   toolsList: 'tools.list',
   toolsSearch: 'tools.search',
   toolExecute: 'tool.execute',
+  developerList: 'developer.list',
+  developerCheckUpdate: 'developer.checkUpdate',
+  developerUpdate: 'developer.update',
+  developerLaunch: 'developer.launch',
 } as const;
 
 export const EventIds = {
@@ -75,4 +79,32 @@ export interface ToolCollectionResult {
 export interface ToolExecuteResult {
   toolId: string;
   output?: unknown;
+}
+
+/** Una herramienta de desarrollador tal como la devuelve developer.list. */
+export interface DeveloperToolInfo {
+  /** Id estable (node, npm, pnpm, bun, claude-code). */
+  id: string;
+  name: string;
+  isInstalled: boolean;
+  /** Ausente si es desconocida (WhenWritingNull del puente). */
+  version?: string | null;
+  /** Ausente si no está instalada. */
+  path?: string | null;
+}
+
+/** Resultado de developer.list. */
+export interface DeveloperCollectionResult {
+  tools: DeveloperToolInfo[];
+}
+
+/** Resultado de developer.checkUpdate. */
+export interface UpdateCheckResult {
+  toolId: string;
+  currentVersion?: string | null;
+  /** Ausente si la comprobación degradó (sin red / sin fuente). */
+  latestVersion?: string | null;
+  updateAvailable: boolean;
+  /** false: sin fuente de updates conocida o comprobación degradada. */
+  supported: boolean;
 }

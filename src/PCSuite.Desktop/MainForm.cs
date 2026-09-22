@@ -2,12 +2,15 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using PCSuite.Application;
+using PCSuite.Application.Developers;
 using PCSuite.Application.Tools;
 using PCSuite.Contracts;
 using PCSuite.Desktop.Bridge;
 using PCSuite.Infrastructure;
+using PCSuite.Infrastructure.Developers;
 using PCSuite.Infrastructure.Logging;
 using PCSuite.Infrastructure.Operations;
+using PCSuite.Infrastructure.Processes;
 using PCSuite.Infrastructure.Tools;
 
 namespace PCSuite.Desktop;
@@ -70,12 +73,28 @@ public partial class MainForm : Form
         toolRegistry.RegisterModule(new ToolsModule());
         var toolSearch = new ToolSearchService(toolRegistry);
 
+        // Developer Providers (Task 004): un único runner sin shell sirve a
+        // los 5 proveedores; los ids registrados aquí son los únicos que la
+        // UI puede invocar vía developer.*.
+        var processRunner = new ProcessRunner();
+        var locator = new ExecutableLocator();
+        var developerRegistry = new DeveloperToolRegistry();
+        developerRegistry.Register(new NodeProvider(processRunner, locator));
+        developerRegistry.Register(new NpmProvider(processRunner, locator));
+        developerRegistry.Register(new PnpmProvider(processRunner, locator));
+        developerRegistry.Register(new BunProvider(processRunner, locator));
+        developerRegistry.Register(new ClaudeCodeProvider(processRunner, locator));
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
                 new ToolsListOperation(toolRegistry),
                 new ToolsSearchOperation(toolSearch),
                 new ToolExecuteOperation(toolRegistry),
+                new DeveloperListOperation(developerRegistry),
+                new DeveloperCheckUpdateOperation(developerRegistry),
+                new DeveloperUpdateOperation(developerRegistry),
+                new DeveloperLaunchOperation(developerRegistry),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

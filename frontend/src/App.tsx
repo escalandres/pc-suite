@@ -3,6 +3,7 @@ import { AppLayout } from './layouts/AppLayout';
 import type { PageId } from './layouts/AppLayout';
 import { Home } from './pages/Home';
 import { Tools } from './pages/Tools';
+import { DevTools } from './pages/DevTools';
 import { bridge } from './services/pcsuiteBridge';
 import type { AppReadyEvent } from './types/bridge';
 import { EventIds } from './types/bridge';
@@ -27,7 +28,7 @@ export default function App() {
 
   return (
     <AppLayout page={page} onNavigate={setPage} readyNotice={readyNotice}>
-      {page === 'tools' ? <Tools /> : <Home />}
+      {page === 'tools' ? <Tools /> : page === 'devtools' ? <DevTools /> : <Home />}
     </AppLayout>
   );
 }

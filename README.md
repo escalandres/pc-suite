@@ -77,11 +77,16 @@ La UI nunca toca el SO directamente; todo pasa por el puente:
 - Respuesta: `{"id", "success", "result?" | "error": {"code", "message"}}`
 - Evento (nativo → UI): `{"event", "payload?"}`
 
-Operaciones permitidas (Task 001): `system.info`.
+Operaciones permitidas (Tasks 001–004): `system.info`, `tools.list`,
+`tools.search`, `tool.execute`, `developer.list`, `developer.checkUpdate`,
+`developer.update`, `developer.launch`.
 Eventos: `app.ready`.
 
 Errores conocidos: `MALFORMED_MESSAGE`, `OPERATION_NOT_FOUND`,
-`OPERATION_FAILED`, `INTERNAL_ERROR`. La UI jamás muestra stack traces.
+`OPERATION_FAILED`, `INTERNAL_ERROR`, y los controlados de las tools de
+desarrollador: `NOT_SUPPORTED`, `NOT_INSTALLED`, `ELEVATION_REQUIRED`,
+`UPDATE_FAILED`, `UPDATE_TIMEOUT`, `LAUNCH_FAILED`.
+La UI jamás muestra stack traces.
 
 ## Tests
 

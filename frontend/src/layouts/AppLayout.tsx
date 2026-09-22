@@ -33,7 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'tools', label: 'Herramientas', icon: Wrench, enabled: true },
   { id: 'cleaner', label: 'Limpiador', icon: Sparkles, enabled: false },
   { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: false },
-  { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: false },
+  { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: true },
   { id: 'plugins', label: 'Plugins', icon: Puzzle, enabled: false },
 ];
 
