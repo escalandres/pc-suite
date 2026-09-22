@@ -16,6 +16,15 @@ presentación interna del programa de escritorio.
 
 ## Compilar y ejecutar
 
+**Opción rápida** — doble clic en `iniciar.bat` (compila frontend + .NET y
+lanza la ventana):
+
+```bat
+iniciar.bat
+```
+
+**Manualmente:**
+
 ```powershell
 # 1. Frontend (produce frontend/dist, la UI embebida)
 npm --prefix frontend install
