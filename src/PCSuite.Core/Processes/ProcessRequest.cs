@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace PCSuite.Core.Processes;
 
 /// <summary>
@@ -32,6 +34,15 @@ public sealed record ProcessRequest
     /// (el proceso vive hasta que el usuario lo cierre).
     /// </summary>
     public bool Interactive { get; init; }
+
+    /// <summary>
+    /// Codificación de la salida redirigida. null = comportamiento por omisión
+    /// del runtime (codepage OEM de la consola). Se declara cuando el CLI
+    /// escribe UTF-8 en la tubería (p. ej. winget): con la decodificación
+    /// OEM, cada acento se convierte en DOS glifos y DESPLAZA las columnas
+    /// de las tablas posicionales.
+    /// </summary>
+    public Encoding? OutputEncoding { get; init; }
 
     /// <summary>Se invoca por cada línea de stdout conforme llega (streaming).</summary>
     public Action<string>? OnStandardOutput { get; init; }

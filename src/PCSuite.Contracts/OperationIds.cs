@@ -28,4 +28,33 @@ public static class OperationIds
 
     /// <summary>Lanza la interfaz interactiva (REPL/TUI) de una tool.</summary>
     public const string DeveloperLaunch = "developer.launch";
+
+    // --- WinGet (Task 006 / Stage 7) -------------------------------------
+    // El frontend envía SIEMPRE payloads estructurados (p. ej. {"packageId"}):
+    // jamás una línea "winget …" arbitraria; .NET valida la entrada y construye
+    // los argumentos permitidos.
+
+    /// <summary>Detección: winget instalado/no, versión, ruta y si corre elevado.</summary>
+    public const string WingetDetect = "winget.detect";
+
+    /// <summary>Busca paquetes en el índice winget (payload: {"query"}).</summary>
+    public const string WingetSearch = "winget.search";
+
+    /// <summary>Lista de paquetes instalados desde el origen winget.</summary>
+    public const string WingetList = "winget.list";
+
+    /// <summary>Paquetes con actualización disponible.</summary>
+    public const string WingetUpdates = "winget.updates";
+
+    /// <summary>Instala un paquete (payload: {"packageId"}); puede pedir UAC.</summary>
+    public const string WingetInstall = "winget.install";
+
+    /// <summary>Actualiza un paquete concreto (payload: {"packageId"}); puede pedir UAC.</summary>
+    public const string WingetUpgrade = "winget.upgrade";
+
+    /// <summary>Actualiza todo lo actualizable; puede pedir UAC.</summary>
+    public const string WingetUpgradeAll = "winget.upgradeAll";
+
+    /// <summary>Desinstala un paquete (payload: {"packageId"}); puede pedir UAC.</summary>
+    public const string WingetUninstall = "winget.uninstall";
 }

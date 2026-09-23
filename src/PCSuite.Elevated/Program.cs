@@ -9,6 +9,7 @@
 //   nonce jamás se escribe en log ni en mensajes de error.
 
 using PCSuite.Infrastructure.Elevation;
+using PCSuite.Infrastructure.WinGet;
 
 namespace PCSuite.Elevated;
 
@@ -31,6 +32,14 @@ internal static class Program
 
         var registry = new ElevatedOperationRegistry();
         registry.Register(new AdminInfoElevatedOperation());
+
+        // Mutaciones winget (Task 006): cada kind su id allow-listed. El
+        // packageId del payload se REVALIDA en WinGetElevatedOperation y los
+        // argv se reconstruyen fijos: jamás ejecución arbitraria.
+        registry.Register(new WinGetElevatedOperation(WinGetMutationKind.Install));
+        registry.Register(new WinGetElevatedOperation(WinGetMutationKind.Upgrade));
+        registry.Register(new WinGetElevatedOperation(WinGetMutationKind.UpgradeAll));
+        registry.Register(new WinGetElevatedOperation(WinGetMutationKind.Uninstall));
 
         try
         {

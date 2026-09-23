@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace PCSuite.MockProcess;
 
@@ -14,6 +15,7 @@ namespace PCSuite.MockProcess;
 ///   echo &lt;args...&gt;      → imprime "arg:X" por cada argumento recibido
 ///   cwd                → imprime el directorio de trabajo actual
 ///   all &lt;code&gt;          → 2 líneas stdout + 1 stderr y sale con ese código
+///   utf8               → escribe bytes UTF-8 crudos en stdout (como winget)
 ///   (sin argumentos)    → "mock-process ready", sale con 0
 /// </summary>
 internal static class Program
@@ -61,6 +63,15 @@ internal static class Program
                 Console.WriteLine("stdout-line-2");
                 Console.Error.WriteLine("stderr-line-1");
                 return TryInt(args, 1, out var allExitCode) ? allExitCode : 64;
+
+            case "utf8":
+                // Bytes UTF-8 crudos por la tubería, saltándose el writer de
+                // texto de consola (codepage OEM): exactamente lo que hace
+                // winget. Decodificar con OutputEncoding = UTF8 da el texto
+                // original; sin él, mojibake.
+                await Console.OpenStandardOutput().WriteAsync(
+                    Encoding.UTF8.GetBytes("Versión 1.2.3 — muñeco\r\n"));
+                return 0;
 
             default:
                 Console.Error.WriteLine($"unknown verb: {args[0]}");

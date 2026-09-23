@@ -1,0 +1,99 @@
+Nombre                                                       Id                                 Versión             Disponible
+---------------------------------------------------------------------------------------------------------------------------------
+7-Zip 26.03 (x64)                                            7zip.7zip                          26.03               
+Bionic 1.1.4+3                                               ElementLabs.Bionic                 1.1.4+3             
+CCleaner 7                                                   Piriform.CCleaner                  7.11.1522.1958      
+ClamAV 1.5.4                                                 Cisco.ClamAV                       1.5.4               
+CrystalDiskInfo 9.9.2                                        CrystalDewWorld.CrystalDiskInfo    9.9.2               
+DirectX                                                      Microsoft.DirectX                  9.29.1974.0         
+DirectX                                                      Microsoft.DirectX                  9.29.1974.0         
+DiskInternals Linux Reader                                   DiskInternals.LinuxReader          5.2                 
+Docker Desktop                                               Docker.DockerDesktop               4.92.0              
+Epic Games Launcher                                          EpicGames.EpicGamesLauncher        1.3.193.0           
+Epic Online Services                                         EpicGames.EpicOnlineServices       4.0.1               4.3.1
+FFmpeg                                                       Gyan.FFmpeg                        9.0.2               
+Git                                                          Git.Git                            2.55.0.5            
+GitHub Desktop                                               GitHub.GitHubDesktop               3.6.6               
+Google Chrome                                                Google.Chrome.EXE                  153.0.8010.53       154.0.8037.58
+Inkscape                                                     Inkscape.Inkscape                  1.4.4               
+Inno Setup versión 6.7.3                                     JRSoftware.InnoSetup               6.7.3               
+Instalador de aplicación                                     Microsoft.AppInstaller             1.29.380.0          
+Java 8 Update 503 (64-bit)                                   Oracle.JavaRuntimeEnvironment      8.0.5030.1          
+LibreOffice 26.8.0.3                                         TheDocumentFoundation.LibreOffice  26.8.0.3            
+LM Studio 0.4.25+1                                           ElementLabs.LMStudio               0.4.25+1            
+Logi Options+                                                Logitech.OptionsPlus               2.8.978214          
+Microsoft .Net Native Runtime Package 2.2                    Microsoft.DotNet.Native.Runtime    2.2.28604.0         
+Microsoft .Net Native Runtime Package 2.2                    Microsoft.DotNet.Native.Runtime    2.2.28604.0         
+Microsoft .NET Runtime - 10.0.12 (x64)                       Microsoft.DotNet.Runtime.10        10.0.12             
+Microsoft .NET SDK 10.0.100 (x64)                            Microsoft.DotNet.SDK.10            10.0.100            
+Microsoft .NET SDK 10.0.300 (x64)                            Microsoft.DotNet.SDK.10            10.0.300            
+Microsoft .NET SDK 10.0.302 (x64)                            Microsoft.DotNet.SDK.10            10.0.302            
+Microsoft .NET SDK 10.0.401 (x64)                            Microsoft.DotNet.SDK.10            10.0.401            
+Microsoft 365 Copilot                                        Microsoft.365Copilot               19.2609.44031.0     
+Microsoft ASP.NET Core Runtime - 10.0.12 (x64)               Microsoft.DotNet.AspNetCore.10     10.0.12             
+Microsoft Edge                                               Microsoft.Edge                     153.0.4234.48       
+Microsoft GameInput                                          Microsoft.GameInput                3.5.274.0           
+Microsoft ODBC Driver 17 for SQL Server                      Microsoft.msodbcsql.17             17.11.1.1           
+Microsoft OneDrive                                           Microsoft.OneDrive                 26.163.0823.0004    
+Microsoft Teams                                              Microsoft.Teams                    26198.304.4946.9672 
+Microsoft Visual C++ 2015 UWP Desktop Runtime Package        Microsoft.VCLibs.Desktop.14        14.0.33728.0        
+Microsoft Visual C++ 2015 UWP Desktop Runtime Package        Microsoft.VCLibs.Desktop.14        14.0.33728.0        
+Microsoft Visual C++ 2015 UWP Runtime Package                Microsoft.VCLibs.14                14.0.33519.0        
+Microsoft Visual C++ 2015 UWP Runtime Package                Microsoft.VCLibs.14                14.0.33519.0        
+Microsoft Visual C++ v14 Redistributable (x64) - 14.51.36247 Microsoft.VCRedist.2015+.x64       14.51.36247.0       
+Microsoft Visual C++ v14 Redistributable (x86) - 14.51.36247 Microsoft.VCRedist.2015+.x86       14.51.36247.0       
+Microsoft Visual Studio Code (User)                          Microsoft.VisualStudioCode         1.138.0             
+Microsoft Web Deploy 4.0                                     Microsoft.WebDeploy                10.0.9419           
+Microsoft Windows Desktop Runtime 10.0.12 (x64)              Microsoft.DotNet.DesktopRuntime.10 10.0.12             
+Microsoft.UI.Xaml.2.7                                        Microsoft.UI.Xaml.2.7              7.2409.9001.0       
+Microsoft.UI.Xaml.2.7                                        Microsoft.UI.Xaml.2.7              7.2409.9001.0       
+Microsoft.UI.Xaml.2.8                                        Microsoft.UI.Xaml.2.8              8.2511.26001.0      
+Microsoft.UI.Xaml.2.8                                        Microsoft.UI.Xaml.2.8              8.2501.31001.0      
+MSYS2                                                        MSYS2.MSYS2                        20251213            20260611
+NVIDIA Software del sistema PhysX 9.26.0703                  Nvidia.PhysX                       9.26.0703           
+OBS Studio                                                   OBSProject.OBSStudio               32.2.2              
+Ollama version 0.34.2                                        Ollama.Ollama                      0.34.2              0.34.3
+OpenCode 2.0.12                                              SST.OpenCodeDesktop                2.0.12              
+Oracle VirtualBox 7.2.18                                     Oracle.VirtualBox                  7.2.18              7.2.20
+Outlook for Windows                                          Microsoft.Outlook                  1.2026.812.100      
+pgAdmin 4 version 9.18                                       PostgreSQL.pgAdmin                 9.18                
+PowerShell                                                   Microsoft.PowerShell               7.6.6.0             
+Python 3.13.15 (64-bit)                                      Python.Python.3.13                 3.13.15             
+Python Launcher                                              Python.Launcher                    3.14.7              
+Python Launcher                                              Python.Launcher                    < 3.14.7            
+Steam                                                        Valve.Steam                        2.10.91.91          
+Subsistema de Windows para Linux                             Microsoft.WSL                      2.7.14.0            
+TeraBox                                                      Baidu.TeraBox                      1.47.0              
+Terminal Windows                                             Microsoft.WindowsTerminal          1.24.11911.0        
+Visual Studio Build Tools 2026 (2)                           Microsoft.VisualStudio.BuildTools  18.10.1             18.10.2
+Visual Studio Community 2026                                 Microsoft.VisualStudio.Community   18.10.2             
+VLC media player                                             VideoLAN.VLC                       3.0.23              
+WindowsAppRuntime.1.2                                        Microsoft.WindowsAppRuntime.1.2    1.2.5               
+WindowsAppRuntime.1.2                                        Microsoft.WindowsAppRuntime.1.2    1.2.5               
+WindowsAppRuntime.1.3                                        Microsoft.WindowsAppRuntime.1.3    1.3.3               
+WindowsAppRuntime.1.3                                        Microsoft.WindowsAppRuntime.1.3    1.3.3               
+WindowsAppRuntime.1.4                                        Microsoft.WindowsAppRuntime.1.4    1.4.7               
+WindowsAppRuntime.1.4                                        Microsoft.WindowsAppRuntime.1.4    1.4.7               
+WindowsAppRuntime.1.5                                        Microsoft.WindowsAppRuntime.1.5    1.5.9               
+WindowsAppRuntime.1.5                                        Microsoft.WindowsAppRuntime.1.5    1.5.9               
+WindowsAppRuntime.1.6                                        Microsoft.WindowsAppRuntime.1.6    1.6.9               
+WindowsAppRuntime.1.7                                        Microsoft.WindowsAppRuntime.1.7    1.7.9               
+WindowsAppRuntime.1.7                                        Microsoft.WindowsAppRuntime.1.7    1.7.9               
+WindowsAppRuntime.1.7                                        Microsoft.WindowsAppRuntime.1.7    1.7.8               
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    > 1.8.10            
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    > 1.8.10            
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    1.8.10              
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    1.8.10              
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    1.8.9               
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    1.8.8               
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    1.8.7               
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    1.8.6               
+WindowsAppRuntime.1.8                                        Microsoft.WindowsAppRuntime.1.8    1.8.5               
+WindowsAppRuntime.2                                          Microsoft.WindowsAppRuntime.2      2.5.1.0             
+WindowsAppRuntime.2                                          Microsoft.WindowsAppRuntime.2      2.5.1.0             
+WindowsAppRuntime.2                                          Microsoft.WindowsAppRuntime.2      2.4.0.0             
+WindowsAppRuntime.2                                          Microsoft.WindowsAppRuntime.2      2.3.1.0             
+WindowsAppRuntime.2                                          Microsoft.WindowsAppRuntime.2      2.3.0.0             
+WindowsAppRuntime.2                                          Microsoft.WindowsAppRuntime.2      2.2.0.0             
+WindowsAppRuntime.2                                          Microsoft.WindowsAppRuntime.2      2.1.3.0             
+Zoom Workplace                                               Zoom.Zoom.EXE                      7.2.1 (48556)       

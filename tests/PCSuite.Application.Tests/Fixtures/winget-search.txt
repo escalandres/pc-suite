@@ -1,0 +1,6 @@
+Nombre                                    Id                                      Versión
+-----------------------------------------------------------------------------------------
+Microsoft Visual Studio Code              Microsoft.VisualStudioCode              1.138.0
+Microsoft Visual Studio Code CLI          Microsoft.VisualStudioCode.CLI          1.126.0
+Microsoft Visual Studio Code Insiders     Microsoft.VisualStudioCode.Insiders     1.127.0
+Microsoft Visual Studio Code Insiders CLI Microsoft.VisualStudioCode.Insiders.CLI 1.127.0

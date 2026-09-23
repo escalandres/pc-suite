@@ -77,15 +77,18 @@ La UI nunca toca el SO directamente; todo pasa por el puente:
 - Respuesta: `{"id", "success", "result?" | "error": {"code", "message"}}`
 - Evento (nativo → UI): `{"event", "payload?"}`
 
-Operaciones permitidas (Tasks 001–004): `system.info`, `tools.list`,
+Operaciones permitidas (Tasks 001–006): `system.info`, `tools.list`,
 `tools.search`, `tool.execute`, `developer.list`, `developer.checkUpdate`,
-`developer.update`, `developer.launch`.
+`developer.update`, `developer.launch`, `winget.detect`, `winget.search`,
+`winget.list`, `winget.updates`, `winget.install`, `winget.upgrade`,
+`winget.upgradeAll`, `winget.uninstall`.
 Eventos: `app.ready`.
 
 Errores conocidos: `MALFORMED_MESSAGE`, `OPERATION_NOT_FOUND`,
 `OPERATION_FAILED`, `INTERNAL_ERROR`, y los controlados de las tools de
 desarrollador: `NOT_SUPPORTED`, `NOT_INSTALLED`, `ELEVATION_REQUIRED`,
-`UPDATE_FAILED`, `UPDATE_TIMEOUT`, `LAUNCH_FAILED`.
+`UPDATE_FAILED`, `UPDATE_TIMEOUT`, `LAUNCH_FAILED`, y los de winget:
+`WINGET_FAILED`, `WINGET_TIMEOUT`.
 La UI jamás muestra stack traces.
 
 ### Elevación por operación (Task 005)
@@ -110,6 +113,44 @@ no lo simula ni lo automatiza):
 Los tests cubren autorización, allow-list, payload inválido, framing/tope e
 IPC completo (servidor y cliente en el mismo proceso, sin pasar por UAC).
 
+### WinGet (Task 006)
+
+`IWinGetService` (Core) con su implementación `WinGetService` (Infrastructure)
+gestiona paquetes a través del CLI winget con 8 operaciones puente: detección,
+búsqueda, instalados, actualizaciones, install, upgrade, upgradeAll y
+uninstall.
+
+Seguridad (§10.1 / §11):
+
+- El frontend solo envía payload tipado (`{"query"}` / `{"packageId"}`); la
+  validación y la construcción de los **argv fijos** viven en .NET
+  (`WinGetArguments`: id `^[A-Za-z0-9][A-Za-z0-9._+-]*$` ≤128, query 1..128
+  sin controles ni guion inicial) — nunca una línea `winget …` arbitraria y
+  nunca un shell. La validación ocurre **antes** de crear cualquier proceso.
+- Las 4 mutaciones (install/upgrade/upgradeAll/uninstall) prueban primero sin
+  privilegios; solo un fallo que parezca de permisos (salidas 5, 740,
+  `0x80070005`, `0x800702E4` o marcas «access denied»/«acceso denegado»)
+  reintentan elevadas contra la allow-list `ElevatedOperationIds`
+  (`elevated.winget.*`), con **revalidación del id dentro del propio proceso
+  elevado** (segunda barrera: cero procesos con entrada inválida). Cancelar el
+  UAC de Windows vuelve `ELEVATION_CANCELLED`; el UAC nunca lo simula la app.
+- Todas las invocaciones se serializan (semáforo 1:1 — dos winget en paralelo
+  corrompen el índice de fuentes) y declaran UTF-8 en la salida: con la
+  codepage OEM cada acento se vuelve mojibake y **desplaza** las columnas de
+  las tablas posicionales.
+- winget solo imprime texto (sin `--output json`): `WinGetTableParser` se
+  ancla en las líneas de separación, corta columnas por posición
+  (locale-independiente) y parsea **todas** las tablas (`winget upgrade` imprime
+  dos), descartando resúmenes, notas y filas con id no válido.
+- Los fallos del CLI no son errores del puente: vuelven como
+  `WinGetMutationResult` estructurado (`succeeded`, `exitCode`, `elevated`,
+  `detail` = última línea saneada ≤300 caracteres) o como `WINGET_FAILED` /
+  `WINGET_TIMEOUT` con mensaje controlado — nunca salidas crudas ni stack
+  traces. Timeouts: versión 30 s, consultas 120 s, mutaciones 900 s.
+
+Los fixtures de tests son capturas reales (UTF-8) del CLI winget v1.29 en
+locale español, congeladas en `tests/PCSuite.Application.Tests/Fixtures/`.
+
 ## Tests
 
 ```powershell
@@ -118,7 +159,9 @@ dotnet test PCSuite.sln
 
 Cubren serialización del protocolo (puente y elevación), enrutado con
 allow-list, el motor de procesos/jobs, los providers de desarrollador, las
-herramientas y el framework de elevación (autorización, IPC, payload inválido).
+herramientas, el framework de elevación (autorización, IPC, payload inválido) y
+winget (parser de tablas contra fixtures reales, validación/argv, detección,
+mutaciones con elevación por permisos y codificación UTF-8 de la salida).
 
 ## Logs
 

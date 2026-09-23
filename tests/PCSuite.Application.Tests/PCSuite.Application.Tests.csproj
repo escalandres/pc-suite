@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Fixtures\**\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\PCSuite.Application\PCSuite.Application.csproj" />
     <ProjectReference Include="..\..\src\PCSuite.Core\PCSuite.Core.csproj" />
     <ProjectReference Include="..\..\src\PCSuite.Contracts\PCSuite.Contracts.csproj" />

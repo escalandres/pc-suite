@@ -8,10 +8,12 @@ using PCSuite.Contracts;
 using PCSuite.Desktop.Bridge;
 using PCSuite.Infrastructure;
 using PCSuite.Infrastructure.Developers;
+using PCSuite.Infrastructure.Elevation;
 using PCSuite.Infrastructure.Logging;
 using PCSuite.Infrastructure.Operations;
 using PCSuite.Infrastructure.Processes;
 using PCSuite.Infrastructure.Tools;
+using PCSuite.Infrastructure.WinGet;
 
 namespace PCSuite.Desktop;
 
@@ -85,6 +87,19 @@ public partial class MainForm : Form
         developerRegistry.Register(new BunProvider(processRunner, locator));
         developerRegistry.Register(new ClaudeCodeProvider(processRunner, locator));
 
+        // WinGet (Task 006): la app corre SIEMPRE sin privilegios; ElevationManager
+        // solo se usa para elevación POR OPERACIÓN (allow-list de Task 005) cuando
+        // una mutación winget falla por permisos (el prompt UAC lo genera Windows).
+        var elevationManager = new ElevationManager(
+            processRunner,
+            Path.Combine(AppContext.BaseDirectory, "PCSuite.Elevated.exe"),
+            logger: _loggerFactory.CreateLogger<ElevationManager>());
+        var wingetService = new WinGetService(
+            locator,
+            processRunner,
+            elevationManager,
+            _loggerFactory.CreateLogger<WinGetService>());
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
@@ -95,6 +110,14 @@ public partial class MainForm : Form
                 new DeveloperCheckUpdateOperation(developerRegistry),
                 new DeveloperUpdateOperation(developerRegistry),
                 new DeveloperLaunchOperation(developerRegistry),
+                new WinGetDetectOperation(wingetService),
+                new WinGetSearchOperation(wingetService),
+                new WinGetListOperation(wingetService),
+                new WinGetUpdatesOperation(wingetService),
+                new WinGetInstallOperation(wingetService),
+                new WinGetUpgradeOperation(wingetService),
+                new WinGetUpgradeAllOperation(wingetService),
+                new WinGetUninstallOperation(wingetService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

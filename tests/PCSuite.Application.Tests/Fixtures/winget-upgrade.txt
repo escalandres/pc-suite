@@ -1,0 +1,13 @@
+Nombre                             Id                                Versión       Disponible
+------------------------------------------------------------------------------------------------
+Epic Online Services               EpicGames.EpicOnlineServices      4.0.1         4.3.1
+Google Chrome                      Google.Chrome.EXE                 153.0.8010.53 154.0.8037.58
+Ollama version 0.34.2              Ollama.Ollama                     0.34.2        0.34.3
+Oracle VirtualBox 7.2.18           Oracle.VirtualBox                 7.2.18        7.2.20
+Visual Studio Build Tools 2026 (2) Microsoft.VisualStudio.BuildTools 18.10.1       18.10.2
+6 actualizaciones disponibles.
+
+Los siguientes paquetes tienen una actualización disponible, pero requieren un destino explícito para la actualización:
+Nombre Id          Versión  Disponible
+--------------------------------------
+MSYS2  MSYS2.MSYS2 20251213 20260611

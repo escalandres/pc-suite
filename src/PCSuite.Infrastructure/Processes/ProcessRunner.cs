@@ -79,6 +79,15 @@ public sealed class ProcessRunner : IProcessRunner
             WorkingDirectory = request.WorkingDirectory ?? "",
         };
 
+        if (captureOutput && request.OutputEncoding is { } outputEncoding)
+        {
+            // winget escribe UTF-8 en la tubería; sin esta codificación
+            // explícita, la decodificación OEM por omisión convierte cada
+            // acento en dos glifos y desplaza las columnas de las tablas.
+            startInfo.StandardOutputEncoding = outputEncoding;
+            startInfo.StandardErrorEncoding = outputEncoding;
+        }
+
         if (request.RequiresElevation)
         {
             // UAC: ShellExecuteEx con "runas" (el prompt lo genera Windows).

@@ -24,4 +24,10 @@ public static class BridgeErrorCodes
 
     /// <summary>Identidad de cliente o token de sesión IPC no válidos.</summary>
     public const string Unauthorized = "UNAUTHORIZED";
+
+    // Códigos de las operaciones winget.* (Task 006): fallas al invocar el
+    // CLI (sin fila de tabla interpretable) y exceso de tiempo, siempre con
+    // mensajes controlados aptos para la UI.
+    public const string WingetFailed = "WINGET_FAILED";
+    public const string WingetTimeout = "WINGET_TIMEOUT";
 }
