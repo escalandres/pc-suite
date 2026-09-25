@@ -66,6 +66,13 @@ export const OperationIds = {
   wslUpdate: 'wsl.update',
   wslShutdown: 'wsl.shutdown',
   wslStart: 'wsl.start',
+  clamavStatus: 'clamav.status',
+  clamavInstall: 'clamav.install',
+  clamavUpdateDefinitions: 'clamav.updateDefinitions',
+  clamavQuickScan: 'clamav.quickScan',
+  clamavFullScan: 'clamav.fullScan',
+  clamavCustomScan: 'clamav.customScan',
+  clamavHistory: 'clamav.history',
 } as const;
 
 export const EventIds = {
@@ -197,4 +204,74 @@ export interface WslMutationResult {
   exitCode: number;
   elevated: boolean;
   detail?: string | null;
+}
+
+/** Resultado de clamav.status. */
+export interface ClamAvStatusResult {
+  installed: boolean;
+  /** Ruta resolvida de clamscan.exe; ausente si no está instalado. */
+  path?: string | null;
+  /** Versión del motor (clamscan --version); ausente si es desconocida. */
+  version?: string | null;
+  /** Build de definiciones conocidas; ausente si es desconocido. */
+  definitions?: string | null;
+  /** false: falta freshclam.exe junto a clamscan (sin actualización de BD). */
+  canUpdateDefinitions: boolean;
+}
+
+/**
+ * Resultado de clamav.install / clamav.updateDefinitions. Igual que winget y
+ * wsl: un fallo del CLI vuelve como resultado estructurado (succeeded:false +
+ * detail controlado), nunca como error del puente.
+ */
+export interface ClamAvMutationResult {
+  succeeded: boolean;
+  exitCode: number;
+  /** true: corrió en el proceso elevado (UAC aceptado). */
+  elevated: boolean;
+  detail?: string | null;
+}
+
+/** Una amenaza detectada por clamscan. */
+export interface ClamAvThreatResult {
+  /** Ruta del archivo marcado como infectado. */
+  file: string;
+  /** Firma de virus (p. ej. Eicar-Test-Signature). */
+  threat: string;
+}
+
+/** Resultado de clamav.quickScan / clamav.fullScan / clamav.customScan. */
+export interface ClamAvScanResult {
+  succeeded: boolean;
+  /** 0: limpio, 1: amenazas, 2: parcial. */
+  exitCode: number;
+  scannedFiles: number;
+  scannedDirectories: number;
+  /** Total exacto aunque la lista threats venga recortada. */
+  infectedFiles: number;
+  engineVersion?: string | null;
+  knownViruses?: number | null;
+  /** Detalle controlado (parcial/fallo); ausente si no hay. */
+  detail?: string | null;
+  threats: ClamAvThreatResult[];
+}
+
+/** Una entrada de clamav.history (la más reciente primero). */
+export interface ClamAvHistoryEntryResult {
+  /** Marca de tiempo UTC en ISO 8601. */
+  timestamp: string;
+  /** quick | full | custom. */
+  kind: string;
+  /** Ruta escaneada en customScan; ausente en quick/full. */
+  path?: string | null;
+  succeeded: boolean;
+  scannedFiles: number;
+  infectedFiles: number;
+  detail?: string | null;
+  threats: ClamAvThreatResult[];
+}
+
+/** Resultado de clamav.history. */
+export interface ClamAvHistoryResult {
+  entries: ClamAvHistoryEntryResult[];
 }

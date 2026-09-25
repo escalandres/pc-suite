@@ -105,6 +105,9 @@ La UI jamás muestra stack traces.
   payload).
 - **WSL** — Task 007: estado, distribuciones y update/shutdown/start con
   confirmación (update avisa que Windows puede pedir UAC).
+- **ClamAV** — Task 008: estado del antivirus, instalación, actualización de
+  definiciones, escaneos rápido/completo/personalizado (con ruta como único
+  payload validado en .NET) e historial de escaneos.
 - **Herramientas dev** — providers de desarrollador (Task 004).
 
 ### Elevación por operación (Task 005)

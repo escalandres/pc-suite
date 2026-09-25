@@ -6,6 +6,7 @@ import { Tools } from './pages/Tools';
 import { DevTools } from './pages/DevTools';
 import { Winget } from './pages/Winget';
 import { Wsl } from './pages/Wsl';
+import { Clamav } from './pages/Clamav';
 import { bridge } from './services/pcsuiteBridge';
 import type { AppReadyEvent } from './types/bridge';
 import { EventIds } from './types/bridge';
@@ -45,6 +46,8 @@ function renderPage(page: PageId) {
       return <Winget />;
     case 'wsl':
       return <Wsl />;
+    case 'clamav':
+      return <Clamav />;
     default:
       return <Home />;
   }

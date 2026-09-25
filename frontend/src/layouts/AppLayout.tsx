@@ -8,6 +8,7 @@ import {
   Sparkles,
   Package,
   Boxes,
+  Bug,
 } from 'lucide-react';
 
 export type PageId =
@@ -18,7 +19,8 @@ export type PageId =
   | 'devtools'
   | 'plugins'
   | 'winget'
-  | 'wsl';
+  | 'wsl'
+  | 'clamav';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -43,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'tools', label: 'Herramientas', icon: Wrench, enabled: true },
   { id: 'winget', label: 'Paquetes', icon: Package, enabled: true },
   { id: 'wsl', label: 'WSL', icon: Boxes, enabled: true },
+  { id: 'clamav', label: 'ClamAV', icon: Bug, enabled: true },
   { id: 'cleaner', label: 'Limpiador', icon: Sparkles, enabled: false },
   { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: false },
   { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: true },

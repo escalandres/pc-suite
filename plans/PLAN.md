@@ -19,6 +19,7 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | Task 007 — WSL (IWslService: status/list/update/shutdown/start) | ✅ Completado | 2026-09-25 |
 | UI — Páginas "Paquetes" (winget.*) y "WSL" (wsl.*) en el frontend React | ✅ Completado | 2026-09-25 |
 | Task 008 — ClamAV (IClamAvService + historial de escaneos) | ✅ Completado | 2026-09-25 |
+| UI — Página "ClamAV" (clamav.* en el frontend React: estado, install/updateDefinitions, 3 escaneos e historial) | ✅ Completado | 2026-09-25 |
 | Task 009 — SSH / PGP (SshKeyService, PgpService + tests) | ⏳ Pendiente | — |
 | Task 010 — Production UX (búsqueda global, favoritos, clipboard, Activity, notificaciones, temas, settings) | ⏳ Pendiente | — |
 
