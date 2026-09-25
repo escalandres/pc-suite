@@ -14,6 +14,7 @@ using PCSuite.Infrastructure.Operations;
 using PCSuite.Infrastructure.Processes;
 using PCSuite.Infrastructure.Tools;
 using PCSuite.Infrastructure.WinGet;
+using PCSuite.Infrastructure.Wsl;
 
 namespace PCSuite.Desktop;
 
@@ -100,6 +101,14 @@ public partial class MainForm : Form
             elevationManager,
             _loggerFactory.CreateLogger<WinGetService>());
 
+        // WSL (Task 007): payloads cero y argv fijos (§12/§53); el mismo
+        // elevationManager cubre wsl --update vía la allow-list de Task 005.
+        var wslService = new WslService(
+            locator,
+            processRunner,
+            elevationManager,
+            _loggerFactory.CreateLogger<WslService>());
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
@@ -118,6 +127,11 @@ public partial class MainForm : Form
                 new WinGetUpgradeOperation(wingetService),
                 new WinGetUpgradeAllOperation(wingetService),
                 new WinGetUninstallOperation(wingetService),
+                new WslStatusOperation(wslService),
+                new WslListOperation(wslService),
+                new WslUpdateOperation(wslService),
+                new WslShutdownOperation(wslService),
+                new WslStartOperation(wslService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

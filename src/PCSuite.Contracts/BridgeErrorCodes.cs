@@ -30,4 +30,10 @@ public static class BridgeErrorCodes
     // mensajes controlados aptos para la UI.
     public const string WingetFailed = "WINGET_FAILED";
     public const string WingetTimeout = "WINGET_TIMEOUT";
+
+    // Códigos de las operaciones wsl.* (Task 007): fallas al invocar el CLI
+    // (sin fila de distribuciones interpretable) y exceso de tiempo, siempre
+    // con mensajes controlados aptos para la UI.
+    public const string WslFailed = "WSL_FAILED";
+    public const string WslTimeout = "WSL_TIMEOUT";
 }

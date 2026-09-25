@@ -23,6 +23,11 @@ public static class ElevatedOperationIds
 
     public const string WingetUninstall = "elevated.winget.uninstall";
 
+    // wsl --update (Task 007): la ÚNICA mutación wsl que puede necesitar
+    // privilegios. argv fijos dentro del proceso elevado y payload ignorado;
+    // shutdown/start jamás elevan. Nunca un shell.
+    public const string WslUpdate = "elevated.wsl.update";
+
     /// <summary>
     /// IDs permitidos. Añadir un ID aquí solo habilita poder registrarlo;
     /// no registra nada por sí mismo.
@@ -34,5 +39,6 @@ public static class ElevatedOperationIds
         WingetUpgrade,
         WingetUpgradeAll,
         WingetUninstall,
+        WslUpdate,
     };
 }

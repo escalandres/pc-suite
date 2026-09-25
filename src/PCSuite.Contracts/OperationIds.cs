@@ -57,4 +57,21 @@ public static class OperationIds
 
     /// <summary>Desinstala un paquete (payload: {"packageId"}); puede pedir UAC.</summary>
     public const string WingetUninstall = "winget.uninstall";
+
+    // Operaciones WSL (Task 007): TODAS de payload cero — el frontend no
+    // envía argumentos (§12/§53) y los argv son fijos en WslArguments.
+    /// <summary>Estado de WSL: instalación, versión, distribución por defecto y running/stopped.</summary>
+    public const string WslStatus = "wsl.status";
+
+    /// <summary>Distribuciones WSL con su estado y versión de plataforma.</summary>
+    public const string WslList = "wsl.list";
+
+    /// <summary>Actualiza el componente WSL (wsl --update); puede pedir UAC.</summary>
+    public const string WslUpdate = "wsl.update";
+
+    /// <summary>Apaga el subsistema WSL (wsl --shutdown); nunca eleva.</summary>
+    public const string WslShutdown = "wsl.shutdown";
+
+    /// <summary>Arranca la distribución por defecto (wsl --exec true); nunca eleva.</summary>
+    public const string WslStart = "wsl.start";
 }

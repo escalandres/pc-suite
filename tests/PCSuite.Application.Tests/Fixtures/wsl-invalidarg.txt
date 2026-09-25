@@ -1,0 +1,3 @@
+Argumento de línea de comandos no válido: --status
+Use 'wsl.exe --help' para obtener una lista de los argumentos admitidos.
+Código de error: Wsl/UpdatePackage/E_INVALIDARG

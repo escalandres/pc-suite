@@ -77,18 +77,20 @@ La UI nunca toca el SO directamente; todo pasa por el puente:
 - Respuesta: `{"id", "success", "result?" | "error": {"code", "message"}}`
 - Evento (nativo → UI): `{"event", "payload?"}`
 
-Operaciones permitidas (Tasks 001–006): `system.info`, `tools.list`,
+Operaciones permitidas (Tasks 001–007): `system.info`, `tools.list`,
 `tools.search`, `tool.execute`, `developer.list`, `developer.checkUpdate`,
 `developer.update`, `developer.launch`, `winget.detect`, `winget.search`,
 `winget.list`, `winget.updates`, `winget.install`, `winget.upgrade`,
-`winget.upgradeAll`, `winget.uninstall`.
+`winget.upgradeAll`, `winget.uninstall`, `wsl.status`, `wsl.list`,
+`wsl.update`, `wsl.shutdown`, `wsl.start`.
 Eventos: `app.ready`.
 
 Errores conocidos: `MALFORMED_MESSAGE`, `OPERATION_NOT_FOUND`,
 `OPERATION_FAILED`, `INTERNAL_ERROR`, y los controlados de las tools de
 desarrollador: `NOT_SUPPORTED`, `NOT_INSTALLED`, `ELEVATION_REQUIRED`,
-`UPDATE_FAILED`, `UPDATE_TIMEOUT`, `LAUNCH_FAILED`, y los de winget:
-`WINGET_FAILED`, `WINGET_TIMEOUT`.
+`UPDATE_FAILED`, `UPDATE_TIMEOUT`, `LAUNCH_FAILED`, los de winget:
+`WINGET_FAILED`, `WINGET_TIMEOUT`, y los de wsl: `WSL_FAILED`,
+`WSL_TIMEOUT`.
 La UI jamás muestra stack traces.
 
 ### Elevación por operación (Task 005)
@@ -151,6 +153,38 @@ Seguridad (§10.1 / §11):
 Los fixtures de tests son capturas reales (UTF-8) del CLI winget v1.29 en
 locale español, congeladas en `tests/PCSuite.Application.Tests/Fixtures/`.
 
+### WSL (Task 007)
+
+`IWslService` (Core) con su implementación `WslService` (Infrastructure)
+expone 5 operaciones puente de **payload cero**: estado, distribuciones,
+actualizar, apagar y arrancar WSL.
+
+Seguridad (§12 / §53):
+
+- El frontend solo puede solicitar una de las 5 operaciones: **nunca** envía
+  argumentos `wsl.exe`. Cada operación construye su argv fijo en .NET
+  (`WslArguments`: `--version`, `--status`, `--list --verbose`, `--update`,
+  `--shutdown`, `--exec true`) — cualquier payload que llegue se ignora por
+  completo (ni se parsea → nunca `MALFORMED`) y jamás hay shell arbitrario.
+- Solo `wsl.update` puede elevar: si falla por permisos reintenta vía
+  `ElevatedOperationIds.WslUpdate` (allow-list, dos barreras) con revalidación
+  dentro del proceso elevado. `--shutdown` y `--exec true` **jamás** piden UAC
+  y ningún caso muestra un UAC preventivo (Windows es el único que genera el
+  diálogo; la app no lo simula).
+- Todas las invocaciones se serializan (semáforo 1:1) y declaran UTF-16LE sin
+  BOM en la salida: wsl.exe escribe texto UTF-16 crudo en la tubería y con la
+  codepage OEM cada acento se vuelve mojibake.
+- `wsl.status` degrada con control: sin `wsl.exe` → `installed:false`; una
+  lectura que falla → valor nulo sin romper el resto. Los fallos del CLI no
+  son errores del puente: mutaciones vuelven `WslMutationResult`
+  (`succeeded`, `exitCode`, `elevated`, `detail`) y las lecturas lanzan
+  `WSL_FAILED` / `WSL_TIMEOUT` con mensaje controlado — nunca salidas crudas
+  ni stack traces. Timeouts: lecturas 30 s, shutdown/start 120 s, update 900 s.
+
+Los fixtures de tests son capturas reales (UTF-16LE decodificado) del CLI wsl
+v2.7.14 en locale español, congeladas en
+`tests/PCSuite.Application.Tests/Fixtures/`.
+
 ## Tests
 
 ```powershell
@@ -159,9 +193,11 @@ dotnet test PCSuite.sln
 
 Cubren serialización del protocolo (puente y elevación), enrutado con
 allow-list, el motor de procesos/jobs, los providers de desarrollador, las
-herramientas, el framework de elevación (autorización, IPC, payload inválido) y
+herramientas, el framework de elevación (autorización, IPC, payload inválido),
 winget (parser de tablas contra fixtures reales, validación/argv, detección,
-mutaciones con elevación por permisos y codificación UTF-8 de la salida).
+mutaciones con elevación por permisos y codificación UTF-8 de la salida) y wsl
+(parser contra fixtures reales, payload cero ignorado, elevación solo en
+`--update` y codificación UTF-16LE de la salida).
 
 ## Logs
 

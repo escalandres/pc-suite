@@ -10,6 +10,7 @@
 
 using PCSuite.Infrastructure.Elevation;
 using PCSuite.Infrastructure.WinGet;
+using PCSuite.Infrastructure.Wsl;
 
 namespace PCSuite.Elevated;
 
@@ -40,6 +41,9 @@ internal static class Program
         registry.Register(new WinGetElevatedOperation(WinGetMutationKind.Upgrade));
         registry.Register(new WinGetElevatedOperation(WinGetMutationKind.UpgradeAll));
         registry.Register(new WinGetElevatedOperation(WinGetMutationKind.Uninstall));
+
+        // wsl --update (Task 007): payload ignorado y argv fijo --update.
+        registry.Register(new WslElevatedOperation());
 
         try
         {

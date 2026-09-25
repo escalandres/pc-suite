@@ -16,6 +16,7 @@ namespace PCSuite.MockProcess;
 ///   cwd                → imprime el directorio de trabajo actual
 ///   all &lt;code&gt;          → 2 líneas stdout + 1 stderr y sale con ese código
 ///   utf8               → escribe bytes UTF-8 crudos en stdout (como winget)
+///   utf16              → escribe bytes UTF-16LE crudos en stdout (como wsl)
 ///   (sin argumentos)    → "mock-process ready", sale con 0
 /// </summary>
 internal static class Program
@@ -71,6 +72,14 @@ internal static class Program
                 // original; sin él, mojibake.
                 await Console.OpenStandardOutput().WriteAsync(
                     Encoding.UTF8.GetBytes("Versión 1.2.3 — muñeco\r\n"));
+                return 0;
+
+            case "utf16":
+                // Igual que utf8 pero en UTF-16LE: exactamente lo que escribe
+                // wsl.exe (sin BOM). Encoding.Unicode.GetBytes no incluye el
+                // preámbulo, así que los bytes arrancan en el primer carácter.
+                await Console.OpenStandardOutput().WriteAsync(
+                    Encoding.Unicode.GetBytes("Versión 2.7.14 — muñeco\r\n"));
                 return 0;
 
             default:
