@@ -74,4 +74,30 @@ public static class OperationIds
 
     /// <summary>Arranca la distribución por defecto (wsl --exec true); nunca eleva.</summary>
     public const string WslStart = "wsl.start";
+
+    // Operaciones ClamAV (Task 008 / §13): la ruta del customScan viaja como
+    // payload estructurado validado en el servicio; el resto es de payload cero
+    // y los argv (clamscan/freshclam) son arreglos fijos, nunca una línea
+    // "clamscan …" arbitraria.
+
+    /// <summary>Detección: clamscan instalado/no, ruta, versión y definiciones.</summary>
+    public const string ClamavStatus = "clamav.status";
+
+    /// <summary>Instala ClamAV (paquete fijo Cisco.ClamAV vía winget); puede pedir UAC.</summary>
+    public const string ClamavInstall = "clamav.install";
+
+    /// <summary>Actualiza las definiciones con freshclam; puede pedir UAC por permisos.</summary>
+    public const string ClamavUpdateDefinitions = "clamav.updateDefinitions";
+
+    /// <summary>Escaneo rápido de ubicaciones comunes del usuario.</summary>
+    public const string ClamavQuickScan = "clamav.quickScan";
+
+    /// <summary>Escaneo completo de los discos fijos.</summary>
+    public const string ClamavFullScan = "clamav.fullScan";
+
+    /// <summary>Escaneo de una ruta absoluta existente (payload: {"path"}).</summary>
+    public const string ClamavCustomScan = "clamav.customScan";
+
+    /// <summary>Historial de escaneos persistido (más reciente primero).</summary>
+    public const string ClamavHistory = "clamav.history";
 }

@@ -28,6 +28,12 @@ public static class ElevatedOperationIds
     // shutdown/start jamás elevan. Nunca un shell.
     public const string WslUpdate = "elevated.wsl.update";
 
+    // freshclam (Task 008): la ÚNICA mutación ClamAV que puede necesitar
+    // privilegios (escribir las definiciones en Program Files). argv fijo
+    // dentro del proceso elevado y payload ignorado; los escaneos jamás
+    // elevan. Nunca un shell.
+    public const string ClamavUpdateDefinitions = "elevated.clamav.updateDefinitions";
+
     /// <summary>
     /// IDs permitidos. Añadir un ID aquí solo habilita poder registrarlo;
     /// no registra nada por sí mismo.
@@ -40,5 +46,6 @@ public static class ElevatedOperationIds
         WingetUpgradeAll,
         WingetUninstall,
         WslUpdate,
+        ClamavUpdateDefinitions,
     };
 }

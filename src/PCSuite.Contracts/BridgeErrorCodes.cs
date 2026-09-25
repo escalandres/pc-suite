@@ -36,4 +36,10 @@ public static class BridgeErrorCodes
     // con mensajes controlados aptos para la UI.
     public const string WslFailed = "WSL_FAILED";
     public const string WslTimeout = "WSL_TIMEOUT";
+
+    // Códigos de las operaciones clamav.* (Task 008): fallas al invocar el CLI
+    // (sin resumen interpretable, ruta inválida para el escaneo) y exceso de
+    // tiempo, siempre con mensajes controlados aptos para la UI.
+    public const string ClamAvFailed = "CLAMAV_FAILED";
+    public const string ClamAvTimeout = "CLAMAV_TIMEOUT";
 }

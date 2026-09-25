@@ -77,20 +77,22 @@ La UI nunca toca el SO directamente; todo pasa por el puente:
 - Respuesta: `{"id", "success", "result?" | "error": {"code", "message"}}`
 - Evento (nativo → UI): `{"event", "payload?"}`
 
-Operaciones permitidas (Tasks 001–007): `system.info`, `tools.list`,
+Operaciones permitidas (Tasks 001–008): `system.info`, `tools.list`,
 `tools.search`, `tool.execute`, `developer.list`, `developer.checkUpdate`,
 `developer.update`, `developer.launch`, `winget.detect`, `winget.search`,
 `winget.list`, `winget.updates`, `winget.install`, `winget.upgrade`,
 `winget.upgradeAll`, `winget.uninstall`, `wsl.status`, `wsl.list`,
-`wsl.update`, `wsl.shutdown`, `wsl.start`.
+`wsl.update`, `wsl.shutdown`, `wsl.start`, `clamav.status`, `clamav.install`,
+`clamav.updateDefinitions`, `clamav.quickScan`, `clamav.fullScan`,
+`clamav.customScan`, `clamav.history`.
 Eventos: `app.ready`.
 
 Errores conocidos: `MALFORMED_MESSAGE`, `OPERATION_NOT_FOUND`,
 `OPERATION_FAILED`, `INTERNAL_ERROR`, y los controlados de las tools de
 desarrollador: `NOT_SUPPORTED`, `NOT_INSTALLED`, `ELEVATION_REQUIRED`,
 `UPDATE_FAILED`, `UPDATE_TIMEOUT`, `LAUNCH_FAILED`, los de winget:
-`WINGET_FAILED`, `WINGET_TIMEOUT`, y los de wsl: `WSL_FAILED`,
-`WSL_TIMEOUT`.
+`WINGET_FAILED`, `WINGET_TIMEOUT`, los de wsl: `WSL_FAILED`,
+`WSL_TIMEOUT`, y los de clamav: `CLAMAV_FAILED`, `CLAMAV_TIMEOUT`.
 La UI jamás muestra stack traces.
 
 ### Páginas de la UI
@@ -197,6 +199,49 @@ Los fixtures de tests son capturas reales (UTF-16LE decodificado) del CLI wsl
 v2.7.14 en locale español, congeladas en
 `tests/PCSuite.Application.Tests/Fixtures/`.
 
+### ClamAV (Task 008)
+
+`IClamAvService` (Core) con su implementación `ClamAvService` (Infrastructure)
+expone 7 operaciones puente: estado, instalación, actualización de
+definiciones, escaneo rápido/completo/personalizado e historial de escaneos.
+
+Seguridad (§12 / §53):
+
+- El frontend solo envía payload estructurado: `{"path"}` para
+  `clamav.customScan` (validado en .NET: no vacío, sin NUL, ruta absoluta,
+  normalizada con `GetFullPath` y existente) y **payload cero** para el resto
+  (cualquier payload que llegue se ignora por completo). El argv de clamscan y
+  freshclam se construye fijo en .NET (`ClamAvArguments`) — jamás hay shell
+  arbitrario.
+- `clamav.install` delega en `IWinGetService.InstallAsync("Cisco.ClamAV")` con
+  idempotencia (ya instalado → mensaje controlado); son las **únicas** 2
+  operaciones que declaran elevación (`install` y `updateDefinitions`), y
+  siempre de forma preventiva: primero corren sin privilegios y solo un fallo
+  con marcas de permisos («permission denied»/«permiso denegado», HRESULTs
+  `0x80070005`/`0x800702E4`) reintenta vía
+  `ElevatedOperationIds.ClamavUpdateDefinitions` (allow-list, dos barreras,
+  argv fijo vacío y payload ignorado dentro del proceso elevado). Los escaneos
+  **jamás** piden UAC.
+- Escaneos y freshclam se serializan (semáforo 1:1) sobre las mismas
+  definiciones; `clamav.status` e `clamav.history` responden fuera de la
+  cola. Timeouts: lecturas 30 s, update 900 s, quick 900 s, custom 1 h,
+  full 2 h. La salida va sin `OutputEncoding` (CRT OEM de freshclam/clamscan,
+  a diferencia del UTF-16LE de wsl.exe).
+- Exit 0/1 = éxito (1 = amenazas, con la lista `threats`); exit 2 con resumen
+  interpretable = éxito parcial con mensaje fijo; resto → detalle saneado
+  ≤300 caracteres o `CLAMAV_FAILED` / `CLAMAV_TIMEOUT` con mensaje
+  controlado — nunca salidas crudas ni stack traces. El historial
+  (`ClamAvHistoryStore`, 50 entradas, escritura atómica) devuelve `[]` ante
+  datos corruptos o fallos de E/S.
+- `clamav.status` degrada con control: sin `clamscan.exe` → `installed:false`
+  (nunca un error) y la ausencia de `freshclam.exe` solo desactiva la
+  actualización de definiciones.
+
+ClamAV no está instalado en la máquina de desarrollo: los fixtures de tests
+son salidas sintéticas con el formato documentado de clamscan/freshclam (las
+etiquetas del resumen son SIEMPRE inglesas) y los tests jamás tocan los
+directorios reales del equipo.
+
 ## Tests
 
 ```powershell
@@ -207,9 +252,11 @@ Cubren serialización del protocolo (puente y elevación), enrutado con
 allow-list, el motor de procesos/jobs, los providers de desarrollador, las
 herramientas, el framework de elevación (autorización, IPC, payload inválido),
 winget (parser de tablas contra fixtures reales, validación/argv, detección,
-mutaciones con elevación por permisos y codificación UTF-8 de la salida) y wsl
+mutaciones con elevación por permisos y codificación UTF-8 de la salida), wsl
 (parser contra fixtures reales, payload cero ignorado, elevación solo en
-`--update` y codificación UTF-16LE de la salida).
+`--update` y codificación UTF-16LE de la salida) y clamav (parser contra
+fixtures sintéticos, argv fijos, historial con E/S tolerantes, payload
+ignorado salvo `customScan` y elevación solo en freshclam por permisos).
 
 ## Logs
 

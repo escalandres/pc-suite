@@ -7,6 +7,7 @@ using PCSuite.Application.Tools;
 using PCSuite.Contracts;
 using PCSuite.Desktop.Bridge;
 using PCSuite.Infrastructure;
+using PCSuite.Infrastructure.ClamAV;
 using PCSuite.Infrastructure.Developers;
 using PCSuite.Infrastructure.Elevation;
 using PCSuite.Infrastructure.Logging;
@@ -109,6 +110,17 @@ public partial class MainForm : Form
             elevationManager,
             _loggerFactory.CreateLogger<WslService>());
 
+        // ClamAV (Task 008): orquestación de clamscan/freshclam; el mismo
+        // elevationManager cubre freshclam vía la allow-list de Task 005 y la
+        // instalación delega en wingetService (paquete fijo Cisco.ClamAV).
+        var clamAvService = new ClamAvService(
+            locator,
+            processRunner,
+            elevationManager,
+            wingetService,
+            new ClamAvHistoryStore(),
+            _loggerFactory.CreateLogger<ClamAvService>());
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
@@ -132,6 +144,13 @@ public partial class MainForm : Form
                 new WslUpdateOperation(wslService),
                 new WslShutdownOperation(wslService),
                 new WslStartOperation(wslService),
+                new ClamAvStatusOperation(clamAvService),
+                new ClamAvInstallOperation(clamAvService),
+                new ClamAvUpdateDefinitionsOperation(clamAvService),
+                new ClamAvQuickScanOperation(clamAvService),
+                new ClamAvFullScanOperation(clamAvService),
+                new ClamAvCustomScanOperation(clamAvService),
+                new ClamAvHistoryOperation(clamAvService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

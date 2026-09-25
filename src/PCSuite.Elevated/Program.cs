@@ -8,6 +8,7 @@
 // - Atiende UNA conexión IPC (identidad de cliente + nonce) y termina. El
 //   nonce jamás se escribe en log ni en mensajes de error.
 
+using PCSuite.Infrastructure.ClamAV;
 using PCSuite.Infrastructure.Elevation;
 using PCSuite.Infrastructure.WinGet;
 using PCSuite.Infrastructure.Wsl;
@@ -44,6 +45,10 @@ internal static class Program
 
         // wsl --update (Task 007): payload ignorado y argv fijo --update.
         registry.Register(new WslElevatedOperation());
+
+        // freshclam (Task 008): payload ignorado, argv vacío fijo y carpeta de
+        // trabajo = instalación de ClamAV. Nunca un shell.
+        registry.Register(new ClamAvElevatedOperation());
 
         try
         {

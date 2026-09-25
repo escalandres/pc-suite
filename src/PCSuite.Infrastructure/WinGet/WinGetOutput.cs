@@ -11,9 +11,10 @@ internal static class WinGetOutput
 {
     /// <summary>
     /// Marcadores de falta de permisos en la salida (HRESULTs en hex + frases
-    /// de ERROR_ACCESS_DENIED en inglés y español). Un falso positivo solo
-    /// provoca un UAC innecesario cuyo reejecución devuelve fallo estructurado;
-    /// un falso negativo deja el fallo como resultado sin UAC (sin riesgo).
+    /// de ERROR_ACCESS_DENIED en inglés y español, y strerror(EACCES) de los
+    /// binarios CRT como freshclam). Un falso positivo solo provoca un UAC
+    /// innecesario cuyo reejecución devuelve fallo estructurado; un falso
+    /// negativo deja el fallo como resultado sin UAC (sin riesgo).
     /// </summary>
     private static readonly string[] ElevationMarkers =
     [
@@ -22,6 +23,8 @@ internal static class WinGetOutput
         "access is denied",
         "access denied",
         "acceso denegado",
+        "permission denied",
+        "permiso denegado",
     ];
 
     /// <summary>True si el fallo parece de permisos (candidato a reintentar elevado).</summary>
