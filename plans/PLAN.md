@@ -17,6 +17,7 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | Task 005 — Elevation Framework (IElevationManager, PCSuite.Elevated, PoC + tests de seguridad) | ✅ Completado | 2026-09-22 |
 | Task 006 — WinGet (IWinGetService, operaciones estructuradas, UAC) | ✅ Completado | 2026-09-22 |
 | Task 007 — WSL (IWslService: status/list/update/shutdown/start) | ✅ Completado | 2026-09-25 |
+| UI — Páginas "Paquetes" (winget.*) y "WSL" (wsl.*) en el frontend React | ✅ Completado | 2026-09-25 |
 | Task 008 — ClamAV (IClamAvService + historial de escaneos) | ⏳ Pendiente | — |
 | Task 009 — SSH / PGP (SshKeyService, PgpService + tests) | ⏳ Pendiente | — |
 | Task 010 — Production UX (búsqueda global, favoritos, clipboard, Activity, notificaciones, temas, settings) | ⏳ Pendiente | — |

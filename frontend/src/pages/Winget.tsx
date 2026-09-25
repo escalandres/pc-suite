@@ -1,0 +1,504 @@
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowUpCircle, List, RefreshCw, Search, Trash2, Download } from 'lucide-react';
+import { bridge, BridgeError } from '../services/pcsuiteBridge';
+import { OperationIds } from '../types/bridge';
+import type {
+  WinGetDetectResult,
+  WinGetMutationResult,
+  WinGetPackageCollectionResult,
+  WinGetPackageResult,
+} from '../types/bridge';
+
+/**
+ * Página "Paquetes" (Task 006): detección de winget (winget.detect), búsqueda
+ * en el índice (winget.search), paquetes instalados (winget.list),
+ * actualizaciones disponibles (winget.updates) y las 4 mutaciones
+ * (install/upgrade/upgradeAll/uninstall) con payload SOLO de id de paquete.
+ *
+ * La UI jamás envía una línea "winget ..." arbitraria: .NET valida el id y
+ * construye los argv fijos. Un fallo del CLI vuelve como resultado
+ * estructurado (succeeded:false + detail controlado), no como error del
+ * puente; los códigos controlados (WINGET_TIMEOUT…) se muestran tal cual.
+ */
+
+// Timeouts del lado del cliente, siempre por encima de los del nativo
+// (detect 30 s, consultas 120 s, mutaciones 900 s).
+const DETECT_TIMEOUT_MS = 45_000;
+const QUERY_TIMEOUT_MS = 135_000;
+const MUTATION_TIMEOUT_MS = 930_000;
+
+type Mode = 'search' | 'installed' | 'updates';
+type MutationKind = 'install' | 'upgrade' | 'uninstall' | 'upgradeAll';
+
+interface Notice {
+  kind: 'success' | 'error';
+  text: string;
+}
+
+const MODES: { id: Mode; label: string; icon: typeof Search }[] = [
+  { id: 'search', label: 'Buscar', icon: Search },
+  { id: 'installed', label: 'Instalados', icon: List },
+  { id: 'updates', label: 'Actualizaciones', icon: ArrowUpCircle },
+];
+
+const EMPTY_HINTS: Record<Mode, string> = {
+  search: 'Escribe una consulta para buscar en el índice de winget.',
+  installed: 'No hay paquetes instalados desde winget.',
+  updates: 'Todo está actualizado: no hay actualizaciones pendientes.',
+};
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof BridgeError ? error.message : fallback;
+}
+
+export function Winget() {
+  const [detect, setDetect] = useState<WinGetDetectResult | null>(null);
+  const [loadingDetect, setLoadingDetect] = useState(true);
+
+  const [mode, setMode] = useState<Mode>('installed');
+  const [query, setQuery] = useState('');
+  const [packages, setPackages] = useState<WinGetPackageResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+
+  const [busy, setBusy] = useState<Record<string, MutationKind>>({});
+  const [notices, setNotices] = useState<Record<string, Notice>>({});
+
+  const load = useCallback(
+    async (currentMode: Mode, search: string) => {
+      setLoading(true);
+      setListError(null);
+      try {
+        const operation =
+          currentMode === 'search'
+            ? OperationIds.wingetSearch
+            : currentMode === 'installed'
+              ? OperationIds.wingetList
+              : OperationIds.wingetUpdates;
+        const payload = currentMode === 'search' ? { query: search } : undefined;
+        const result = await bridge.call<WinGetPackageCollectionResult>(
+          operation,
+          payload,
+          QUERY_TIMEOUT_MS,
+        );
+        setPackages(result.packages ?? []);
+      } catch (error) {
+        setPackages([]);
+        setListError(errorMessage(error, 'No se pudieron cargar los paquetes.'));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  // Detección inicial + carga de la pestaña por omisión.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await bridge.call<WinGetDetectResult>(
+          OperationIds.wingetDetect,
+          undefined,
+          DETECT_TIMEOUT_MS,
+        );
+        if (cancelled) return;
+        setDetect(result);
+        if (result.installed) {
+          await load('installed', '');
+        } else {
+          setLoadingDetect(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setListError(errorMessage(error, 'No se pudo detectar winget.'));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDetect(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setListError(null);
+    if (next === 'search') {
+      setPackages([]);
+      return;
+    }
+    void load(next, '');
+  };
+
+  const submitSearch = () => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    void load('search', trimmed);
+  };
+
+  const setNotice = (key: string, kind: Notice['kind'], text: string) => {
+    setNotices((previous) => ({ ...previous, [key]: { kind, text } }));
+  };
+
+  const clearNotice = (key: string) => {
+    setNotices((previous) => {
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const runMutation = async (
+    key: string,
+    kind: MutationKind,
+    operation: string,
+    payload: unknown,
+    successText: string,
+  ) => {
+    setBusy((previous) => ({ ...previous, [key]: kind }));
+    clearNotice(key);
+    try {
+      const result = await bridge.call<WinGetMutationResult>(
+        operation,
+        payload,
+        MUTATION_TIMEOUT_MS,
+      );
+      if (result.succeeded) {
+        setNotice(key, 'success', result.elevated ? `${successText} (elevado)` : successText);
+        await load(mode, query.trim()); // refresca la lista tras la mutación
+      } else {
+        setNotice(
+          key,
+          'error',
+          result.detail ?? `winget terminó con el código ${result.exitCode}.`,
+        );
+      }
+    } catch (error) {
+      setNotice(key, 'error', errorMessage(error, 'La operación falló.'));
+    } finally {
+      setBusy((previous) => {
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const installed = detect?.installed ?? false;
+
+  return (
+    <div className="space-y-6">
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Paquetes</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+            Gestión de paquetes con winget: búsqueda, instalados, actualizaciones e
+            instalación/desinstalación — solo ids validados por el nativo, nunca comandos.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load(mode, query.trim())}
+          disabled={loadingDetect || loading || !installed}
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+          style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+        >
+          <RefreshCw size={14} aria-hidden className={loading ? 'animate-spin' : undefined} />
+          Actualizar
+        </button>
+      </header>
+
+      {/* Detección de winget */}
+      {loadingDetect && (
+        <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+          Detectando winget…
+        </p>
+      )}
+
+      {!loadingDetect && detect && (
+        <div
+          className="rounded-md border px-4 py-3 text-sm"
+          style={{
+            background: 'var(--pcs-surface)',
+            borderColor: installed ? 'var(--pcs-border)' : 'var(--pcs-danger)',
+            color: installed ? 'var(--pcs-text)' : 'var(--pcs-danger)',
+          }}
+          role={installed ? 'status' : 'alert'}
+        >
+          {installed ? (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-medium">winget {detect.version ?? ''}</span>
+              <code className="truncate text-xs" style={{ color: 'var(--pcs-text-muted)' }} title={detect.path ?? ''}>
+                {detect.path}
+              </code>
+              {detect.isAdministrator && (
+                <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                  la app corre elevada
+                </span>
+              )}
+            </span>
+          ) : (
+            'winget no está disponible en esta máquina (App Installer no está en la PATH).'
+          )}
+        </div>
+      )}
+
+      {listError && (
+        <div
+          className="rounded-md border px-4 py-3 text-sm"
+          style={{ borderColor: 'var(--pcs-danger)', color: 'var(--pcs-danger)' }}
+          role="alert"
+        >
+          {listError}
+        </div>
+      )}
+
+      {/* Aviso global de upgradeAll */}
+      {notices['__all__'] && <NoticeBox notice={notices['__all__']} />}
+
+      {installed && (
+        <>
+          {/* Selector de pestañas + acción "Actualizar todo" */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="flex items-center gap-1 rounded-md border p-1"
+              style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+            >
+              {MODES.map((entry) => {
+                const Icon = entry.icon;
+                const active = entry.id === mode;
+                return (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => switchMode(entry.id)}
+                    className="flex items-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition-colors"
+                    style={{
+                      background: active ? 'var(--pcs-accent)' : 'transparent',
+                      color: active ? '#fff' : 'var(--pcs-text-muted)',
+                    }}
+                  >
+                    <Icon size={14} aria-hidden />
+                    {entry.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {mode === 'updates' && packages.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `¿Actualizar ${packages.length} paquete(s)? Windows puede mostrar un control de cuentas de usuario (UAC).`,
+                    )
+                  ) {
+                    return;
+                  }
+                  void runMutation(
+                    '__all__',
+                    'upgradeAll',
+                    OperationIds.wingetUpgradeAll,
+                    undefined,
+                    'Todas las actualizaciones se aplicaron.',
+                  );
+                }}
+                disabled={Boolean(busy['__all__'])}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+              >
+                <Download size={14} aria-hidden />
+                {busy['__all__'] ? 'Actualizando…' : 'Actualizar todo'}
+              </button>
+            )}
+          </div>
+
+          {/* Búsqueda */}
+          {mode === 'search' && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitSearch();
+              }}
+              className="flex items-center gap-2 rounded-md border px-3"
+              style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+            >
+              <Search size={15} aria-hidden style={{ color: 'var(--pcs-text-muted)' }} />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar paquetes en el índice de winget…"
+                className="w-full bg-transparent py-2 text-sm outline-none"
+                style={{ color: 'var(--pcs-text)' }}
+              />
+              <button
+                type="submit"
+                disabled={loading || !query.trim()}
+                className="rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50"
+                style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+              >
+                Buscar
+              </button>
+            </form>
+          )}
+
+          {loading && (
+            <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+              Consultando winget…
+            </p>
+          )}
+
+          {!loading && !listError && packages.length === 0 && (
+            <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+              {EMPTY_HINTS[mode]}
+            </p>
+          )}
+
+          {/* Resultados */}
+          {!loading && packages.length > 0 && (
+            <ul className="space-y-2">
+              {packages.map((pkg) => {
+                const notice = notices[pkg.id];
+                const action = busy[pkg.id];
+                return (
+                  <li
+                    key={pkg.id}
+                    className="space-y-2 rounded-lg border p-3"
+                    style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+                  >
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="text-sm font-medium">{pkg.name}</span>
+                      <code className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                        {pkg.id}
+                      </code>
+                      <span className="ml-auto text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                        {pkg.version}
+                        {pkg.available ? ` → ${pkg.available}` : ''}
+                      </span>
+                    </div>
+
+                    {pkg.match && (
+                      <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                        {pkg.match}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {mode === 'search' && (
+                        <ActionButton
+                          busy={action === 'install'}
+                          label="Instalar"
+                          icon={<Download size={13} aria-hidden />}
+                          onClick={() =>
+                            void runMutation(
+                              pkg.id,
+                              'install',
+                              OperationIds.wingetInstall,
+                              { packageId: pkg.id },
+                              `Se instaló ${pkg.name}.`,
+                            )
+                          }
+                        />
+                      )}
+
+                      {mode === 'updates' && (
+                        <ActionButton
+                          busy={action === 'upgrade'}
+                          label="Actualizar"
+                          icon={<ArrowUpCircle size={13} aria-hidden />}
+                          onClick={() =>
+                            void runMutation(
+                              pkg.id,
+                              'upgrade',
+                              OperationIds.wingetUpgrade,
+                              { packageId: pkg.id },
+                              `Se actualizó ${pkg.name}.`,
+                            )
+                          }
+                        />
+                      )}
+
+                      {mode === 'installed' && (
+                        <ActionButton
+                          busy={action === 'uninstall'}
+                          label="Desinstalar"
+                          danger
+                          icon={<Trash2 size={13} aria-hidden />}
+                          onClick={() => {
+                            if (!window.confirm(`¿Desinstalar ${pkg.name} (${pkg.id})?`)) {
+                              return;
+                            }
+                            void runMutation(
+                              pkg.id,
+                              'uninstall',
+                              OperationIds.wingetUninstall,
+                              { packageId: pkg.id },
+                              `Se desinstaló ${pkg.name}.`,
+                            );
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    {notice && <NoticeBox notice={notice} />}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ActionButton(props: {
+  busy: boolean;
+  label: string;
+  icon: React.ReactNode;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      disabled={props.busy}
+      className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40"
+      style={
+        props.danger
+          ? {
+              background: 'color-mix(in srgb, var(--pcs-danger) 14%, transparent)',
+              color: 'var(--pcs-danger)',
+            }
+          : { background: 'var(--pcs-surface-2)', color: 'var(--pcs-text)' }
+      }
+    >
+      {props.icon}
+      {props.busy ? 'Procesando…' : props.label}
+    </button>
+  );
+}
+
+function NoticeBox(props: { notice: Notice }) {
+  const { notice } = props;
+  return (
+    <div
+      className="flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+      style={
+        notice.kind === 'success'
+          ? { borderColor: 'var(--pcs-success)', color: 'var(--pcs-success)' }
+          : { borderColor: 'var(--pcs-danger)', color: 'var(--pcs-danger)' }
+      }
+      role={notice.kind === 'error' ? 'alert' : 'status'}
+    >
+      <span>{notice.text}</span>
+    </div>
+  );
+}

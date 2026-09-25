@@ -4,6 +4,8 @@ import type { PageId } from './layouts/AppLayout';
 import { Home } from './pages/Home';
 import { Tools } from './pages/Tools';
 import { DevTools } from './pages/DevTools';
+import { Winget } from './pages/Winget';
+import { Wsl } from './pages/Wsl';
 import { bridge } from './services/pcsuiteBridge';
 import type { AppReadyEvent } from './types/bridge';
 import { EventIds } from './types/bridge';
@@ -28,7 +30,22 @@ export default function App() {
 
   return (
     <AppLayout page={page} onNavigate={setPage} readyNotice={readyNotice}>
-      {page === 'tools' ? <Tools /> : page === 'devtools' ? <DevTools /> : <Home />}
+      {renderPage(page)}
     </AppLayout>
   );
+}
+
+function renderPage(page: PageId) {
+  switch (page) {
+    case 'tools':
+      return <Tools />;
+    case 'devtools':
+      return <DevTools />;
+    case 'winget':
+      return <Winget />;
+    case 'wsl':
+      return <Wsl />;
+    default:
+      return <Home />;
+  }
 }

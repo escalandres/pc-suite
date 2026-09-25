@@ -53,6 +53,19 @@ export const OperationIds = {
   developerCheckUpdate: 'developer.checkUpdate',
   developerUpdate: 'developer.update',
   developerLaunch: 'developer.launch',
+  wingetDetect: 'winget.detect',
+  wingetSearch: 'winget.search',
+  wingetList: 'winget.list',
+  wingetUpdates: 'winget.updates',
+  wingetInstall: 'winget.install',
+  wingetUpgrade: 'winget.upgrade',
+  wingetUpgradeAll: 'winget.upgradeAll',
+  wingetUninstall: 'winget.uninstall',
+  wslStatus: 'wsl.status',
+  wslList: 'wsl.list',
+  wslUpdate: 'wsl.update',
+  wslShutdown: 'wsl.shutdown',
+  wslStart: 'wsl.start',
 } as const;
 
 export const EventIds = {
@@ -107,4 +120,81 @@ export interface UpdateCheckResult {
   updateAvailable: boolean;
   /** false: sin fuente de updates conocida o comprobación degradada. */
   supported: boolean;
+}
+
+/** Resultado de winget.detect. */
+export interface WinGetDetectResult {
+  installed: boolean;
+  /** Versión sin la 'v'; ausente si es desconocida. */
+  version?: string | null;
+  path?: string | null;
+  /** true: el proceso ya corre elevado (sin pedir UAC). */
+  isAdministrator: boolean;
+}
+
+/** Un paquete en winget.search / winget.list / winget.updates. */
+export interface WinGetPackageResult {
+  id: string;
+  name: string;
+  version: string;
+  /** Solo winget.updates. */
+  available?: string | null;
+  /** Solo winget.search. */
+  match?: string | null;
+}
+
+/** Resultado de winget.search / winget.list / winget.updates. */
+export interface WinGetPackageCollectionResult {
+  packages: WinGetPackageResult[];
+}
+
+/**
+ * Resultado de las mutaciones winget (install/upgrade/upgradeAll/uninstall).
+ * Un fallo del CLI NO es un error del puente: success:true con succeeded:false
+ * y el detalle controlado en `detail`.
+ */
+export interface WinGetMutationResult {
+  /** Ausente en upgradeAll. */
+  packageId?: string | null;
+  succeeded: boolean;
+  exitCode: number;
+  elevated: boolean;
+  /** Última línea saneada de winget; ausente si no hay salida. */
+  detail?: string | null;
+}
+
+/** Resultado de wsl.status. */
+export interface WslStatusResult {
+  installed: boolean;
+  path?: string | null;
+  /** running | stopped | unknown. */
+  state: string;
+  version?: string | null;
+  defaultDistro?: string | null;
+}
+
+/** Una distribución en wsl.list. */
+export interface WslDistroResult {
+  name: string;
+  /** Estado en crudo (Running / Stopped). */
+  state: string;
+  /** Plataforma WSL (1 o 2). */
+  version: number;
+}
+
+/** Resultado de wsl.list. */
+export interface WslListResult {
+  distributions: WslDistroResult[];
+}
+
+/**
+ * Resultado de las mutaciones wsl (update/shutdown/start). Igual que winget:
+ * un fallo del CLI vuelve como resultado estructurado, nunca como error del
+ * puente.
+ */
+export interface WslMutationResult {
+  succeeded: boolean;
+  exitCode: number;
+  elevated: boolean;
+  detail?: string | null;
 }

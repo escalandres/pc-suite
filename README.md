@@ -93,6 +93,18 @@ desarrollador: `NOT_SUPPORTED`, `NOT_INSTALLED`, `ELEVATION_REQUIRED`,
 `WSL_TIMEOUT`.
 La UI jamás muestra stack traces.
 
+### Páginas de la UI
+
+- **Inicio** — `system.info`.
+- **Herramientas** — framework de tools (Task 002): lista/búsqueda y ejecución
+  con editor JSON genérico.
+- **Paquetes** — winget (Task 006): detección, búsqueda, instalados,
+  actualizaciones y las 4 mutaciones con confirmación (id de paquete como único
+  payload).
+- **WSL** — Task 007: estado, distribuciones y update/shutdown/start con
+  confirmación (update avisa que Windows puede pedir UAC).
+- **Herramientas dev** — providers de desarrollador (Task 004).
+
 ### Elevación por operación (Task 005)
 
 La app **nunca** se ejecuta como Administrador: cada operación que lo exige se

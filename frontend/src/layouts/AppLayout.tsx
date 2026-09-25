@@ -6,9 +6,19 @@ import {
   Terminal,
   Puzzle,
   Sparkles,
+  Package,
+  Boxes,
 } from 'lucide-react';
 
-export type PageId = 'home' | 'tools' | 'cleaner' | 'security' | 'devtools' | 'plugins';
+export type PageId =
+  | 'home'
+  | 'tools'
+  | 'cleaner'
+  | 'security'
+  | 'devtools'
+  | 'plugins'
+  | 'winget'
+  | 'wsl';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -31,6 +41,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Inicio', icon: Home, enabled: true },
   { id: 'tools', label: 'Herramientas', icon: Wrench, enabled: true },
+  { id: 'winget', label: 'Paquetes', icon: Package, enabled: true },
+  { id: 'wsl', label: 'WSL', icon: Boxes, enabled: true },
   { id: 'cleaner', label: 'Limpiador', icon: Sparkles, enabled: false },
   { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: false },
   { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: true },
