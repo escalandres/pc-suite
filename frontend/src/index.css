@@ -1,11 +1,15 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens — tema "oscuro primario" (plan §17).
- * Los tokens viven en CSS variables para que futuros temas
- * (claro, alto contraste) solo sobreescriban estas reglas.
+ * Design tokens centralizados (plan §34) — TODO color de la UI sale de
+ * aquí: los componentes solo usan var(--pcs-*). El tema OSCURO es la
+ * experiencia primaria: vive en :root como valor por defecto; el claro
+ * es la única capa de sobrescritura, activada por data-theme en <html>
+ * (theme.ts resuelve "system" antes del primer render, por eso no hace
+ * falta un bloque prefers-color-scheme aquí).
  */
 :root {
+  color-scheme: dark;
   --pcs-bg: #0b1220;
   --pcs-surface: #121a2b;
   --pcs-surface-2: #182338;
@@ -16,6 +20,21 @@
   --pcs-accent-hover: #2f6fe0;
   --pcs-success: #34d399;
   --pcs-danger: #f87171;
+}
+
+/* Tema claro — sobrescribir SOLO tokens, nunca estilos de componentes. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --pcs-bg: #f4f7fb;
+  --pcs-surface: #ffffff;
+  --pcs-surface-2: #eaeff7;
+  --pcs-border: #d4dcea;
+  --pcs-text: #16202f;
+  --pcs-text-muted: #566480;
+  --pcs-accent: #2563eb;
+  --pcs-accent-hover: #1d4ed8;
+  --pcs-success: #059669;
+  --pcs-danger: #dc2626;
 }
 
 html,

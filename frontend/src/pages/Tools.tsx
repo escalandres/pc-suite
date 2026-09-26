@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Search, Play, Wrench } from 'lucide-react';
+import { Search, Play, Star, Wrench } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type { ToolCollectionResult, ToolExecuteResult, ToolInfo } from '../types/bridge';
+import { toolKey, toggleFavorite, useFavorites } from '../favorites';
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof BridgeError ? error.message : fallback;
@@ -16,11 +17,12 @@ function errorMessage(error: unknown, fallback: string): string {
  * El editor de entrada es genérico: un JSON precargado con el
  * exampleInput de cada tool.
  */
-export function Tools() {
+export function Tools({ focus }: { focus?: { toolId: string } | null }) {
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const favorites = useFavorites();
 
   const [selected, setSelected] = useState<ToolInfo | null>(null);
   const [inputText, setInputText] = useState('');
@@ -76,6 +78,17 @@ export function Tools() {
     setOutput(null);
     setRunError(null);
   };
+
+  // Apertura desde un favorito (10.3): lista completa + selección.
+  useEffect(() => {
+    if (focus) setQuery('');
+  }, [focus]);
+
+  useEffect(() => {
+    if (!focus) return;
+    const match = tools.find((tool) => tool.id === focus.toolId);
+    if (match && selected?.id !== match.id) selectTool(match);
+  }, [focus, tools]);
 
   const execute = async () => {
     if (!selected) return;
@@ -157,17 +170,20 @@ export function Tools() {
           <ul className="space-y-2">
             {tools.map((tool) => {
               const active = selected?.id === tool.id;
+              const starred = favorites.some((favorite) => favorite.key === toolKey(tool.id));
               return (
-                <li key={tool.id}>
-                  <button
-                    type="button"
-                    onClick={() => selectTool(tool)}
-                    className="w-full rounded-lg border p-3 text-left transition-colors"
-                    style={{
-                      background: active ? 'var(--pcs-surface-2)' : 'var(--pcs-surface)',
-                      borderColor: active ? 'var(--pcs-accent)' : 'var(--pcs-border)',
-                    }}
-                  >
+                <li key={tool.id} className="group/li">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => selectTool(tool)}
+                      className="w-full rounded-lg border p-3 text-left transition-colors"
+                      style={{
+                        background: active ? 'var(--pcs-surface-2)' : 'var(--pcs-surface)',
+                        borderColor: active ? 'var(--pcs-accent)' : 'var(--pcs-border)',
+                        paddingRight: '2.25rem',
+                      }}
+                    >
                     <div className="flex items-center gap-2">
                       <Wrench size={14} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
                       <span className="text-sm font-medium">{tool.name}</span>
@@ -196,7 +212,34 @@ export function Tools() {
                         </span>
                       ))}
                     </div>
-                  </button>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={starred}
+                      aria-label={
+                        starred
+                          ? `Quitar ${tool.name} de favoritos`
+                          : `Añadir ${tool.name} a favoritos`
+                      }
+                      onClick={() =>
+                        toggleFavorite({
+                          key: toolKey(tool.id),
+                          label: tool.name,
+                          page: 'tools',
+                          toolId: tool.id,
+                        })
+                      }
+                      className={`absolute right-2 top-2 rounded p-1 transition-opacity ${
+                        starred ? 'opacity-100' : 'opacity-0 group-hover/li:opacity-100'
+                      }`}
+                      style={{
+                        color: starred ? 'var(--pcs-accent)' : 'var(--pcs-text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Star size={14} fill={starred ? 'currentColor' : 'none'} aria-hidden />
+                    </button>
+                  </div>
                 </li>
               );
             })}

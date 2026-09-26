@@ -20,8 +20,62 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | UI — Páginas "Paquetes" (winget.*) y "WSL" (wsl.*) en el frontend React | ✅ Completado | 2026-09-25 |
 | Task 008 — ClamAV (IClamAvService + historial de escaneos) | ✅ Completado | 2026-09-25 |
 | UI — Página "ClamAV" (clamav.* en el frontend React: estado, install/updateDefinitions, 3 escaneos e historial) | ✅ Completado | 2026-09-25 |
-| Task 009 — SSH / PGP (SshKeyService, PgpService + tests) | ⏳ Pendiente | — |
-| Task 010 — Production UX (búsqueda global, favoritos, clipboard, Activity, notificaciones, temas, settings) | ⏳ Pendiente | — |
+| Task 009 — SSH / PGP (SshKeyService, PgpService + tests) — dividida en 7 partes (9.1–9.7) | ✅ Completado | 2026-09-25 |
+| ├ 9.1 — SSH: contratos + núcleo (modelos `SshKeyInfo`, payloads/resultados `ssh.*` en Contracts, `ISshKeyService` + parser/fingerprint .NET puro en Core) + 22 tests, fingerprints cross-validados con `ssh-keygen -lf` | ✅ Completada | 2026-09-25 |
+| ├ 9.2 — SSH: infraestructura — `SshKeyService` (generación por argv fijo con `ssh-keygen`, detección, listado deduplicado por fingerprint, inspección, importación atómica sin sobrescritura, abrir carpeta) + 32 tests (+2 de round-trip del parser) | ✅ Completada | 2026-09-25 |
+| ├ 9.3 — SSH: operaciones del puente `ssh.*` (6) + registro en el composition root de MainForm + tests de contrato/seguridad (argv fijo, payloads hostiles, sin elevación) | ✅ Completada | 2026-09-25 |
+| ├ 9.4 — PGP: contratos + núcleo (`IPgpService`, modelos, `pgp.*` en OperationIds) + keyring store tolerante a E/S con escritura atómica + tests | ✅ Completada | 2026-09-25 |
+| ├ 9.5 — PGP: claves con BouncyCastle — generación (nombre/email/algoritmo/expiración/passphrase), importación, exportación, listado/inspección + tests round-trip | ✅ Completada | 2026-09-25 |
+| ├ 9.6 — PGP: cifrado/descifrado/firma/verificación + operaciones del puente `pgp.*` + registro DI + tests round-trip criptográficos | ✅ Completada | 2026-09-25 |
+| └ 9.7 — Integración final: README, build + suite completa en verde, la app compila y lanza | ✅ Completada | 2026-09-25 |
+| Task 010 — Production UX (temas, settings, favoritos, búsqueda global, atajos, notificaciones/activity, clipboard, first-run) — dividida en 9 partes (10.1–10.9) | 🚧 En curso | 2026-09-26 |
+| ├ 10.1 — Temas: sistema de design tokens centralizado + dark/light/system (dark como experiencia primaria) con persistencia de la preferencia | ✅ Completada | 2026-09-26 |
+| ├ 10.2 — Settings: página "Ajustes" (sidebar ⚙) con las preferencias de UX (tema, toggles de notificaciones/detección) sobre el store de preferencias | ✅ Completada | 2026-09-26 |
+| ├ 10.3 — Favoritos: estrella en tools/ops, sección "⭐ Favorites" en la sidebar con navegación, persistente | ✅ Completada | 2026-09-26 |
+| ├ 10.4 — Búsqueda global: paleta Ctrl+K (command palette) sobre tools, ops, ajustes y devs con tags y fuzzy matching | ✅ Completada | 2026-09-26 |
+| ├ 10.5 — Atajos de teclado: registro global de shortcuts + overlay de ayuda con la lista | ✅ Completada | 2026-09-26 |
+| ├ 10.6 — Notificaciones + Activity center: toasts globales (éxito/aviso/error) y panel Activity con operaciones en curso/completadas y su detalle | ⏳ Pendiente | — |
+| ├ 10.7 — Smart detection (clipboard): detección de JSON/JWT/clave SSH/PEM con sugerencia de tool; contenido sensible solo en memoria, jamás persistido (§21) | ⏳ Pendiente | — |
+| ├ 10.8 — First-run experience: pantalla de bienvenida/onboarding en el primer arranque | ⏳ Pendiente | — |
+| └ 10.9 — Integración final: README, build + suite completa en verde, la app compila y lanza | ⏳ Pendiente | — |
+
+## Desglose Task 009 — decisiones de diseño (previas a implementar)
+
+- **SSH**: generación con `ssh-keygen` de Windows (implementación madura; argv
+  fijo vía `IProcessRunner`, nunca shell; si no está disponible → error
+  controlado `NOT_INSTALLED` con mensaje claro). Detección, listado,
+  inspección, fingerprint SHA256 e importación de claves públicas 100% en
+  .NET con BouncyCastle (`OpenSshPublicKeyUtilities`), testeables sin
+  binarios externos.
+- **PGP**: BouncyCastle en proceso (`Org.BouncyCastle.Bcpg.OpenPgp`) — GnuPG
+  no existe en Windows por defecto. Keyring propio en
+  `%APPDATA%\PCSuite\pgp` con escritura atómica (tmp+move, patrón del
+  historial de ClamAV); claves secretas protegidas con passphrase (S2K) cuando
+  el usuario la indica.
+- Sin elevación (UAC) en toda la task: todo escribe en directorios de usuario.
+- Nunca se registran passphrase, texto claro ni material de clave privada.
+- Sonda previa verificada: `ssh-keygen` presente en
+  `C:\WINDOWS\System32\OpenSSH\`; BC 2.x produce y lee el contenedor real
+  `openssh-key-v1` (round-trip comprobado).
+
+## Desglose Task 010 — decisiones de diseño (previas a implementar)
+
+- **Frontend-first**: todo el trabajo vive en `frontend/` (React/TS); sin
+  nuevas mutaciones nativas ni elevación. Único contacto opcional con el
+  puente en 10.7: una operación tipada de solo lectura de clipboard si el
+  gesto manual no basta — nunca logging ni persistencia de su contenido.
+- **Persistencia**: preferencias de UX (tema, favoritos, toggles, first-run
+  hecho) en `localStorage` del WebView2. `ponytail:` vs §30 (SQLite): para
+  claves-valor de UX locales SQLite sería over-engineering; si el nativo las
+  necesita algún día → store JSON atómico (patrón `ClamAvHistoryStore`).
+- **Activity/Notificaciones**: se alimentan del ciclo de vida de las llamadas
+  al puente que el propio frontend dispara (request/response + eventos), sin
+  instrumentar el host; sin stack traces ni datos sensibles en la UI.
+- **Clipboard (§20–21)**: detección puntuada y sugerencia de tool; nada del
+  contenido se escribe a disco ni a logs — los datos sensibles (claves,
+  tokens, JWT, contraseñas) solo viven en memoria.
+- **Commits**: cada parte se cierra con `UI: ...`; el cierre de la task con
+  `Task 010: Production UX - ...`.
 
 ## Reglas del proyecto (aplican a todas las tasks)
 
