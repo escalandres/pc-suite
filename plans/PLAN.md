@@ -28,7 +28,7 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | ├ 9.5 — PGP: claves con BouncyCastle — generación (nombre/email/algoritmo/expiración/passphrase), importación, exportación, listado/inspección + tests round-trip | ✅ Completada | 2026-09-25 |
 | ├ 9.6 — PGP: cifrado/descifrado/firma/verificación + operaciones del puente `pgp.*` + registro DI + tests round-trip criptográficos | ✅ Completada | 2026-09-25 |
 | └ 9.7 — Integración final: README, build + suite completa en verde, la app compila y lanza | ✅ Completada | 2026-09-25 |
-| Task 010 — Production UX (temas, settings, favoritos, búsqueda global, atajos, notificaciones/activity, clipboard, first-run) — dividida en 9 partes (10.1–10.9) | 🚧 En curso | 2026-09-26 |
+| Task 010 — Production UX (temas, settings, favoritos, búsqueda global, atajos, notificaciones/activity, clipboard, first-run) — dividida en 9 partes (10.1–10.9) | ✅ Completada | 2026-09-26 |
 | ├ 10.1 — Temas: sistema de design tokens centralizado + dark/light/system (dark como experiencia primaria) con persistencia de la preferencia | ✅ Completada | 2026-09-26 |
 | ├ 10.2 — Settings: página "Ajustes" (sidebar ⚙) con las preferencias de UX (tema, toggles de notificaciones/detección) sobre el store de preferencias | ✅ Completada | 2026-09-26 |
 | ├ 10.3 — Favoritos: estrella en tools/ops, sección "⭐ Favorites" en la sidebar con navegación, persistente | ✅ Completada | 2026-09-26 |
@@ -37,7 +37,7 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | ├ 10.6 — Notificaciones + Activity center: toasts globales (éxito/aviso/error) y panel Activity con operaciones en curso/completadas y su detalle | ✅ Completada | 2026-09-26 |
 | ├ 10.7 — Smart detection (clipboard): detección de JSON/JWT/clave SSH/PEM con sugerencia de tool; contenido sensible solo en memoria, jamás persistido (§21) | ✅ Completada | 2026-09-26 |
 | ├ 10.8 — First-run experience: pantalla de bienvenida/onboarding en el primer arranque | ✅ Completada | 2026-09-26 |
-| └ 10.9 — Integración final: README, build + suite completa en verde, la app compila y lanza | ⏳ Pendiente | — |
+| └ 10.9 — Integración final: README, build + suite completa en verde, la app compila y lanza | ✅ Completada | 2026-09-26 |
 
 ## Desglose Task 009 — decisiones de diseño (previas a implementar)
 

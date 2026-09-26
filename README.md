@@ -114,6 +114,12 @@ La UI jamás muestra stack traces.
   definiciones, escaneos rápido/completo/personalizado (con ruta como único
   payload validado en .NET) e historial de escaneos.
 - **Herramientas dev** — providers de desarrollador (Task 004).
+- **Portapapeles** — smart detection (Task 010): al pegar contenido analiza
+  JSON/JWT/clave SSH/PEM/tokens y sugiere la herramienta adecuada; lo sensible
+  solo vive en memoria, jamás se persiste (§21).
+- **Actividad** — centro de actividad (Task 010): operaciones en curso
+  (spinner), completadas con duración y sus errores; los fallos de CLI
+  (`succeeded:false`) se registran como error con `detail`.
 
 ### Elevación por operación (Task 005)
 
@@ -289,6 +295,28 @@ Seguridad (§5 / §6 / §12):
 - Límites: anillos/entradas armor acotados a 1 MiB, texto plano a 4 MiB,
   contraseñas con tope y sin NUL; las claves privadas solo salen del keyring
   si se pide `includePrivate` explícito.
+
+### Production UX (Task 010)
+
+Frontend puro — sin operaciones nativas nuevas. Todo se persiste en
+`localStorage` con prefijo `pcsuite.` (`ponytail:` frente al §30 SQLite, que
+sería over-engineering para claves-valor de UI):
+
+- **Temas** — oscuro (por defecto), claro y «sistema» (`matchMedia`).
+- **Ajustes** — notificaciones y detección de portapapeles como toggles
+  persistidos; el tema también se cambia desde ahí.
+- **Favoritos** — estrellas en el menú y en las tarjetas de herramientas;
+  se agrupan bajo «FAVORITOS».
+- **Búsqueda global (Ctrl + K)** — paleta difusa sobre páginas, herramientas,
+  acciones de tema y ayuda.
+- **Atajos** — registro global (`Ctrl + K`, `?`, `Ctrl + ,`) con panel de ayuda.
+- **Notificaciones** — toasts al terminar operaciones (éxito solo en
+  mutaciones; errores siempre), auto-dismiss a los 5 s y respetando el toggle
+  de Ajustes. Las operaciones ruidosas (`tools.list`, `system.info`, búsquedas)
+  no generan actividad ni toasts.
+- **Actividad** — consumida desde el ciclo de vida del puente (`bridge.onCall`),
+  sin instrumentar el host.
+- **Primer arranque** — overlay de bienvenida que se cierra con «Empezar».
 
 ## Tests
 
