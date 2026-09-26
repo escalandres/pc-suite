@@ -11,6 +11,7 @@ import { useSyncExternalStore } from 'react';
 export const PREF_NOTIFICATIONS = 'notifications';
 export const PREF_CLIPBOARD_DETECTION = 'clipboardDetection';
 export const PREF_FAVORITES = 'favorites';
+export const PREF_FIRST_RUN = 'firstRunSeen';
 
 const PREFIX = 'pcsuite.';
 const cache = new Map<string, unknown>();

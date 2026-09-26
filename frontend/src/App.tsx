@@ -14,6 +14,7 @@ import { Toasts } from './components/Toasts';
 import { bridge } from './services/pcsuiteBridge';
 import { CommandPalette } from './components/CommandPalette';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
+import { Welcome } from './components/Welcome';
 import {
   isEditableTarget,
   registerShortcut,
@@ -102,6 +103,7 @@ export default function App() {
       />
       <ShortcutsHelp />
       <Toasts />
+      <Welcome />
     </>
   );
 }
