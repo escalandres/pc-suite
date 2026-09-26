@@ -12,7 +12,9 @@ using PCSuite.Infrastructure.Developers;
 using PCSuite.Infrastructure.Elevation;
 using PCSuite.Infrastructure.Logging;
 using PCSuite.Infrastructure.Operations;
+using PCSuite.Infrastructure.PGP;
 using PCSuite.Infrastructure.Processes;
+using PCSuite.Infrastructure.SSH;
 using PCSuite.Infrastructure.Tools;
 using PCSuite.Infrastructure.WinGet;
 using PCSuite.Infrastructure.Wsl;
@@ -121,6 +123,19 @@ public partial class MainForm : Form
             new ClamAvHistoryStore(),
             _loggerFactory.CreateLogger<ClamAvService>());
 
+        // SSH (Task 009): solo la generación invoca ssh-keygen con argv fijo
+        // (sin privilegios); listado, inspección, fingerprint e importación son
+        // parseo .NET puro sobre ~/.ssh (nunca se ejecuta nada para leer claves).
+        var sshKeyService = new SshKeyService(
+            locator,
+            processRunner,
+            _loggerFactory.CreateLogger<SshKeyService>());
+
+        // PGP (Task 009): 100% BouncyCastle en proceso (nunca gpg ni procesos
+        // externos); el keyring vive en %APPDATA%\PCSuite\pgp. Sin logger a
+        // propósito: contraseña, texto plano y clave privada no se registran.
+        var pgpService = new PgpService(new PgpKeyringStore());
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
@@ -151,6 +166,20 @@ public partial class MainForm : Form
                 new ClamAvFullScanOperation(clamAvService),
                 new ClamAvCustomScanOperation(clamAvService),
                 new ClamAvHistoryOperation(clamAvService),
+                new SshDetectOperation(sshKeyService),
+                new SshListOperation(sshKeyService),
+                new SshGenerateOperation(sshKeyService),
+                new SshInspectOperation(sshKeyService),
+                new SshImportPublicKeyOperation(sshKeyService),
+                new SshOpenDirectoryOperation(sshKeyService),
+                new PgpGenerateKeyOperation(pgpService),
+                new PgpListKeysOperation(pgpService),
+                new PgpImportKeyOperation(pgpService),
+                new PgpExportKeyOperation(pgpService),
+                new PgpEncryptOperation(pgpService),
+                new PgpDecryptOperation(pgpService),
+                new PgpSignOperation(pgpService),
+                new PgpVerifyOperation(pgpService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

@@ -42,4 +42,16 @@ public static class BridgeErrorCodes
     // tiempo, siempre con mensajes controlados aptos para la UI.
     public const string ClamAvFailed = "CLAMAV_FAILED";
     public const string ClamAvTimeout = "CLAMAV_TIMEOUT";
+
+    // Códigos de las operaciones ssh.* (Task 009): fallas al invocar
+    // ssh-keygen (incluida una clave que ya existe, que jamás se sobrescribe)
+    // y exceso de tiempo, siempre con mensajes controlados aptos para la UI.
+    public const string SshFailed = "SSH_FAILED";
+    public const string SshTimeout = "SSH_TIMEOUT";
+
+    // Código de las operaciones pgp.* (Task 009): cualquier fallo controlado
+    // (entrada inválida, clave inexistente, passphrase erróneo, material
+    // ilegible) con mensaje apto para la UI y jamás material privado ni
+    // passphrases. Todo ocurre en proceso, así que no hay timeout propio.
+    public const string PgpFailed = "PGP_FAILED";
 }

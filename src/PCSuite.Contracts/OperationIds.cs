@@ -100,4 +100,56 @@ public static class OperationIds
 
     /// <summary>Historial de escaneos persistido (más reciente primero).</summary>
     public const string ClamavHistory = "clamav.history";
+
+    // Operaciones SSH (Task 009 / §5.1–5.2): payloads estructurados validados
+    // en el servicio (ruta, algoritmo, tamaño, nombre de archivo); la
+    // generación invoca ssh-keygen con argv fijo y el resto (listado,
+    // inspección, fingerprint e importación) es parseo .NET puro.
+
+    /// <summary>Detección: ssh-keygen instalado/no y ruta resuelta.</summary>
+    public const string SshDetect = "ssh.detect";
+
+    /// <summary>Claves públicas existentes (por defecto en ~/.ssh).</summary>
+    public const string SshList = "ssh.list";
+
+    /// <summary>Generación de par (payload: algorithm/bits/comment/directory/passphrase).</summary>
+    public const string SshGenerate = "ssh.generate";
+
+    /// <summary>Inspección de un archivo .pub o contenedor openssh-key-v1 (payload: {"path"}).</summary>
+    public const string SshInspect = "ssh.inspect";
+
+    /// <summary>Importación de una clave pública (payload: key/fileName/directory).</summary>
+    public const string SshImportPublicKey = "ssh.importPublicKey";
+
+    /// <summary>Crea ~/.ssh si falta y lo abre en el Explorador.</summary>
+    public const string SshOpenDirectory = "ssh.openDirectory";
+
+    // Operaciones PGP (Task 009 / §6): BouncyCastle 100% en proceso (nunca
+    // gpg, que no existe en Windows por defecto); los payloads son texto y
+    // claves armoured acotados, y el material privado / los passphrases
+    // jamás viajan en claro ni en argv de procesos.
+
+    /// <summary>Generación de par (payload: name/email/algorithm/bits/expirationDays/passphrase).</summary>
+    public const string PgpGenerateKey = "pgp.generateKey";
+
+    /// <summary>Claves del keyring propio (%APPDATA%\PCSuite\pgp); payload cero.</summary>
+    public const string PgpListKeys = "pgp.listKeys";
+
+    /// <summary>Importación de una clave armoured (pública o privada): payload {"armoredKey"}.</summary>
+    public const string PgpImportKey = "pgp.importKey";
+
+    /// <summary>Exportación armoured por fingerprint (payload: fingerprint/includePrivate).</summary>
+    public const string PgpExportKey = "pgp.exportKey";
+
+    /// <summary>Cifrado de texto para destinatarios (payload: text/recipients).</summary>
+    public const string PgpEncrypt = "pgp.encrypt";
+
+    /// <summary>Descifrado de un mensaje armoured (payload: armoredMessage/passphrase).</summary>
+    public const string PgpDecrypt = "pgp.decrypt";
+
+    /// <summary>Firma separada de texto con clave privada (payload: text/fingerprint/passphrase).</summary>
+    public const string PgpSign = "pgp.sign";
+
+    /// <summary>Verificación de firma armoured (payload: text/signature).</summary>
+    public const string PgpVerify = "pgp.verify";
 }

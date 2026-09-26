@@ -77,14 +77,17 @@ La UI nunca toca el SO directamente; todo pasa por el puente:
 - Respuesta: `{"id", "success", "result?" | "error": {"code", "message"}}`
 - Evento (nativo → UI): `{"event", "payload?"}`
 
-Operaciones permitidas (Tasks 001–008): `system.info`, `tools.list`,
+Operaciones permitidas (Tasks 001–009): `system.info`, `tools.list`,
 `tools.search`, `tool.execute`, `developer.list`, `developer.checkUpdate`,
 `developer.update`, `developer.launch`, `winget.detect`, `winget.search`,
 `winget.list`, `winget.updates`, `winget.install`, `winget.upgrade`,
 `winget.upgradeAll`, `winget.uninstall`, `wsl.status`, `wsl.list`,
 `wsl.update`, `wsl.shutdown`, `wsl.start`, `clamav.status`, `clamav.install`,
 `clamav.updateDefinitions`, `clamav.quickScan`, `clamav.fullScan`,
-`clamav.customScan`, `clamav.history`.
+`clamav.customScan`, `clamav.history`, `ssh.detect`, `ssh.list`,
+`ssh.generate`, `ssh.inspect`, `ssh.importPublicKey`, `ssh.openDirectory`,
+`pgp.generateKey`, `pgp.listKeys`, `pgp.importKey`, `pgp.exportKey`,
+`pgp.encrypt`, `pgp.decrypt`, `pgp.sign`, `pgp.verify`.
 Eventos: `app.ready`.
 
 Errores conocidos: `MALFORMED_MESSAGE`, `OPERATION_NOT_FOUND`,
@@ -92,7 +95,9 @@ Errores conocidos: `MALFORMED_MESSAGE`, `OPERATION_NOT_FOUND`,
 desarrollador: `NOT_SUPPORTED`, `NOT_INSTALLED`, `ELEVATION_REQUIRED`,
 `UPDATE_FAILED`, `UPDATE_TIMEOUT`, `LAUNCH_FAILED`, los de winget:
 `WINGET_FAILED`, `WINGET_TIMEOUT`, los de wsl: `WSL_FAILED`,
-`WSL_TIMEOUT`, y los de clamav: `CLAMAV_FAILED`, `CLAMAV_TIMEOUT`.
+`WSL_TIMEOUT`, los de clamav: `CLAMAV_FAILED`, `CLAMAV_TIMEOUT`, los de
+ssh: `SSH_FAILED`, `SSH_TIMEOUT` y los de pgp: `PGP_FAILED` (además de
+`NOT_INSTALLED` cuando falta `ssh-keygen`).
 La UI jamás muestra stack traces.
 
 ### Páginas de la UI
@@ -245,6 +250,46 @@ son salidas sintéticas con el formato documentado de clamscan/freshclam (las
 etiquetas del resumen son SIEMPRE inglesas) y los tests jamás tocan los
 directorios reales del equipo.
 
+### SSH / PGP (Task 009)
+
+`ISshKeyService` y `IPgpService` (Core) con sus implementaciones en
+Infrastructure exponen 6 operaciones puente `ssh.*` (detect, list, generate,
+inspect, importPublicKey, openDirectory) y 8 `pgp.*` (generateKey, listKeys,
+importKey, exportKey, encrypt, decrypt, sign, verify).
+
+Arquitectura: la generación de claves SSH usa el `ssh-keygen` de Windows con
+**argv fijo** construido en .NET vía `IProcessRunner` (nunca shell); si no
+existe el binario → `NOT_INSTALLED` con mensaje controlado. Detección,
+listado, inspección, fingerprint e importación son **parseo .NET puro**
+(`SshKeyParser`: OpenSSH/PEM/Base64, deduplicación por fingerprint,
+`SHA256:` en Base64) sobre `~/.ssh` — nunca se ejecuta nada para leer claves.
+PGP es **100 % BouncyCastle en proceso** (nunca `gpg` ni procesos externos):
+keyring propio en `%APPDATA%\PCSuite\pgp` (`keyring.json` + anillos
+`<FINGERPRINT>.pub.asc`/`.sec.asc`, escritura atómica y lectura tolerante a
+corrupción).
+
+Seguridad (§5 / §6 / §12):
+
+- El frontend solo envía payloads tipados camelCase (fingerprints, emails,
+  texto a cifrar, anillos armor); la validación y la resolución (prefijo de
+  fingerprint o email exacto, sin ambigüedad) ocurren en .NET. Nada del
+  payload se convierte en argv arbitrario y **cero shell** en toda la task.
+- Ninguna operación `ssh.*`/`pgp.*` declara elevación (`RequiresElevation =
+  false` en las 14): la app jamás se ejecuta como Administrador por esta
+  task y no hay prompts UAC en su flujo.
+- Sin `ILogger` en `PgpService` y logging mínimo en SSH: la contraseña, el
+  texto plano, la clave privada y el argv (que puede contener la passphrase)
+  **jamás se registran**; los errores son mensajes estáticos en español y
+  nunca incluyen stack traces ni reflejan la entrada del usuario.
+- Firmas: `pgp.sign` produce una firma detached armor; `pgp.verify` devuelve
+  `valid` como **resultado legítimo** (firma inválida o desconocida →
+  `valid:false` con detalle, `success:true`), no como error del puente. El
+  descifrado distingue passphrase incorrecta, mensaje no cifrado para el
+  keyring local y mensaje corrupto con códigos fijos.
+- Límites: anillos/entradas armor acotados a 1 MiB, texto plano a 4 MiB,
+  contraseñas con tope y sin NUL; las claves privadas solo salen del keyring
+  si se pide `includePrivate` explícito.
+
 ## Tests
 
 ```powershell
@@ -257,9 +302,15 @@ herramientas, el framework de elevación (autorización, IPC, payload inválido)
 winget (parser de tablas contra fixtures reales, validación/argv, detección,
 mutaciones con elevación por permisos y codificación UTF-8 de la salida), wsl
 (parser contra fixtures reales, payload cero ignorado, elevación solo en
-`--update` y codificación UTF-16LE de la salida) y clamav (parser contra
+`--update` y codificación UTF-16LE de la salida), clamav (parser contra
 fixtures sintéticos, argv fijos, historial con E/S tolerantes, payload
-ignorado salvo `customScan` y elevación solo en freshclam por permisos).
+ignorado salvo `customScan` y elevación solo en freshclam por permisos) y
+ssh/pgp (parser y fingerprint cross-validados con `ssh-keygen -lf`, argv fijo
+de generación, payloads hostiles ignorados, keyring en carpetas temporales
+que jamás tocan `~/.ssh` ni `%APPDATA%` real, round-trips criptográficos
+cifrar→descifrar y firmar→verificar con BouncyCastle, passphrase jamás
+reflejada en errores y firma inválida como resultado `valid:false`, no como
+error).
 
 ## Logs
 
