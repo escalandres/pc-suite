@@ -8,6 +8,7 @@ import { Winget } from './pages/Winget';
 import { Wsl } from './pages/Wsl';
 import { Clamav } from './pages/Clamav';
 import { Settings } from './pages/Settings';
+import { Clipboard } from './pages/Clipboard';
 import { ActivityPage } from './pages/Activity';
 import { Toasts } from './components/Toasts';
 import { bridge } from './services/pcsuiteBridge';
@@ -92,7 +93,7 @@ export default function App() {
   return (
     <>
       <AppLayout page={page} onNavigate={navigate} readyNotice={readyNotice}>
-        {renderPage(page, focus)}
+        {renderPage(page, focus, navigate)}
       </AppLayout>
       <CommandPalette
         open={paletteOpen}
@@ -105,10 +106,16 @@ export default function App() {
   );
 }
 
-function renderPage(page: PageId, focus: { toolId: string } | null) {
+function renderPage(
+  page: PageId,
+  focus: { toolId: string } | null,
+  navigate: (page: PageId, toolId?: string) => void,
+) {
   switch (page) {
     case 'tools':
       return <Tools focus={focus} />;
+    case 'clipboard':
+      return <Clipboard onNavigate={navigate} />;
     case 'devtools':
       return <DevTools />;
     case 'winget':

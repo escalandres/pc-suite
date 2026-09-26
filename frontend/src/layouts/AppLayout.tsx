@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   Activity,
+  ClipboardPaste,
   Home,
   ShieldCheck,
   Wrench,
@@ -19,6 +20,7 @@ import { openHelp } from '../shortcuts';
 export type PageId =
   | 'home'
   | 'tools'
+  | 'clipboard'
   | 'cleaner'
   | 'security'
   | 'devtools'
@@ -51,6 +53,7 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Inicio', icon: Home, enabled: true },
   { id: 'tools', label: 'Herramientas', icon: Wrench, enabled: true },
+  { id: 'clipboard', label: 'Portapapeles', icon: ClipboardPaste, enabled: true },
   { id: 'winget', label: 'Paquetes', icon: Package, enabled: true },
   { id: 'wsl', label: 'WSL', icon: Boxes, enabled: true },
   { id: 'clamav', label: 'ClamAV', icon: Bug, enabled: true },

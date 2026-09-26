@@ -35,7 +35,7 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | ├ 10.4 — Búsqueda global: paleta Ctrl+K (command palette) sobre tools, ops, ajustes y devs con tags y fuzzy matching | ✅ Completada | 2026-09-26 |
 | ├ 10.5 — Atajos de teclado: registro global de shortcuts + overlay de ayuda con la lista | ✅ Completada | 2026-09-26 |
 | ├ 10.6 — Notificaciones + Activity center: toasts globales (éxito/aviso/error) y panel Activity con operaciones en curso/completadas y su detalle | ✅ Completada | 2026-09-26 |
-| ├ 10.7 — Smart detection (clipboard): detección de JSON/JWT/clave SSH/PEM con sugerencia de tool; contenido sensible solo en memoria, jamás persistido (§21) | ⏳ Pendiente | — |
+| ├ 10.7 — Smart detection (clipboard): detección de JSON/JWT/clave SSH/PEM con sugerencia de tool; contenido sensible solo en memoria, jamás persistido (§21) | ✅ Completada | 2026-09-26 |
 | ├ 10.8 — First-run experience: pantalla de bienvenida/onboarding en el primer arranque | ⏳ Pendiente | — |
 | └ 10.9 — Integración final: README, build + suite completa en verde, la app compila y lanza | ⏳ Pendiente | — |
 
