@@ -8,6 +8,8 @@ import { Winget } from './pages/Winget';
 import { Wsl } from './pages/Wsl';
 import { Clamav } from './pages/Clamav';
 import { Settings } from './pages/Settings';
+import { ActivityPage } from './pages/Activity';
+import { Toasts } from './components/Toasts';
 import { bridge } from './services/pcsuiteBridge';
 import { CommandPalette } from './components/CommandPalette';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
@@ -98,6 +100,7 @@ export default function App() {
         onNavigate={navigate}
       />
       <ShortcutsHelp />
+      <Toasts />
     </>
   );
 }
@@ -116,6 +119,8 @@ function renderPage(page: PageId, focus: { toolId: string } | null) {
       return <Clamav />;
     case 'settings':
       return <Settings />;
+    case 'activity':
+      return <ActivityPage />;
     default:
       return <Home />;
   }

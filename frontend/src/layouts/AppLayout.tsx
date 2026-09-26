@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  Activity,
   Home,
   ShieldCheck,
   Wrench,
@@ -25,6 +26,7 @@ export type PageId =
   | 'winget'
   | 'wsl'
   | 'clamav'
+  | 'activity'
   | 'settings';
 
 interface AppLayoutProps {
@@ -56,6 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: false },
   { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: true },
   { id: 'plugins', label: 'Plugins', icon: Puzzle, enabled: false },
+  { id: 'activity', label: 'Actividad', icon: Activity, enabled: true },
   { id: 'settings', label: 'Ajustes', icon: Settings, enabled: true },
 ];
 

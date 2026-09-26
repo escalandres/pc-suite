@@ -39,9 +39,23 @@ export class BridgeError extends Error {
 
 type EventHandler<T> = (payload: T) => void;
 
+/** Fase del ciclo de vida de una call() (alimenta Activity y toasts, §36–37). */
+export interface BridgeCallEvent {
+  phase: 'start' | 'end';
+  id: string;
+  operation: string;
+  /** Solo en 'end' si falló el puente (mensaje estructurado, jamás stack trace). */
+  error?: { code: string; message: string };
+  /** Solo en 'end': resultado estructurado (p. ej. succeeded:false del CLI). */
+  result?: unknown;
+}
+
+type CallObserver = (event: BridgeCallEvent) => void;
+
 export class PcsuiteBridge {
   private readonly pending = new Map<string, Pending>();
   private readonly handlers = new Map<string, Set<EventHandler<unknown>>>();
+  private readonly callObservers = new Set<CallObserver>();
   private seq = 0;
 
   constructor() {
@@ -61,14 +75,19 @@ export class PcsuiteBridge {
    * Rechaza con BridgeError si la operación falla o no está permitida.
    */
   call<T>(operation: string, payload?: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+    const id = `${Date.now()}-${++this.seq}`;
     const webview = window.chrome?.webview;
     if (!webview) {
-      return Promise.reject(
-        new BridgeError('BRIDGE_UNAVAILABLE', 'El host nativo no está disponible.'),
-      );
+      const error = new BridgeError('BRIDGE_UNAVAILABLE', 'El host nativo no está disponible.');
+      this.emitCall({
+        phase: 'end',
+        id,
+        operation,
+        error: { code: error.code, message: error.message },
+      });
+      return Promise.reject(error);
     }
 
-    const id = `${Date.now()}-${++this.seq}`;
     const request: BridgeRequest = { id, operation };
     if (payload !== undefined) {
       request.payload = payload;
@@ -97,8 +116,44 @@ export class PcsuiteBridge {
             error instanceof Error ? error.message : 'No se pudo enviar el mensaje.',
           ),
         );
+        return;
       }
-    });
+      this.emitCall({ phase: 'start', id, operation });
+    }).then(
+      (value) => {
+        this.emitCall({ phase: 'end', id, operation, result: value });
+        return value;
+      },
+      (error: unknown) => {
+        const info =
+          error instanceof BridgeError
+            ? { code: error.code, message: error.message }
+            : {
+                code: 'UNKNOWN',
+                message: error instanceof Error ? error.message : 'Error desconocido.',
+              };
+        this.emitCall({ phase: 'end', id, operation, error: info });
+        throw error;
+      },
+    );
+  }
+
+  /** Observa el inicio/fin de cada call(); devuelve la función de baja. */
+  onCall(observer: CallObserver): () => void {
+    this.callObservers.add(observer);
+    return () => {
+      this.callObservers.delete(observer);
+    };
+  }
+
+  private emitCall(event: BridgeCallEvent): void {
+    for (const observer of this.callObservers) {
+      try {
+        observer(event);
+      } catch {
+        // un observador roto no debe romper la operación observada
+      }
+    }
   }
 
   /** Suscribe un manejador a un evento nativo. Devuelve la función de baja. */
