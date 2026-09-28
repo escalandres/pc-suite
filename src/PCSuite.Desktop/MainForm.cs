@@ -8,6 +8,7 @@ using PCSuite.Contracts;
 using PCSuite.Desktop.Bridge;
 using PCSuite.Infrastructure;
 using PCSuite.Infrastructure.ClamAV;
+using PCSuite.Infrastructure.Cleaner;
 using PCSuite.Infrastructure.Developers;
 using PCSuite.Infrastructure.Elevation;
 using PCSuite.Infrastructure.Logging;
@@ -136,6 +137,11 @@ public partial class MainForm : Form
         // propósito: contraseña, texto plano y clave privada no se registran.
         var pgpService = new PgpService(new PgpKeyringStore());
 
+        // Limpiador (Task 011): escaneo y borrado SOLO en raíces fijas del
+        // sistema (§16 "Temporary file cleanup"); sin procesos ni elevación —
+        // lo que la ACL no permite se omite y se contabiliza.
+        var cleanerService = new CleanerService();
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
@@ -180,6 +186,8 @@ public partial class MainForm : Form
                 new PgpDecryptOperation(pgpService),
                 new PgpSignOperation(pgpService),
                 new PgpVerifyOperation(pgpService),
+                new CleanerScanOperation(cleanerService),
+                new CleanerCleanOperation(cleanerService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

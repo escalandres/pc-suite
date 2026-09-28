@@ -41,9 +41,8 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | Task 011 — Limpiador (limpieza de archivos temporales en raíces fijas) — dividida en 4 partes (11.1–11.4) | 🚧 En progreso | — |
 | ├ 11.1 — Contratos + núcleo: `ICleanerService` (Core) + modelos/payloads/resultados `cleaner.*` en Contracts + OperationIds + tests | ✅ Completada | 2026-09-27 |
 | ├ 11.2 — Infraestructura: `CleanerService` (escaneo y borrado seguro en raíces fijas, tolerancia a bloqueos/ACL, sin saltar reparse points) + tests | ✅ Completada | 2026-09-27 |
-| ├ 11.3 — Operaciones del puente `cleaner.scan` / `cleaner.clean` + registro en composition root + tests de contrato/seguridad | 🚧 En progreso | — |
-| ├ 11.3 — Operaciones del puente `cleaner.scan` / `cleaner.clean` + registro en composition root + tests de contrato/seguridad | ⏳ Pendiente | — |
-| └ 11.4 — UI: página "Limpiador" (nav habilitada, escaneo con tamaños, confirmación y resultados) + build y recorrido | ⏳ Pendiente | — |
+| ├ 11.3 — Operaciones del puente `cleaner.scan` / `cleaner.clean` + registro en composition root + tests de contrato/seguridad | ✅ Completada | 2026-09-27 |
+| └ 11.4 — UI: página "Limpiador" (nav habilitada, escaneo con tamaños, confirmación y resultados) + build y recorrido | 🚧 En progreso | — |
 
 ## Desglose Task 009 — decisiones de diseño (previas a implementar)
 
@@ -82,6 +81,29 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
   tokens, JWT, contraseñas) solo viven en memoria.
 - **Commits**: cada parte se cierra con `UI: ...`; el cierre de la task con
   `Task 010: Production UX - ...`.
+
+## Desglose Task 011 — decisiones de diseño (previas a implementar)
+
+- **Alcance**: "Archivos temporales" (§16 "Future: Temporary file cleanup"):
+  3 categorías de raíces FIJAS — Temp del usuario (`%LOCALAPPDATA%\Temp`),
+  `C:\Windows\Temp` y la caché de Windows Update
+  (`SoftwareDistribution\Download`). El frontend solo envía ids de categoría
+  (`userTemp`/`windowsTemp`/`updateCache`) validados contra la lista cerrada
+  del backend; jamás rutas ni argumentos.
+- **Borrado seguro**: enumeración recursiva con `IgnoreInaccessible` y
+  `AttributesToSkip = ReparsePoint` — una junction dentro de la raíz no puede
+  sacar el borrado fuera de ella (test explícito). Sin elevación: lo que la
+  ACL no permite se omite y se contabiliza (`skippedFiles` + `detail`), nunca
+  rompe la operación ni pide UAC.
+- **2 operaciones**: `cleaner.scan` (payload cero; tamaños/ficheros por
+  categoría) y `cleaner.clean` (payload `{"categories":[ids]}`; ids
+  desconocidos/vacío → `CLEANER_FAILED` controlado, sin eco de la entrada).
+  `cleaner.clean` entra en el regex de MUTATION (toast); `cleaner.scan` se
+  registra como cualquier lectura de página.
+- **UI**: página Limpiador con escaneo → tamaños por categoría con checkbox →
+  `window.confirm` antes de borrar → resultado (borrados/liberados/omitidos).
+- **Commits**: cada parte se cierra con `Task 011: ...`; la UI con
+  `UI: Task 011 (11.4) ...`.
 
 ## Reglas del proyecto (aplican a todas las tasks)
 
