@@ -152,4 +152,15 @@ public static class OperationIds
 
     /// <summary>Verificación de firma armoured (payload: text/signature).</summary>
     public const string PgpVerify = "pgp.verify";
+
+    // Operaciones Limpiador (Task 011 / §16 "Temporary file cleanup"): el
+    // frontend envía SOLO ids de categoría de la lista fija validada en el
+    // servicio — jamás rutas — y .NET borra únicamente dentro de las raíces
+    // fijas (Temp de usuario, C:\Windows\Temp, SoftwareDistribution\Download).
+
+    /// <summary>Tamaños y ficheros por categoría de temporales (payload cero).</summary>
+    public const string CleanerScan = "cleaner.scan";
+
+    /// <summary>Borra las categorías pedidas (payload: {"categories":[ids]}).</summary>
+    public const string CleanerClean = "cleaner.clean";
 }

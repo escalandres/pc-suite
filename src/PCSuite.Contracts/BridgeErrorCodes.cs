@@ -49,6 +49,11 @@ public static class BridgeErrorCodes
     public const string SshFailed = "SSH_FAILED";
     public const string SshTimeout = "SSH_TIMEOUT";
 
+    // Código de las operaciones cleaner.* (Task 011): entrada inválida (id de
+    // categoría desconocido o payload que no es objeto) con mensaje apto para
+    // la UI; nunca rutas ni stack traces en el error.
+    public const string CleanerFailed = "CLEANER_FAILED";
+
     // Código de las operaciones pgp.* (Task 009): cualquier fallo controlado
     // (entrada inválida, clave inexistente, passphrase erróneo, material
     // ilegible) con mensaje apto para la UI y jamás material privado ni

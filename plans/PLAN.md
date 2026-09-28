@@ -38,6 +38,11 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | ├ 10.7 — Smart detection (clipboard): detección de JSON/JWT/clave SSH/PEM con sugerencia de tool; contenido sensible solo en memoria, jamás persistido (§21) | ✅ Completada | 2026-09-26 |
 | ├ 10.8 — First-run experience: pantalla de bienvenida/onboarding en el primer arranque | ✅ Completada | 2026-09-26 |
 | └ 10.9 — Integración final: README, build + suite completa en verde, la app compila y lanza | ✅ Completada | 2026-09-26 |
+| Task 011 — Limpiador (limpieza de archivos temporales en raíces fijas) — dividida en 4 partes (11.1–11.4) | 🚧 En progreso | — |
+| ├ 11.1 — Contratos + núcleo: `ICleanerService` (Core) + modelos/payloads/resultados `cleaner.*` en Contracts + OperationIds + tests | ✅ Completada | 2026-09-27 |
+| ├ 11.2 — Infraestructura: `CleanerService` (escaneo y borrado seguro en raíces fijas, tolerancia a bloqueos/ACL, sin saltar reparse points) + tests | 🚧 En progreso | — |
+| ├ 11.3 — Operaciones del puente `cleaner.scan` / `cleaner.clean` + registro en composition root + tests de contrato/seguridad | ⏳ Pendiente | — |
+| └ 11.4 — UI: página "Limpiador" (nav habilitada, escaneo con tamaños, confirmación y resultados) + build y recorrido | ⏳ Pendiente | — |
 
 ## Desglose Task 009 — decisiones de diseño (previas a implementar)
 
