@@ -73,6 +73,8 @@ export const OperationIds = {
   clamavFullScan: 'clamav.fullScan',
   clamavCustomScan: 'clamav.customScan',
   clamavHistory: 'clamav.history',
+  cleanerScan: 'cleaner.scan',
+  cleanerClean: 'cleaner.clean',
 } as const;
 
 export const EventIds = {
@@ -274,4 +276,40 @@ export interface ClamAvHistoryEntryResult {
 /** Resultado de clamav.history. */
 export interface ClamAvHistoryResult {
   entries: ClamAvHistoryEntryResult[];
+}
+
+/** Categoría escaneada por cleaner.scan (raíz fija resuelta en .NET). */
+export interface CleanerCategoryScanResult {
+  /** Id fijo (userTemp / windowsTemp / updateCache). */
+  id: string;
+  /** Etiqueta visible. */
+  label: string;
+  /** Raíz fija resuelta por el backend (solo transparencia). */
+  path: string;
+  fileCount: number;
+  sizeBytes: number;
+  /** false: la raíz no se pudo leer (ACL) — la UI lo muestra como "sin permisos". */
+  accessible: boolean;
+}
+
+/** Resultado de cleaner.scan. */
+export interface CleanerScanResult {
+  categories: CleanerCategoryScanResult[];
+}
+
+/** Resultado de limpieza de una categoría (cleaner.clean). */
+export interface CleanerCategoryCleanResult {
+  /** Id fijo de la categoría. */
+  id: string;
+  deletedFiles: number;
+  freedBytes: number;
+  /** Ficheros omitidos (en uso o sin permiso). */
+  skippedFiles: number;
+  /** Detalle controlado (p. ej. "requiere administrador"); ausente si no hay. */
+  detail?: string | null;
+}
+
+/** Resultado de cleaner.clean. */
+export interface CleanerCleanResult {
+  categories: CleanerCategoryCleanResult[];
 }

@@ -33,7 +33,7 @@ const NOISY = new Set(['system.info', 'tools.list', 'tools.search', 'developer.l
 
 /** Solo las mutaciones generan toast de éxito; los errores, siempre. */
 const MUTATION =
-  /\.(install|upgrade|upgradeAll|uninstall|update|updateDefinitions|quickScan|fullScan|customScan|shutdown|start|execute|generate|generateKey|importKey|importPublicKey|encrypt|decrypt|sign)$/;
+  /\.(install|upgrade|upgradeAll|uninstall|update|updateDefinitions|quickScan|fullScan|customScan|shutdown|start|execute|generate|generateKey|importKey|importPublicKey|encrypt|decrypt|sign|clean)$/;
 
 const MAX_ENTRIES = 100;
 const MAX_TOASTS = 4;

@@ -7,6 +7,7 @@ import { DevTools } from './pages/DevTools';
 import { Winget } from './pages/Winget';
 import { Wsl } from './pages/Wsl';
 import { Clamav } from './pages/Clamav';
+import { Cleaner } from './pages/Cleaner';
 import { Settings } from './pages/Settings';
 import { Clipboard } from './pages/Clipboard';
 import { ActivityPage } from './pages/Activity';
@@ -126,6 +127,8 @@ function renderPage(
       return <Wsl />;
     case 'clamav':
       return <Clamav />;
+    case 'cleaner':
+      return <Cleaner />;
     case 'settings':
       return <Settings />;
     case 'activity':
