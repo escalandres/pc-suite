@@ -43,6 +43,11 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | ├ 11.2 — Infraestructura: `CleanerService` (escaneo y borrado seguro en raíces fijas, tolerancia a bloqueos/ACL, sin saltar reparse points) + tests | ✅ Completada | 2026-09-27 |
 | ├ 11.3 — Operaciones del puente `cleaner.scan` / `cleaner.clean` + registro en composition root + tests de contrato/seguridad | ✅ Completada | 2026-09-27 |
 | └ 11.4 — UI: página "Limpiador" (nav habilitada, escaneo con tamaños, confirmación y resultados) + build y recorrido | ✅ Completada | 2026-09-28 |
+| Task 012 — Seguridad (Security Center de solo lectura: Defender, firewall, puertos, antivirus y diagnóstico) — dividida en 4 partes (12.1–12.4) | 🚧 En progreso | — |
+| ├ 12.1 — Contratos + núcleo: `ISecurityService`, modelos/payloads `security.*`, `OperationIds.SecurityGetStatus` y tests de contrato | ✅ Completada | 2026-09-28 |
+| ├ 12.2 — Infraestructura: sondeo nativo (WSC `WscGetSecurityProviderHealth`, WMI SecurityCenter2/Defender, registro, puertos `IPGlobalProperties`) + `SecurityService` con tests sobre probe falso | 🚧 En progreso | — |
+| ├ 12.3 — Operación puente `security.getStatus` (payload cero, sin elevación) + composition root y tests | 🚧 En progreso | — |
+| └ 12.4 — UI: página "Seguridad" (nav habilitada) con tarjetas de estado, puertos abiertos y diagnóstico + build y recorrido | 🚧 En progreso | — |
 
 ## Desglose Task 009 — decisiones de diseño (previas a implementar)
 
@@ -104,6 +109,36 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
   `window.confirm` antes de borrar → resultado (borrados/liberados/omitidos).
 - **Commits**: cada parte se cierra con `Task 011: ...`; la UI con
   `UI: Task 011 (11.4) ...`.
+
+## Desglose Task 012 — decisiones de diseño (previas a implementar)
+
+- **Alcance**: §14 "Security Center" (Stage 10) en modo SOLO LECTURA:
+  1) estado de Windows Defender, 2) estado del firewall (por perfil),
+  3) puertos abiertos, 4) diagnóstico de seguridad y 5) antivirus registrado.
+  Ninguna acción de modificación en esta task: §14 prohíbe tocar ajustes de
+  seguridad sensibles sin confirmación explícita del usuario — cuando existan
+  acciones se añadirán con `window.confirm` y registro MUTATION.
+- **Fuentes de datos (siempre de lectura, sin elevación)**:
+  - Salud por proveedor: `WscGetSecurityProviderHealth` (wscapi.dll, Centro de
+    seguridad de Windows) para firewall/antivirus/antispyware/UAC.
+  - Antivirus registrado y estado de Defender: WMI `root\SecurityCenter2`
+    (`AntiVirusProduct`) y `root\Microsoft\Defender` (`MSFT_MpComputerStatus`)
+    vía `System.Management`.
+  - Perfiles de firewall, UAC y RDP: registro con `Microsoft.Win32.Registry`.
+  - Puertos: `IPGlobalProperties` (.NET, en proceso) — escucha/conexiones con
+    PID→proceso tolerante a acceso denegado.
+- **1 operación**: `security.getStatus` de payload cero que devuelve el
+  snapshot completo (`defender`/`firewall`/`antivirus`/`ports`/`diagnostics` +
+  `scannedAt`): una sola ida y vuelta al cargar la página.
+- **Testeabilidad**: todo el contacto con el OS vive tras `ISecurityProbe`
+  (implementación nativa real); `SecurityService` solo compone, mapea y
+  traduce fallos WMI/registro a estados `unknown` con detalle legible (nunca
+  stack traces) — tests con probe falso, deterministas en cualquier máquina.
+- **UI**: página "Seguridad" (nav `enabled` al aterrizar 12.4): tarjetas con
+  semáforo (Defender/firewall/antivirus), tabla de puertos abiertos y lista
+  de diagnóstico (UAC, RDP, protección en tiempo real…).
+- **Commits**: cada parte se cierra con `Task 012: ...`; la UI con
+  `UI: Task 012 (12.4) ...`.
 
 ## Reglas del proyecto (aplican a todas las tasks)
 

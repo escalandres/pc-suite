@@ -163,4 +163,12 @@ public static class OperationIds
 
     /// <summary>Borra las categorías pedidas (payload: {"categories":[ids]}).</summary>
     public const string CleanerClean = "cleaner.clean";
+
+    // Operaciones Seguridad (Task 012 / §14 "Security Center"): SOLO LECTURA —
+    // el frontend no envía nada y el backend jamás modifica ajustes de
+    // seguridad sensibles (§14 exige confirmación explícita del usuario; las
+    // acciones llegarán en una task futura con confirmación + registro).
+
+    /// <summary>Snapshot de solo lectura: Defender, firewall, puertos, antivirus y diagnóstico (payload cero).</summary>
+    public const string SecurityGetStatus = "security.getStatus";
 }
