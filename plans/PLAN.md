@@ -45,7 +45,7 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | └ 11.4 — UI: página "Limpiador" (nav habilitada, escaneo con tamaños, confirmación y resultados) + build y recorrido | ✅ Completada | 2026-09-28 |
 | Task 012 — Seguridad (Security Center de solo lectura: Defender, firewall, puertos, antivirus y diagnóstico) — dividida en 4 partes (12.1–12.4) | 🚧 En progreso | — |
 | ├ 12.1 — Contratos + núcleo: `ISecurityService`, modelos/payloads `security.*`, `OperationIds.SecurityGetStatus` y tests de contrato | ✅ Completada | 2026-09-28 |
-| ├ 12.2 — Infraestructura: sondeo nativo (WSC `WscGetSecurityProviderHealth`, WMI SecurityCenter2/Defender, registro, puertos `IPGlobalProperties`) + `SecurityService` con tests sobre probe falso | 🚧 En progreso | — |
+| ├ 12.2 — Infraestructura: sondeo nativo (WSC `WscGetSecurityProviderHealth`, WMI SecurityCenter2/Defender, registro, puertos `IPGlobalProperties`) + `SecurityService` con tests sobre probe falso | ✅ Completada | 2026-09-28 |
 | ├ 12.3 — Operación puente `security.getStatus` (payload cero, sin elevación) + composition root y tests | 🚧 En progreso | — |
 | └ 12.4 — UI: página "Seguridad" (nav habilitada) con tarjetas de estado, puertos abiertos y diagnóstico + build y recorrido | 🚧 En progreso | — |
 
