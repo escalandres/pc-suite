@@ -16,6 +16,7 @@ using PCSuite.Infrastructure.Operations;
 using PCSuite.Infrastructure.PGP;
 using PCSuite.Infrastructure.Processes;
 using PCSuite.Infrastructure.SSH;
+using PCSuite.Infrastructure.Security;
 using PCSuite.Infrastructure.Tools;
 using PCSuite.Infrastructure.WinGet;
 using PCSuite.Infrastructure.Wsl;
@@ -142,6 +143,11 @@ public partial class MainForm : Form
         // lo que la ACL no permite se omite y se contabiliza.
         var cleanerService = new CleanerService();
 
+        // Seguridad (Task 012): Security Center de solo lectura (§14) —
+        // Defender, firewall, antivirus, puertos y diagnóstico; sin elevación
+        // y sin ninguna acción de modificación.
+        var securityService = new SecurityService();
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
@@ -188,6 +194,7 @@ public partial class MainForm : Form
                 new PgpVerifyOperation(pgpService),
                 new CleanerScanOperation(cleanerService),
                 new CleanerCleanOperation(cleanerService),
+                new SecurityGetStatusOperation(securityService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

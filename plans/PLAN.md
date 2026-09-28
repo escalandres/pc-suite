@@ -46,7 +46,7 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | Task 012 — Seguridad (Security Center de solo lectura: Defender, firewall, puertos, antivirus y diagnóstico) — dividida en 4 partes (12.1–12.4) | 🚧 En progreso | — |
 | ├ 12.1 — Contratos + núcleo: `ISecurityService`, modelos/payloads `security.*`, `OperationIds.SecurityGetStatus` y tests de contrato | ✅ Completada | 2026-09-28 |
 | ├ 12.2 — Infraestructura: sondeo nativo (WSC `WscGetSecurityProviderHealth`, WMI SecurityCenter2/Defender, registro, puertos `IPGlobalProperties`) + `SecurityService` con tests sobre probe falso | ✅ Completada | 2026-09-28 |
-| ├ 12.3 — Operación puente `security.getStatus` (payload cero, sin elevación) + composition root y tests | 🚧 En progreso | — |
+| ├ 12.3 — Operación puente `security.getStatus` (payload cero, sin elevación) + composition root y tests | ✅ Completada | 2026-09-28 |
 | └ 12.4 — UI: página "Seguridad" (nav habilitada) con tarjetas de estado, puertos abiertos y diagnóstico + build y recorrido | 🚧 En progreso | — |
 
 ## Desglose Task 009 — decisiones de diseño (previas a implementar)
