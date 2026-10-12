@@ -17,6 +17,34 @@ public sealed class HashTool : ITool
         Description = "Calcula el hash MD5, SHA-1, SHA-256 o SHA-512 de un texto (UTF-8).",
         Keywords = ["hash", "sha256", "sha1", "sha512", "md5", "checksum", "digest"],
         ExampleInput = BridgeJson.ToJson(new { algorithm = "sha256", text = "Hola PCSuite" }),
+        Parameters =
+        [
+            new ToolParameter
+            {
+                Name = "algorithm",
+                Label = "Algoritmo",
+                Type = ToolParameterType.Select,
+                Default = BridgeJson.ToJson("sha256"),
+                Options = ["md5", "sha1", "sha256", "sha512"],
+            },
+            new ToolParameter
+            {
+                Name = "text",
+                Label = "Texto",
+                Type = ToolParameterType.TextArea,
+                Required = true,
+                Placeholder = "Hola PCSuite",
+                HelpText = "Texto (UTF-8) cuyo hash se calcula.",
+            },
+            new ToolParameter
+            {
+                Name = "uppercase",
+                Label = "Mayúsculas",
+                Type = ToolParameterType.Boolean,
+                Default = BridgeJson.ToJson(false),
+                HelpText = "Hash en hex mayúsculas.",
+            },
+        ],
     };
 
     public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken)
@@ -73,6 +101,6 @@ public sealed class HashTool : ITool
             hash = hash.ToUpperInvariant();
         }
 
-        return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(new { hash })));
+        return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(hash)));
     }
 }

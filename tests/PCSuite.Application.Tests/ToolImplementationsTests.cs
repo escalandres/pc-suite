@@ -22,7 +22,8 @@ public class ToolImplementationsTests
         var result = await ExecuteAsync(new JsonFormatterTool(), new { text, mode });
 
         Assert.True(result.Success);
-        var json = result.Output!.Value.GetProperty("json").GetString()!;
+        // La salida es el JSON procesado a pelo, no un envoltorio.
+        var json = result.Output!.Value.GetString()!;
         Assert.Equal(mode == "format", json.Contains('\n'));
         Assert.NotNull(JsonDocument.Parse(json));
     }
@@ -64,7 +65,8 @@ public class ToolImplementationsTests
         var result = await ExecuteAsync(new UuidGeneratorTool(), new { });
 
         Assert.True(result.Success);
-        var uuids = result.Output!.Value.GetProperty("uuids").EnumerateArray()
+        // La salida es la lista de UUIDs a pelo (sin envoltorio "uuids").
+        var uuids = result.Output!.Value.EnumerateArray()
             .Select(e => e.GetString()!)
             .ToArray();
         var uuid = Assert.Single(uuids);
@@ -77,12 +79,35 @@ public class ToolImplementationsTests
         var result = await ExecuteAsync(new UuidGeneratorTool(), new { count = 25 });
 
         Assert.True(result.Success);
-        var uuids = result.Output!.Value.GetProperty("uuids").EnumerateArray()
+        var uuids = result.Output!.Value.EnumerateArray()
             .Select(e => e.GetString()!)
             .ToArray();
         Assert.Equal(25, uuids.Length);
         Assert.Equal(25, uuids.Distinct().Count());
         Assert.All(uuids, AssertV4);
+    }
+
+    [Fact]
+    public async Task UuidGenerator_V7_ReturnsSortableTimestampedV7()
+    {
+        var result = await ExecuteAsync(new UuidGeneratorTool(), new { count = 2, version = "v7" });
+
+        Assert.True(result.Success);
+        var uuids = result.Output!.Value.EnumerateArray()
+            .Select(e => e.GetString()!)
+            .ToArray();
+        Assert.Equal(2, uuids.Length);
+        Assert.Equal(2, uuids.Distinct().Count());
+        Assert.All(uuids, AssertV7);
+    }
+
+    [Fact]
+    public async Task UuidGenerator_UnknownVersion_Fails()
+    {
+        var result = await ExecuteAsync(new UuidGeneratorTool(), new { version = "v6" });
+
+        Assert.False(result.Success);
+        Assert.Contains("\"v4\" o \"v7\"", result.ErrorMessage);
     }
 
     [Theory]
@@ -114,12 +139,13 @@ public class ToolImplementationsTests
 
         var encoded = await ExecuteAsync(new Base64Tool(), new { operation = "encode", text = original });
         Assert.True(encoded.Success);
-        var value = encoded.Output!.Value.GetProperty("result").GetString()!;
+        // Salida plana: el texto codificado/descodificado, sin envoltorio.
+        var value = encoded.Output!.Value.GetString()!;
         Assert.Equal(Convert.ToBase64String(Encoding.UTF8.GetBytes(original)), value);
 
         var decoded = await ExecuteAsync(new Base64Tool(), new { operation = "decode", text = value });
         Assert.True(decoded.Success);
-        Assert.Equal(original, decoded.Output!.Value.GetProperty("result").GetString());
+        Assert.Equal(original, decoded.Output!.Value.GetString());
     }
 
     [Fact]
@@ -164,7 +190,8 @@ public class ToolImplementationsTests
         var result = await ExecuteAsync(new HashTool(), new { algorithm, text = "abc" });
 
         Assert.True(result.Success);
-        Assert.Equal(expected, result.Output!.Value.GetProperty("hash").GetString());
+        // Salida plana: el hash, sin envoltorio.
+        Assert.Equal(expected, result.Output!.Value.GetString());
     }
 
     [Fact]
@@ -175,7 +202,7 @@ public class ToolImplementationsTests
             new { algorithm = "sha256", text = "abc", uppercase = true });
 
         Assert.True(result.Success);
-        var hash = result.Output!.Value.GetProperty("hash").GetString()!;
+        var hash = result.Output!.Value.GetString()!;
         Assert.Equal(hash.ToUpperInvariant(), hash);
     }
 
@@ -205,13 +232,13 @@ public class ToolImplementationsTests
         var result = await ExecuteAsync(new PasswordGeneratorTool(), new { length = 24 });
 
         Assert.True(result.Success);
-        var password = result.Output!.Value.GetProperty("password").GetString()!;
+        // Salida plana: la contraseña a pelo, sin envoltorio.
+        var password = result.Output!.Value.GetString()!;
         Assert.Equal(24, password.Length);
         Assert.Contains(password, char.IsUpper);
         Assert.Contains(password, char.IsLower);
         Assert.Contains(password, char.IsDigit);
         Assert.Contains(password, c => !char.IsLetterOrDigit(c));
-        Assert.True(result.Output!.Value.GetProperty("entropyBits").GetDouble() > 0);
     }
 
     [Fact]
@@ -222,7 +249,7 @@ public class ToolImplementationsTests
             new { length = 32, upper = false, lower = false, digits = true, symbols = false });
 
         Assert.True(result.Success);
-        var password = result.Output!.Value.GetProperty("password").GetString()!;
+        var password = result.Output!.Value.GetString()!;
         Assert.All(password, c => Assert.True(char.IsDigit(c)));
     }
 
@@ -282,5 +309,11 @@ public class ToolImplementationsTests
     {
         Assert.True(Guid.TryParse(uuid, out var parsed), $"'{uuid}' no es un GUID válido.");
         Assert.Equal(4, parsed.Version);
+    }
+
+    private static void AssertV7(string uuid)
+    {
+        Assert.True(Guid.TryParse(uuid, out var parsed), $"'{uuid}' no es un GUID válido.");
+        Assert.Equal(7, parsed.Version);
     }
 }

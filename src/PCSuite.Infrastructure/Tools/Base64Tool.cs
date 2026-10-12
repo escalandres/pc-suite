@@ -18,6 +18,26 @@ public sealed class Base64Tool : ITool
         Description = "Codifica texto a Base64 o lo descodifica de vuelta a texto UTF-8.",
         Keywords = ["base64", "encode", "decode", "codificar", "decodificar", "texto"],
         ExampleInput = BridgeJson.ToJson(new { operation = "encode", text = "Hola PCSuite" }),
+        Parameters =
+        [
+            new ToolParameter
+            {
+                Name = "operation",
+                Label = "Operación",
+                Type = ToolParameterType.Select,
+                Default = BridgeJson.ToJson("encode"),
+                Options = ["encode", "decode"],
+            },
+            new ToolParameter
+            {
+                Name = "text",
+                Label = "Texto",
+                Type = ToolParameterType.TextArea,
+                Required = true,
+                Placeholder = "Hola PCSuite",
+                HelpText = "Texto a codificar, o Base64 a descodificar.",
+            },
+        ],
     };
 
     public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken)
@@ -49,13 +69,13 @@ public sealed class Base64Tool : ITool
                 case "encode":
                 {
                     var encoded = Convert.ToBase64String(StrictUtf8.GetBytes(text));
-                    return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(new { result = encoded })));
+                    return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(encoded)));
                 }
                 case "decode":
                 {
                     var bytes = Convert.FromBase64String(text);
                     var decoded = StrictUtf8.GetString(bytes);
-                    return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(new { result = decoded })));
+                    return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(decoded)));
                 }
                 default:
                     return Task.FromResult(ToolResult.Fail("El campo 'operation' debe ser \"encode\" o \"decode\"."));

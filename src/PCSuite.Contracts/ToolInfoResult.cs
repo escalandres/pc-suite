@@ -17,4 +17,7 @@ public sealed class ToolInfoResult
 
     /// <summary>Ejemplo de payload de entrada para la UI genérica.</summary>
     public JsonElement? ExampleInput { get; init; }
+
+    /// <summary>Formulario de configuración de la tool (vacío → editor JSON genérico).</summary>
+    public IReadOnlyList<ToolParameterResult> Parameters { get; init; } = [];
 }

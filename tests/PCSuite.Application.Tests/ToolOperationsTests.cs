@@ -35,6 +35,43 @@ public class ToolOperationsTests
             Assert.False(string.IsNullOrEmpty(t.GetProperty("description").GetString()));
             Assert.True(t.GetProperty("keywords").ValueKind == JsonValueKind.Array);
         });
+
+        // El formulario de la UI se genera desde el esquema de parámetros:
+        // toda tool del módulo declara sus parámetros con tipo y control.
+        Assert.All(tools, t =>
+        {
+            var parameters = t.GetProperty("parameters");
+            Assert.Equal(JsonValueKind.Array, parameters.ValueKind);
+            Assert.All(parameters.EnumerateArray(), p =>
+            {
+                Assert.False(string.IsNullOrEmpty(p.GetProperty("name").GetString()));
+                Assert.False(string.IsNullOrEmpty(p.GetProperty("label").GetString()));
+                var type = p.GetProperty("type").GetString();
+                Assert.Contains(type, new[] { "text", "textArea", "number", "boolean", "select" });
+            });
+        });
+
+        // Contrato puntual: password.generate declara length (number con
+        // límites) y los flags booleanos con default true.
+        var password = tools.Single(t => t.GetProperty("id").GetString() == "password.generate");
+        var passwordParameters = password.GetProperty("parameters").EnumerateArray().ToList();
+        var length = passwordParameters.Single(p => p.GetProperty("name").GetString() == "length");
+        Assert.Equal("number", length.GetProperty("type").GetString());
+        Assert.Equal(8, length.GetProperty("min").GetInt32());
+        Assert.Equal(128, length.GetProperty("max").GetInt32());
+        Assert.True(length.GetProperty("default").GetInt32() == 16);
+        Assert.All(
+            passwordParameters.Where(p => p.GetProperty("type").GetString() == "boolean"),
+            p => Assert.True(p.GetProperty("default").GetBoolean()));
+
+        // Los select exponen sus opciones (hash: md5/sha1/sha256/sha512).
+        var hash = tools.Single(t => t.GetProperty("id").GetString() == "hash");
+        var algorithm = hash.GetProperty("parameters").EnumerateArray()
+            .Single(p => p.GetProperty("name").GetString() == "algorithm");
+        Assert.Equal("select", algorithm.GetProperty("type").GetString());
+        Assert.Equal(
+            ["md5", "sha1", "sha256", "sha512"],
+            algorithm.GetProperty("options").EnumerateArray().Select(o => o.GetString()));
     }
 
     [Fact]
@@ -81,7 +118,8 @@ public class ToolOperationsTests
 
         Assert.True(result.Success);
         Assert.Equal("hash", result.Data!.Value.GetProperty("toolId").GetString());
-        var hash = result.Data!.Value.GetProperty("output").GetProperty("hash").GetString();
+        // Salida plana: el hash es el output directo.
+        var hash = result.Data!.Value.GetProperty("output").GetString();
         Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", hash);
     }
 
@@ -163,7 +201,8 @@ public class ToolOperationsTests
         var execute = await router.RouteAsync(
             """{"id":"r3","operation":"tool.execute","payload":{"toolId":"uuid.generate","input":{"count":2}}}""");
         Assert.True(execute.Success);
-        Assert.Equal(2, execute.Result!.Value.GetProperty("output").GetProperty("uuids").GetArrayLength());
+        // Salida plana: el array de UUIDs es el output directo.
+        Assert.Equal(2, execute.Result!.Value.GetProperty("output").GetArrayLength());
 
         var unknown = await router.RouteAsync(
             """{"id":"r4","operation":"tool.execute","payload":{"toolId":"no.existe"}}""");

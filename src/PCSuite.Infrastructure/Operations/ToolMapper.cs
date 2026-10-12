@@ -19,6 +19,31 @@ internal static class ToolMapper
             Description = metadata.Description,
             Keywords = metadata.Keywords,
             ExampleInput = metadata.ExampleInput,
+            Parameters = metadata.Parameters.Select(ToParameter).ToList(),
+        };
+
+    /// <summary>Enum de Core → string del contrato (el bridge no usa convertidores de enum).</summary>
+    private static ToolParameterResult ToParameter(ToolParameter parameter) =>
+        new()
+        {
+            Name = parameter.Name,
+            Label = parameter.Label,
+            Type = parameter.Type switch
+            {
+                ToolParameterType.Text => "text",
+                ToolParameterType.TextArea => "textArea",
+                ToolParameterType.Number => "number",
+                ToolParameterType.Boolean => "boolean",
+                ToolParameterType.Select => "select",
+                _ => "text",
+            },
+            Required = parameter.Required,
+            Default = parameter.Default,
+            Placeholder = parameter.Placeholder,
+            HelpText = parameter.HelpText,
+            Options = parameter.Options,
+            Min = parameter.Min,
+            Max = parameter.Max,
         };
 
     /// <summary>

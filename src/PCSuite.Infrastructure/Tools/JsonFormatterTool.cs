@@ -19,6 +19,27 @@ public sealed class JsonFormatterTool : ITool
             text = "{\"ok\":true,\"items\":[1,2,3]}",
             mode = "format",
         }),
+        Parameters =
+        [
+            new ToolParameter
+            {
+                Name = "text",
+                Label = "JSON",
+                Type = ToolParameterType.TextArea,
+                Required = true,
+                Placeholder = "{\"clave\": \"valor\"}",
+                HelpText = "El JSON a procesar.",
+            },
+            new ToolParameter
+            {
+                Name = "mode",
+                Label = "Modo",
+                Type = ToolParameterType.Select,
+                Default = BridgeJson.ToJson("format"),
+                Options = ["format", "minify"],
+                HelpText = "format: sangría legible · minify: compacto.",
+            },
+        ],
     };
 
     public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken)
@@ -59,7 +80,7 @@ public sealed class JsonFormatterTool : ITool
                 document.RootElement,
                 new JsonSerializerOptions { WriteIndented = mode == "format" });
 
-            return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(new { json = formatted })));
+            return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(formatted)));
         }
         catch (JsonException exception)
         {

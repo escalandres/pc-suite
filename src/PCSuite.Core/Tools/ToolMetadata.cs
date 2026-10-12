@@ -21,4 +21,11 @@ public sealed class ToolMetadata
 
     /// <summary>Ejemplo de payload de entrada para la UI genérica.</summary>
     public JsonElement? ExampleInput { get; init; }
+
+    /// <summary>
+    /// Parámetros de configuración de la tool: la UI genera el formulario
+    /// de ejecución a partir de esta lista (app-like). Vacía = la UI cae al
+    /// editor JSON genérico.
+    /// </summary>
+    public IReadOnlyList<ToolParameter> Parameters { get; init; } = [];
 }

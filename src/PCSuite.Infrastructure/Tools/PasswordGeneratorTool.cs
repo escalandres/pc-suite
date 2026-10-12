@@ -35,6 +35,47 @@ public sealed class PasswordGeneratorTool : ITool
             digits = true,
             symbols = true,
         }),
+        Parameters =
+        [
+            new ToolParameter
+            {
+                Name = "length",
+                Label = "Longitud",
+                Type = ToolParameterType.Number,
+                Default = BridgeJson.ToJson(16),
+                Min = MinLength,
+                Max = MaxLength,
+                HelpText = $"Caracteres de la contraseña ({MinLength}-{MaxLength}).",
+            },
+            new ToolParameter
+            {
+                Name = "upper",
+                Label = "Mayúsculas (A-Z)",
+                Type = ToolParameterType.Boolean,
+                Default = BridgeJson.ToJson(true),
+            },
+            new ToolParameter
+            {
+                Name = "lower",
+                Label = "Minúsculas (a-z)",
+                Type = ToolParameterType.Boolean,
+                Default = BridgeJson.ToJson(true),
+            },
+            new ToolParameter
+            {
+                Name = "digits",
+                Label = "Números (0-9)",
+                Type = ToolParameterType.Boolean,
+                Default = BridgeJson.ToJson(true),
+            },
+            new ToolParameter
+            {
+                Name = "symbols",
+                Label = "Símbolos (!@#$…)",
+                Type = ToolParameterType.Boolean,
+                Default = BridgeJson.ToJson(true),
+            },
+        ],
     };
 
     public Task<ToolResult> ExecuteAsync(ToolContext context, CancellationToken cancellationToken)
@@ -97,12 +138,8 @@ public sealed class PasswordGeneratorTool : ITool
         var pool = string.Concat(groups);
         var characters = Generate(length, groups, pool);
 
-        // Entropía aproximada: longitud * log2(tamaño del alfabeto).
-        var entropyBits = Math.Round(length * Math.Log2(pool.Length), 1);
-
-        // El resultado solo sale en el payload de respuesta; jamás se registra en logs.
-        return Task.FromResult(
-            ToolResult.Ok(BridgeJson.ToJson(new { password = new string(characters), entropyBits })));
+        // La salida es la contraseña a pelo (nunca se registra en logs).
+        return Task.FromResult(ToolResult.Ok(BridgeJson.ToJson(new string(characters))));
     }
 
     private static bool? ReadFlag(JsonElement input, string name, bool defaultValue)
