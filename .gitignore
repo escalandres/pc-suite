@@ -5,10 +5,16 @@ artifacts/
 *.user
 *.suo
 .vs/
+*.pdb
+*.apsx
 
 # Node
 node_modules/
 frontend/dist/
+
+# Salida de empaquetar.bat / instalador.iss
+dist/
+*.zip
 
 # Logs
 *.log
@@ -17,3 +23,33 @@ frontend/dist/
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Piloto Blazor (Task 015): BlazorWebView genera archivos
+# temporales del host en %TEMP%
+pcsuite-blazor-host.html
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+
+# NuGet
+*.nupkg
+packages/
+
+# IA / Agentes
+graphify-out/
+.opencode/
+.claude/
+.cursor/
+.continue/
+.aider*
+CLAUDE.md
+AGENTS.md

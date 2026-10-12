@@ -1,0 +1,247 @@
+@inject ClamAvState State
+@implements IDisposable
+
+@* DIAGNÓSTICO: texto de prueba para verificar que el componente renderiza.
+   Si ves "Blazor funciona" + el estado, el problema era @page.
+   Si solo ves azul, el componente no se monta. *@
+<p style="color: var(--pcs-success); font-size: 0.875rem; margin: 0 0 1rem">
+    ⚡ Blazor funciona — @(State.Status?.Installed is true ? "ClamAV instalado" : "Estado cargando…")
+</p>
+
+<h1 style="font-size: 1.5rem; font-weight: 600; margin: 0 0 0.5rem">ClamAV</h1>
+<p style="color: var(--pcs-text-muted); font-size: 0.875rem; margin: 0 0 1.5rem">
+    Antivirus de código abierto: estado, instalación, definiciones, escaneos e historial.
+</p>
+
+@if (!string.IsNullOrEmpty(State.Notice))
+{
+    <div style="border: 1px solid @(State.NoticeIsError ? "var(--pcs-danger)" : "var(--pcs-success)");
+                color: @(State.NoticeIsError ? "var(--pcs-danger)" : "var(--pcs-success)");
+                padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem">
+        @State.Notice
+    </div>
+}
+
+@if (State.Status is null)
+{
+    <p style="color: var(--pcs-text-muted)">Consultando clamscan…</p>
+}
+else if (!State.Status.Installed)
+{
+    <div style="border: 1px solid var(--pcs-border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: var(--pcs-surface)">
+        <p style="color: var(--pcs-danger); font-size: 0.875rem; margin: 0 0 0.75rem">
+            clamscan.exe no se encontró. Instala ClamAV para poder escanear.
+        </p>
+        <button @onclick="InstallAsync"
+                disabled="@(State.IsInstalling || State.IsScanning || State.IsUpdatingDefinitions)"
+                style="background: var(--pcs-accent); color: #fff; border: none; padding: 0.5rem 0.75rem;
+                       border-radius: 8px; cursor: pointer; font-size: 0.875rem">
+            @(State.IsInstalling ? "Instalando…" : "Instalar ClamAV")
+        </button>
+    </div>
+}
+else
+{
+    @* --- Estado del antivirus --- *@
+    <div style="border: 1px solid var(--pcs-border); border-radius: 8px; padding: 1rem;
+                margin-bottom: 1rem; background: var(--pcs-surface);
+                display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem">
+        <StatusCellEx Label="Motor" Value="@State.Status.Version" />
+        <StatusCellEx Label="Definiciones" Value="@State.Status.Definitions" />
+        <StatusCellEx Label="Ejecutable" Value="@State.Status.Path" Mono="true" />
+        <StatusCellEx Label="Actualización de BD"
+                      Value="@(State.Status.CanUpdateDefinitions ? "Disponible (freshclam)" : "No disponible")" />
+    </div>
+
+    @* --- Operaciones --- *@
+    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem">
+        <button @onclick="UpdateDefinitions"
+                disabled="@(State.IsScanning || State.IsInstalling || State.IsUpdatingDefinitions || !State.Status.CanUpdateDefinitions)"
+                style="background: var(--pcs-surface-2); color: var(--pcs-text); border: 1px solid var(--pcs-border);
+                       padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer; font-size: 0.875rem">
+            @(State.IsUpdatingDefinitions ? "Actualizando…" : "Actualizar definiciones")
+        </button>
+        <button @onclick="QuickScan"
+                disabled="@(State.IsScanning || State.IsInstalling || State.IsUpdatingDefinitions)"
+                style="background: var(--pcs-surface-2); color: var(--pcs-text); border: 1px solid var(--pcs-border);
+                       padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer; font-size: 0.875rem">
+            Escaneo rápido
+        </button>
+        <button @onclick="FullScan"
+                disabled="@(State.IsScanning || State.IsInstalling || State.IsUpdatingDefinitions)"
+                style="background: var(--pcs-surface-2); color: var(--pcs-text); border: 1px solid var(--pcs-border);
+                       padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer; font-size: 0.875rem">
+            Escaneo completo
+        </button>
+        <input type="text"
+               @bind="_customPath"
+               placeholder="C:\Descargas o directorio"
+               disabled="@(State.IsScanning)"
+               style="background: var(--pcs-surface-2); color: var(--pcs-text);
+                      border: 1px solid var(--pcs-border); border-radius: 8px; padding: 0.5rem 0.75rem;
+                      font-size: 0.875rem; min-width: 200px" />
+        <button @onclick="CustomScan"
+                disabled="@(State.IsScanning || string.IsNullOrWhiteSpace(_customPath))"
+                style="background: var(--pcs-surface-2); color: var(--pcs-text); border: 1px solid var(--pcs-border);
+                       padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer; font-size: 0.875rem">
+            Escanear ruta
+        </button>
+    </div>
+
+    @* --- Progreso de escaneo en vivo (SIN IPC: suscripción directa C#) --- *@
+    @if (State.IsScanning)
+    {
+        <div style="border: 1px solid var(--pcs-border); border-radius: 8px; padding: 1rem;
+                    margin-bottom: 1rem; background: var(--pcs-surface)">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+                <span style="font-size: 0.875rem; color: var(--pcs-text-muted)">
+                    Escaneando @if (State.ScanProgress?.CurrentDirectory is { } dir)
+                    {
+                        <code style="color: var(--pcs-text)">@dir</code>
+                    }
+                </span>
+                <span style="font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--pcs-text-muted)">
+                    @(State.ScanProgress?.ScannedFiles ?? 0) archivos · @(State.ScanProgress?.ScannedDirectories ?? 0) dirs
+                    @if (State.ScanProgress is { Percent: { } pct })
+                    {
+                        <text>· @pct%</text>
+                    }
+                    @if (State.ScanProgress is { InfectedFiles: > 0 })
+                    {
+                        <span style="color: var(--pcs-danger)">· ⚠ @(State.ScanProgress.InfectedFiles)</span>
+                    }
+                </span>
+            </div>
+            <div style="height: 8px; border-radius: 9999px; overflow: hidden; background: var(--pcs-surface-2)">
+                <div style="height: 100%; background: var(--pcs-accent); border-radius: 9999px;
+                            transition: width 300ms ease-out; width: @(($"{Math.Min(100, State.ScanProgress?.Percent ?? 0)}%"))" />
+            </div>
+            @* Ruta actual del escaneo *@
+            @if (State.ScanProgress?.CurrentFile is { } file)
+            {
+                <p style="font-size: 0.75rem; color: var(--pcs-text-muted); margin: 0.5rem 0 0;
+                           overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                   title="@file">
+                    @file
+                </p>
+            }
+            <button @onclick="CancelScan"
+                    style="background: var(--pcs-surface-2); color: var(--pcs-danger);
+                           border: 1px solid var(--pcs-danger); padding: 0.25rem 0.5rem;
+                           border-radius: 8px; cursor: pointer; font-size: 0.75rem; margin-top: 0.5rem">
+                Cancelar
+            </button>
+        </div>
+    }
+
+    @* --- Progreso de freshclam --- *@
+    @if (State.IsUpdatingDefinitions && State.FreshclamProgress is { } fp)
+    {
+        <div style="border: 1px solid var(--pcs-border); border-radius: 8px; padding: 1rem;
+                    margin-bottom: 1rem; background: var(--pcs-surface)">
+            <div style="display: flex; justify-content: space-between; font-size: 0.875rem; margin-bottom: 0.5rem">
+                <span style="color: var(--pcs-text-muted)">
+                    @(fp.StatusText ?? "Actualizando definiciones…")
+                    @if (fp.CurrentFile is { } cf)
+                    {
+                        <text> — <code>@cf</code></text>
+                    }
+                </span>
+                @if (fp.Percent is { } pct)
+                {
+                    <span style="font-variant-numeric: tabular-nums">@pct%</span>
+                }
+            </div>
+            <div style="height: 8px; border-radius: 9999px; overflow: hidden; background: var(--pcs-surface-2)">
+                <div style="height: 100%; background: var(--pcs-accent); border-radius: 9999px;
+                            transition: width 300ms ease-out; width: @(($"{Math.Min(100, fp.Percent ?? 0)}%"))" />
+            </div>
+        </div>
+    }
+
+    @* --- Resultado del último escaneo --- *@
+    @if (State.LastScan is { } scan)
+    {
+        <div style="border: 1px solid var(--pcs-border); border-radius: 8px; padding: 1rem;
+                    margin-bottom: 1rem; background: var(--pcs-surface)">
+            <h2 style="font-size: 0.875rem; font-weight: 600; margin: 0 0 0.75rem">Resultado del escaneo</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem">
+                <StatusCellEx Label="Archivos" Value="@scan.ScannedFiles.ToString("N0")" />
+                <StatusCellEx Label="Directorios" Value="@scan.ScannedDirectories.ToString("N0")" />
+                <StatusCellEx Label="Infectados" Value="@scan.InfectedFiles.ToString("N0")" />
+                <StatusCellEx Label="Motor" Value="@(scan.EngineVersion ?? "—")" />
+            </div>
+            @if (scan.Threats.Count > 0)
+            {
+                <ul style="list-style: none; padding: 0; margin: 0.75rem 0 0; max-height: 10rem; overflow-y: auto">
+                    @foreach (var threat in scan.Threats)
+                    {
+                        <li style="display: flex; align-items: center; gap: 0.5rem; padding: 0.375rem 0.75rem;
+                                   border: 1px solid var(--pcs-border); border-radius: 8px;
+                                   margin-bottom: 0.25rem; font-size: 0.75rem">
+                            <span style="color: var(--pcs-danger); flex: 1; font-family: monospace">@threat.Threat</span>
+                            <span style="color: var(--pcs-text-muted); font-family: monospace; max-width: 300px;
+                                         overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                                  title="@threat.File">
+                                @threat.File
+                            </span>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    }
+
+    @* --- Historial --- *@
+    @if (State.History is { Count: > 0 })
+    {
+        <h2 style="font-size: 0.875rem; font-weight: 600; margin: 0 0 0.5rem">Historial de escaneos</h2>
+        <ul style="list-style: none; padding: 0; margin: 0">
+            @foreach (var entry in State.History)
+            {
+                <li style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem;
+                           border: 1px solid var(--pcs-border); border-radius: 8px;
+                           margin-bottom: 0.5rem; background: var(--pcs-surface); font-size: 0.875rem">
+                    <span style="background: color-mix(in srgb, var(--pcs-accent) 16%, transparent);
+                                 color: var(--pcs-accent); border-radius: 9999px; padding: 0.125rem 0.5rem; font-size: 0.75rem">
+                        @entry.Kind
+                    </span>
+                    <span style="color: var(--pcs-text-muted); font-size: 0.75rem">
+                        @entry.Timestamp.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    </span>
+                    <span style="margin-left: auto; font-size: 0.75rem">@(entry.ScannedFiles.ToString("N0")) archivos</span>
+                    <span style="background: color-mix(in srgb, @(entry.Succeeded && entry.InfectedFiles == 0 ? "var(--pcs-success)" : "var(--pcs-danger)") 16%, transparent);
+                                 color: @(entry.Succeeded && entry.InfectedFiles == 0 ? "var(--pcs-success)" : "var(--pcs-danger)");
+                                 border-radius: 9999px; padding: 0.125rem 0.5rem; font-size: 0.75rem">
+                        @(entry.Succeeded ? (entry.InfectedFiles > 0 ? $"{entry.InfectedFiles} infectado(s)" : "Sin amenazas") : "Fallido")
+                    </span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private string _customPath = "";
+
+    protected override void OnInitialized()
+    {
+        State.StateChanged += OnStateChanged;
+        _ = State.RefreshAsync();
+    }
+
+    private void OnStateChanged()
+    {
+        // Blazor agrupa los re-renders: sin throttle manual, sin IPC.
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task InstallAsync() => State.InstallAsync();
+    private Task UpdateDefinitions() => State.UpdateDefinitionsAsync();
+    private Task QuickScan() => State.StartScanAsync("quick");
+    private Task FullScan() => State.StartScanAsync("full");
+    private Task CustomScan() => State.StartScanAsync("custom", _customPath.Trim());
+    private void CancelScan() => State.CancelScan();
+
+    public void Dispose() => State.StateChanged -= OnStateChanged;
+}

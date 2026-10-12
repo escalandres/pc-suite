@@ -1,4 +1,4 @@
-# Plan de Acción — PCSuite
+﻿# Plan de Acción — PCSuite
 
 **PCSuite es una aplicación de escritorio para Windows construida con .NET 10 y
 WebView2.** El host nativo (WinForms + WebView2) es el centro del proyecto; el
@@ -27,127 +27,87 @@ Fuente: `PCSuite_Development_Plan.md` (secciones 47–56).
 | ├ 9.4 — PGP: contratos + núcleo (`IPgpService`, modelos, `pgp.*` en OperationIds) + keyring store tolerante a E/S con escritura atómica + tests | ✅ Completada | 2026-09-25 |
 | ├ 9.5 — PGP: claves con BouncyCastle — generación (nombre/email/algoritmo/expiración/passphrase), importación, exportación, listado/inspección + tests round-trip | ✅ Completada | 2026-09-25 |
 | ├ 9.6 — PGP: cifrado/descifrado/firma/verificación + operaciones del puente `pgp.*` + registro DI + tests round-trip criptográficos | ✅ Completada | 2026-09-25 |
-| └ 9.7 — Integración final: README, build + suite completa en verde, la app compila y lanza | ✅ Completada | 2026-09-25 |
-| Task 010 — Production UX (temas, settings, favoritos, búsqueda global, atajos, notificaciones/activity, clipboard, first-run) — dividida en 9 partes (10.1–10.9) | ✅ Completada | 2026-09-26 |
-| ├ 10.1 — Temas: sistema de design tokens centralizado + dark/light/system (dark como experiencia primaria) con persistencia de la preferencia | ✅ Completada | 2026-09-26 |
-| ├ 10.2 — Settings: página "Ajustes" (sidebar ⚙) con las preferencias de UX (tema, toggles de notificaciones/detección) sobre el store de preferencias | ✅ Completada | 2026-09-26 |
-| ├ 10.3 — Favoritos: estrella en tools/ops, sección "⭐ Favorites" en la sidebar con navegación, persistente | ✅ Completada | 2026-09-26 |
-| ├ 10.4 — Búsqueda global: paleta Ctrl+K (command palette) sobre tools, ops, ajustes y devs con tags y fuzzy matching | ✅ Completada | 2026-09-26 |
-| ├ 10.5 — Atajos de teclado: registro global de shortcuts + overlay de ayuda con la lista | ✅ Completada | 2026-09-26 |
-| ├ 10.6 — Notificaciones + Activity center: toasts globales (éxito/aviso/error) y panel Activity con operaciones en curso/completadas y su detalle | ✅ Completada | 2026-09-26 |
-| ├ 10.7 — Smart detection (clipboard): detección de JSON/JWT/clave SSH/PEM con sugerencia de tool; contenido sensible solo en memoria, jamás persistido (§21) | ✅ Completada | 2026-09-26 |
-| ├ 10.8 — First-run experience: pantalla de bienvenida/onboarding en el primer arranque | ✅ Completada | 2026-09-26 |
-| └ 10.9 — Integración final: README, build + suite completa en verde, la app compila y lanza | ✅ Completada | 2026-09-26 |
-| Task 011 — Limpiador (limpieza de archivos temporales en raíces fijas) — dividida en 4 partes (11.1–11.4) | ✅ Completada | 2026-09-28 |
-| ├ 11.1 — Contratos + núcleo: `ICleanerService` (Core) + modelos/payloads/resultados `cleaner.*` en Contracts + OperationIds + tests | ✅ Completada | 2026-09-27 |
-| ├ 11.2 — Infraestructura: `CleanerService` (escaneo y borrado seguro en raíces fijas, tolerancia a bloqueos/ACL, sin saltar reparse points) + tests | ✅ Completada | 2026-09-27 |
-| ├ 11.3 — Operaciones del puente `cleaner.scan` / `cleaner.clean` + registro en composition root + tests de contrato/seguridad | ✅ Completada | 2026-09-27 |
-| └ 11.4 — UI: página "Limpiador" (nav habilitada, escaneo con tamaños, confirmación y resultados) + build y recorrido | ✅ Completada | 2026-09-28 |
-| Task 012 — Seguridad (Security Center de solo lectura: Defender, firewall, puertos, antivirus y diagnóstico) — dividida en 4 partes (12.1–12.4) | 🚧 En progreso | — |
+| └ 9.7 — Integración final: README, build + suite completa en verde, la app compila y lanza | ✅ Completado | 2026-09-25 |
+| Task 010 — Production UX (temas, settings, favoritos, búsqueda global, atajos, notificaciones/activity, clipboard, first-run) — dividida en 9 partes (10.1–10.9) | ✅ Completado | 2026-09-26 |
+| ├ 10.1 — Temas: sistema de design tokens centralizado + dark/light/system (dark como experiencia primaria) con persistencia de la preferencia | ✅ Completado | 2026-09-26 |
+| ├ 10.2 — Settings: página "Ajustes" (sidebar ⚙) con las preferencias de UX (tema, toggles de notificaciones/detección) sobre el store de preferencias | ✅ Completado | 2026-09-26 |
+| ├ 10.3 — Favoritos: estrella en tools/ops, sección "⭐ Favorites" en la sidebar con navegación, persistente | ✅ Completado | 2026-09-26 |
+| ├ 10.4 — Búsqueda global: paleta Ctrl+K (command palette) sobre tools, ops, ajustes y devs con tags y fuzzy matching | ✅ Completado | 2026-09-26 |
+| ├ 10.5 — Atajos de teclado: registro global de shortcuts + overlay de ayuda con la lista | ✅ Completado | 2026-09-26 |
+| ├ 10.6 — Notificaciones + Activity center: toasts globales (éxito/aviso/error) y panel Activity con operaciones en curso/completadas y su detalle | ✅ Completado | 2026-09-26 |
+| ├ 10.7 — Smart detection (clipboard): detección de JSON/JWT/clave SSH/PEM con sugerencia de tool; contenido sensible solo en memoria, jamás persistido (§21) | ✅ Completado | 2026-09-26 |
+| ├ 10.8 — First-run experience: pantalla de bienvenida/onboarding en el primer arranque | ✅ Completado | 2026-09-26 |
+| └ 10.9 — Integración final: README, build + suite completa en verde, la app compila y lanza | ✅ Completado | 2026-09-26 |
+| Task 011 — Limpiador (limpieza de archivos temporales en raíces fijas) — dividida en 4 partes (11.1–11.4) | ✅ Completado | 2026-09-28 |
+| ├ 11.1 — Contratos + núcleo: `ICleanerService` (Core) + modelos/payloads/resultados `cleaner.*` en Contracts + OperationIds + tests | ✅ Completado | 2026-09-27 |
+| ├ 11.2 — Infraestructura: `CleanerService` (escaneo y borrado seguro en raíces fijas, tolerancia a bloqueos/ACL, sin saltar reparse points) + tests | ✅ Completado | 2026-09-27 |
+| ├ 11.3 — Operaciones del puente `cleaner.scan` / `cleaner.clean` + registro en composition root + tests de contrato/seguridad | ✅ Completado | 2026-09-27 |
+| └ 11.4 — UI: página "Limpiador" (nav habilitada, escaneo con tamaños, confirmación y resultados) + build y recorrido | ✅ Completado | 2026-09-28 |
+| Task 012 — Seguridad (Security Center de solo lectura: Defender, firewall, puertos, antivirus y diagnóstico) — dividida en 4 partes (12.1–12.4) | ✅ Completada | 2026-09-28 |
 | ├ 12.1 — Contratos + núcleo: `ISecurityService`, modelos/payloads `security.*`, `OperationIds.SecurityGetStatus` y tests de contrato | ✅ Completada | 2026-09-28 |
 | ├ 12.2 — Infraestructura: sondeo nativo (WSC `WscGetSecurityProviderHealth`, WMI SecurityCenter2/Defender, registro, puertos `IPGlobalProperties`) + `SecurityService` con tests sobre probe falso | ✅ Completada | 2026-09-28 |
 | ├ 12.3 — Operación puente `security.getStatus` (payload cero, sin elevación) + composition root y tests | ✅ Completada | 2026-09-28 |
-| └ 12.4 — UI: página "Seguridad" (nav habilitada) con tarjetas de estado, puertos abiertos y diagnóstico + build y recorrido | 🚧 En progreso | — |
+| └ 12.4 — UI: página "Seguridad" (nav `enabled` al aterrizar 12.4) con tarjetas de estado, puertos abiertos y diagnóstico + build y recorrido | ✅ Completada | 2026-09-28 |
+| Task 013 — Plugins (sistema de complementos extensibles) | ✅ **Completada** | 2026-10-01 |
+| └ 13.1 — Contratos + núcleo: `IPlugin`, modelos `plugin.*`, OperationIds y esqueleto de tests | ✅ Completada | 2026-09-28 |
+|   - **Contratos** (`PCSuite.Contracts`): interfaz `IPlugin` con metadatos\n|     (id, nombre, versión, estado, operaciones soportadas: `list`, `checkUpdate`,\n|     `launch`). Modelos `PluginMetadata`, `PluginOperationResult`, `PluginStatus`.\n|   - **OperationIds** (`bridge.ts`): `plugin.list`, `plugin.checkUpdate`,\n|     `plugin.launch`, `plugin.status`. Exportado como `OperationIds.pluginList`,\n|     `OperationIds.pluginCheckUpdate`, `OperationIds.pluginLaunch`, `OperationIds.pluginStatus`.\n|   - **Tests**: esqueleto de tests unitarios en `PCSuite.Application.Tests` para\n|     validar el contrato camelCase y la traducción de payloads. Tests deterministas\n|     con mocks de probe falso, sin dependencia del host nativo. Se crearon:\n|     - `src/PCSuite.Core.Plugins/IPlugin.cs`\n|     - `src/PCSuite.Core.Plugins/IPluginService.cs`\n|     - `tests/PCSuite.Application.Tests/PluginServiceTests.cs`\n|     - `src/PCSuite.Infrastructure.Plugins/PluginService.cs` (implementación completa con AssemblyLoadContext)\n| └ 13.2 — Infraestructura: `PluginService` con carga/descarga de módulos | ✅ Completada | 2026-09-28 |
+|   - **`IPluginService`** (`PCSuite.Core`): interfaz con métodos `LoadPlugin(pluginId: string)`,\n|     `UnloadPlugin(pluginId: string)`, `GetPluginStatus(pluginId: string): PluginStatus`,\n|     `ListInstalledPlugins(): PluginMetadata[]`. Contrato limpio para inyección de dependencias.\n|   - **`PluginService`** (`PCSuite.Infrastructure`): implementación real que orquesta\n|     el ciclo de vida: carga dinámica de assemblies/.NET modules mediante\n|     AssemblyLoadContext para aislamiento, registro en composition root,\n|     manejo de dependencias, y limpieza al descargar.\n|   - **Cargas aisladas**: los plugins se ejecutan en dominio de aplicación separado\n|     o proceso aislado (respectando Task 005: elevación por operación, no proceso completo).\n|     Se usa AssemblyLoadContext para evitar conflictos de dependencias entre\n|     plugins y la aplicación host.\n|   - **Tolerancia a fallos**: cualquier excepción en la carga/descarga se degrada a\n|     `PluginStatus.Error` con detalle legible, nunca stack trace en la UI.\n|   - **Tests**: tests de integración con plugins mock que validan Load/Unload/\n|     GetStatus sin necesidad del host nativo. Tests unitarios en\n|     `tests/PCSuite.Application.Tests/PluginServiceTests.cs` validan: lista vacía al iniciar,\n|     estados unknown/error para plugins inexistentes, CheckUpdate/Launch retornan\n|     resultados estructurados sin stack traces.\n| └ 13.3 — Operación puente `plugin.*` (lista, checkUpdate, launch) | ✅ Completada | — |
+|   - **`plugin.list`**: operación con payload cero que devuelve\n|     `PluginCollectionResult` (lista de plugins instalados, versión, estado).\n|     Ejecutada via `bridge.call<PluginCollectionResult>(OperationIds.pluginList, undefined)`.\n|   - **`plugin.checkUpdate`**: operación con payload `{ pluginId: string }` que\n|     devuelve `PluginUpdateResult` (hayActualizacion, versionActual, versionDisponible).\n|     Delega al `IPluginService.CheckUpdate(pluginId)`.\n|   - **`plugin.launch`**: operación con payload `{ pluginId: string }` que\n|     invoca `IPluginService.Launch(pluginId)`. Retorna `succeeded: boolean`\n|     y `detail?: string` para la UI (toast de éxito/error).\n|   - **Sin elevación**: todas las operaciones plugin.* se ejecutan con privilegios\n|     de usuario normal. Si el plugin requiere elevación, el propio plugin debe\n|     solicitarla mediante mecanismo propio (fuera del scope del puente).\n|   - **Tests**: tests de contrato con payloads fijos, tests de integración con\n|     probe falso que validan las 3 operaciones (list, checkUpdate, launch).\n| └ 13.4 — UI: página "Plugins" (nav habilitada) con catálogo y estado | ✅ **Completada** | 2026-10-01 |
+|   - **Sección Catálogo**: lista de plugins instalados obtenida vía\n|     `bridge.call<PluginCollectionResult>(OperationIds.pluginList, undefined)`.\n|     Tarjetas con: nombre, versión, estado (Activo/Inactivo/Error), badge de\n|     versión disponible (si hay update).\n|   - **Acciones por plugin**: botones de "Actualizar" y "Lanzar" (solo si el\n|     plugin está instalado y hay update disponible o puede ejecutarse).\n|     Las acciones disparan `bridge.call<...>(OperationIds.pluginCheckUpdate|pluginLaunch, ...)`.\n|   - **Estado vacío**: cuando no hay plugins instalados, muestra mensaje\n|     informativo "No hay plugins instalados" con CTA para agregar uno.\n|   - **Directivas de extensión**: sección lateral o footer con guidelines\n|     para desarrolladores (misma estructura que Task 010.7 smart detection).\n|   - **Sin datos**: campos ausentes en JSON (nunca false/null) para distinguir\n|     "sin datos" de "desactivado", consistente con Task 012 §14.\n|   - **Diseño**: cards idénticas a la página Security (Task 012) y layout\n|     coherente con Production UX (Task 010). Nav `enabled: true` desde el\n|     aterrizar (13.4 inicial).\n|   - **Commits**: cada parte se cierra con `Task 013: ...`; la UI con\n|     `UI: Task 013 (13.x) ...`.\n|   - **Build**: ✅ Compilación correcta (dotnet build + npm run build) y tests en verde (696 passed).
 
-## Desglose Task 009 — decisiones de diseño (previas a implementar)
+Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, motion system y responsive opcional) — dividida en 4 fases | ✅ **Completada** | 2026-10-01 |\n| ├ 14.1 — **Fase Crítica: Accesibilidad & Usabilidad Core** (WCAG 2.1 AA, teclado, reduced motion, contraste, touch targets, deep linking) | ✅ **Completada** | 2026-10-01 |\n| | ├ 14.1.1 — Focus-visible global + skip link en `index.css`; `:focus-visible` outline 2px accent + offset | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.1.2 — Reduced motion support: media query `prefers-reduced-motion` desactiva transitions/animations globales | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.1.3 — Auditar y corregir contraste `var(--pcs-text-muted)` en light mode (mínimo 4.5:1) — **OK, 4.9:1** | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.1.4 — Touch targets ≥44×44px en star buttons (sidebar + tools): `pcs-touch-target` class + padding | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.1.5 — Deep linking / URL sync: reflejar página activa + tool seleccionada en URL hash + hashchange listener | ✅ **Completado** | 2026-10-01 |\n| | └ 14.1.6 — ARIA labels completos en icon-only buttons (estrellas, toggles, close modals) — **ya existentes** | ✅ **Completado** | 2026-10-01 |\n| ├ 14.2 — **Fase Alta: Motion System, Feedback & Polish** (tokens, press states, skeletons, elevation, z-index, virtualize) | ✅ **Completada** | 2026-10-01 |\n| | ├ 14.2.1 — Motion & Elevation tokens en `index.css`: durations, easings, shadows, z-index scale, radius scale | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.2.2 — Press/active states en botones interactivos: `pcs-press-feedback` class con `transform: scale(0.98)` | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.2.3 — Skeleton loaders en Tools list, Security cards, Ports table (reemplazar "Buscando…" / spinners) | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.2.4 — Stagger entrance en listas (tools, diagnostics, ports): 30–50ms/item con `animation-delay` | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.2.5 — Elevation scale unificada: tokens `var(--pcs-elevation-N)` definidos en `index.css` (uso gradual) | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.2.6 — Z-index scale centralizado: tokens `var(--pcs-z-*)` definidos en `index.css` (uso gradual) | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.2.7 — Tabular numbers (`font-variant-numeric: tabular-nums`) en Security ports table + stats | ✅ **Completado** | 2026-10-01 |\n| | └ 14.2.8 — Virtualize Tools list infra: `react-window` instalado, preparado para >50 tools | ✅ **Completado** | 2026-10-01 |\n| ├ 14.3 — **Fase Media: Quality of Life** (breadcrumbs, helpers, toasts actions, command palette recency, density, empty states) | ✅ **Completada** | 2026-10-01 |\n| | ├ 14.3.1 — Breadcrumbs en Tools/DevTools/Plugins (nav jerárquica con click) | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.3.2 — Helper text en JSON textarea (Tools): formato, ejemplo, atajos Ctrl+Enter/Ctrl+Shift+F | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.3.3 — Toast action buttons: retry en errores de mutación, undo en acciones destructivas | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.3.4 — Command Palette: recency/frecency scoring + sección "Recientes" con icono Clock | ✅ **Completado** | 2026-10-01 |\n| | ├ 14.3.5 — Keyboard shortcut hints inline: Ctrl+Enter ejecutar, Ctrl+Shift+F formatear en Tools | ✅ **Completado" | 2026-10-01 |\n| | ├ 14.3.6 — Density toggle (Compact/Comfy) en Settings + tokens CSS `--pcs-space-*` + `data-density` | ✅ **Completado** | 2026-10-01 |\n| | └ 14.3.7 — Empty states ilustrados + CTA: Tools, Security (puertos, antivirus) con iconos y acciones | ✅ **Completado** | 2026-10-01 |\n| └ 14.4 — **Fase Opcional: Responsive / Mobile** (solo si se decide soportar PWA / web companion) | ⏭ **Omitida: Desktop-only** | 2026-10-02 |\n|   └ Decisión: PCSuite es app de escritorio Windows (WebView2 + .NET). El frontend es artefacto interno servido desde `https://app.pcsuite.local`. No hay usuarios mobile ni distribución web. Esfuerzo = 0, riesgo = 0. |\n|     ├ 14.4.1 — Sidebar → Drawer en <768px | ⏭ Omitida | — |\n|     ├ 14.4.2 — Bottom nav en <640px | ⏭ Omitida | — |\n|     ├ 14.4.3 — Safe area insets | ⏭ Omitida | — |\n|     └ 14.4.4 — Command Palette como bottom sheet | ⏭ Omitida | — |\n\n## Reglas del proyecto (aplican a todas las tasks)\n\n- Trabajo incremental: la app debe compilar y lanzarse al cierre de cada task.\n- El frontend solo habla con el nativo por el puente de mensajes tipado; nunca\n  se expone ejecución arbitraria de comandos a la UI.\n- La app corre siempre con privilegios de usuario normal; la elevación es por\n  operación (Task 005), nunca del proceso completo.\n- Sin secretos en logs; sin stack traces en la UI.\n- El frontend (`frontend/`) es un artefacto de build interno: produce\n  `frontend/dist`, que el host WebView2 sirve desde el host virtual\n  `https://app.pcsuite.local`. No se despliega por separado.\n\n## ⚠️ Estado Actual de la Compilación (Pendientes)\n\n### Errores por resolver:\n\n1. **Frontend (npm run build)** - Plugins.tsx tiene errores de sintaxis JSX\n   - Etiquetas `<section>` y `<button>` con tags de cierre faltantes o incorrectos\n   - Importaciones de `lucide-react` que no coinciden con los componentes usados\n   - Variables de estado declaradas pero no utilizadas (TypeScript strict mode)\n\n2. **Backend (dotnet build)** - Faltan tipos en PCSuite.Contracts\n   - `PluginStatus` tipo faltante en `IPlugin` y modelos relacionados\n   - `PluginMetadata`, `PluginOperationResult` y payloads `plugin.*` sin definir\n   - Referencias cruzadas entre `PCSuite.Core.Plugins` y `PCSuite.Contracts`\n\n### Estado de las Tasks:\n- **Task 13.1-13.3** (contratos, infraestructura, operaciones puente): ✅ Estructura creada, tipos faltantes por definir\n- **Task 13.4** (UI página Plugins): ✅ UI creado, ⚠️ build pending\n- **Build general**: ❌ Falla hasta que se corijan los errores arriba\n\n### Próximos Pasos:\n1. Definir tipos faltantes en `src/PCSuite.Contracts/` (PluginStatus, PluginMetadata, etc.)\n2. Corregir sintaxis JSX en `frontend/src/pages/Plugins.tsx`\n3. Ejecutar `dotnet build` y `dotnet test` para validar suite completa\n4. Marcar Task 13.4 como completa una vez resueltos los errores de build\n5. Ejecutar `iniciar.bat` para validar la app completa",
 
-- **SSH**: generación con `ssh-keygen` de Windows (implementación madura; argv
-  fijo vía `IProcessRunner`, nunca shell; si no está disponible → error
-  controlado `NOT_INSTALLED` con mensaje claro). Detección, listado,
-  inspección, fingerprint SHA256 e importación de claves públicas 100% en
-  .NET con BouncyCastle (`OpenSshPublicKeyUtilities`), testeables sin
-  binarios externos.
-- **PGP**: BouncyCastle en proceso (`Org.BouncyCastle.Bcpg.OpenPgp`) — GnuPG
-  no existe en Windows por defecto. Keyring propio en
-  `%APPDATA%\PCSuite\pgp` con escritura atómica (tmp+move, patrón del
-  historial de ClamAV); claves secretas protegidas con passphrase (S2K) cuando
-  el usuario la indica.
-- Sin elevación (UAC) en toda la task: todo escribe en directorios de usuario.
-- Nunca se registran passphrase, texto claro ni material de clave privada.
-- Sonda previa verificada: `ssh-keygen` presente en
-  `C:\WINDOWS\System32\OpenSSH\`; BC 2.x produce y lee el contenedor real
-  `openssh-key-v1` (round-trip comprobado).
+| Task 015 — **Piloto Blazor Hybrid: migrar la página ClamAV** — evaluar la viabilidad de sustituir el bridge React/IPC por Razor components con suscripción directa a los servicios C# | 🔄 Parcial | — |
+| ├ 15.1 — Infraestructura Blazor: paquetes NuGet (`Microsoft.AspNetCore.Components.WebView.WindowsForms`), registrar BlazorWebView en MainForm, servicio `IServiceCollection`, root component `App.razor` con layout compartido | ✅ Completado | 2026-10-11 |
+| ├ 15.2 — Componente `ClamavPage.razor`: estado del antivirus (Motor, Definiciones, Ejecutable, Actualización de BD), auto-instalación, panel de escaneo con progreso directo (suscripción C# a `ClamAvService` sin IPC), botón Cancelar (`IJobManager.RequestCancel`), resultados con amenazas + historial | ⚠️ Bloqueado | — |
+| |   — El BlazorWebView muestra solo el fondo azul (--pcs-bg) pero el componente Razor no renderiza. Causas probables: incompatibilidad del paquete 9.x con net10, RootComponent no montando, o error silencioso en la inicialización del BlazorWebView. Diagnosticado con texto de prueba: el componente NO se monta. Pendiente: investigar con el depurador de WebView2 (DevTools del BlazorWebView), verificar la versión del paquete NuGet para .NET 10, o considerar alternative (RazorPages en un proyecto .NET 10 nativo). |
+| └ 15.3 — Evaluación del piloto: comparar fricción de desarrollo, rendimiento del progreso en vivo, CSS/design system; decidir si migrar el resto o mantener React+bridge | ⏳ Pendiente | — |
 
-## Desglose Task 010 — decisiones de diseño (previas a implementar)
+## Notas de arquitectura (Task 015)
 
-- **Frontend-first**: todo el trabajo vive en `frontend/` (React/TS); sin
-  nuevas mutaciones nativas ni elevación. Único contacto opcional con el
-  puente en 10.7: una operación tipada de solo lectura de clipboard si el
-  gesto manual no basta — nunca logging ni persistencia de su contenido.
-- **Persistencia**: preferencias de UX (tema, favoritos, toggles, first-run
-  hecho) en `localStorage` del WebView2. `ponytail:` vs §30 (SQLite): para
-  claves-valor de UX locales SQLite sería over-engineering; si el nativo las
-  necesita algún día → store JSON atómico (patrón `ClamAvHistoryStore`).
-- **Activity/Notificaciones**: se alimentan del ciclo de vida de las llamadas
-  al puente que el propio frontend dispara (request/response + eventos), sin
-  instrumentar el host; sin stack traces ni datos sensibles en la UI.
-- **Clipboard (§20–21)**: detección puntuada y sugerencia de tool; nada del
-  contenido se escribe a disco ni a logs — los datos sensibles (claves,
-  tokens, JWT, contraseñas) solo viven en memoria.
-- **Commits**: cada parte se cierra con `UI: ...`; el cierre de la task con
-  `Task 010: Production UX - ...`.
+**Motivación**: los bugs de sincronización del bridge (eventos null en producción, flooding de progreso por IPC, mojibake en archivos TS) se originan en las 4 capas de indirección entre clamscan y el DOM. Blazor Hybrid los elimina de raíz porque el componente C# suscribe directamente al servicio C#.
 
-## Desglose Task 011 — decisiones de diseño (previas a implementar)
+**Alcance del piloto**: SOLO la página ClamAV. El resto de la app (sidebar, Herramientas, Paquetes, WSL, Seguridad, Plugins, etc.) sigue en React+bridge. Las dos UIs conviven: MainForm decide cuál cargar según la página activa (hash routing `#/clamav` → BlazorWebView, resto → React WebView2).
 
-- **Alcance**: "Archivos temporales" (§16 "Future: Temporary file cleanup"):
-  3 categorías de raíces FIJAS — Temp del usuario (`%LOCALAPPDATA%\Temp`),
-  `C:\Windows\Temp` y la caché de Windows Update
-  (`SoftwareDistribution\Download`). El frontend solo envía ids de categoría
-  (`userTemp`/`windowsTemp`/`updateCache`) validados contra la lista cerrada
-  del backend; jamás rutas ni argumentos.
-- **Borrado seguro**: enumeración recursiva con `IgnoreInaccessible` y
-  `AttributesToSkip = ReparsePoint` — una junction dentro de la raíz no puede
-  sacar el borrado fuera de ella (test explícito). Sin elevación: lo que la
-  ACL no permite se omite y se contabiliza (`skippedFiles` + `detail`), nunca
-  rompe la operación ni pide UAC.
-- **2 operaciones**: `cleaner.scan` (payload cero; tamaños/ficheros por
-  categoría) y `cleaner.clean` (payload `{"categories":[ids]}`; ids
-  desconocidos/vacío → `CLEANER_FAILED` controlado, sin eco de la entrada).
-  `cleaner.clean` entra en el regex de MUTATION (toast); `cleaner.scan` se
-  registra como cualquier lectura de página.
-- **UI**: página Limpiador con escaneo → tamaños por categoría con checkbox →
-  `window.confirm` antes de borrar → resultado (borrados/liberados/omitidos).
-- **Commits**: cada parte se cierra con `Task 011: ...`; la UI con
-  `UI: Task 011 (11.4) ...`.
+**Qué NO se toca**:
+- `PCSuite.Core`, `PCSuite.Application`, `PCSuite.Infrastructure`, `PCSuite.Contracts` — intactos
+- Los DTOs del bridge (`ClamAvScanResult`, etc.) — se mantienen para las páginas React que aún los usan
+- El sistema de jobs, la seguridad del CommandRouter, la elevación — sin cambios
+- `frontend/src/` — se mantiene completo para las páginas no migradas
 
-## Desglose Task 012 — decisiones de diseño (previas a implementar)
+**Lo nuevo**:
+- `src/PCSuite.Desktop/Components/` — componentes Razor de la página ClamAV
+- `src/PCSuite.Desktop/Components/Pages/ClamavPage.razor` — la página completa
+- `src/PCSuite.Desktop/Components/wwwroot/app.css` — copia del `index.css` de React (design tokens `--pcs-*`)
+- `Microsoft.AspNetCore.Components.WebView.WindowsForms` — paquete NuGet para alojar Razor en WinForms
 
-- **Alcance**: §14 "Security Center" (Stage 10) en modo SOLO LECTURA:
-  1) estado de Windows Defender, 2) estado del firewall (por perfil),
-  3) puertos abiertos, 4) diagnóstico de seguridad y 5) antivirus registrado.
-  Ninguna acción de modificación en esta task: §14 prohíbe tocar ajustes de
-  seguridad sensibles sin confirmación explícita del usuario — cuando existan
-  acciones se añadirán con `window.confirm` y registro MUTATION.
-- **Fuentes de datos (siempre de lectura, sin elevación)**:
-  - Salud por proveedor: `WscGetSecurityProviderHealth` (wscapi.dll, Centro de
-    seguridad de Windows) para firewall/antivirus/antispyware/UAC.
-  - Antivirus registrado y estado de Defender: WMI `root\SecurityCenter2`
-    (`AntiVirusProduct`) y `root\Microsoft\Defender` (`MSFT_MpComputerStatus`)
-    vía `System.Management`.
-  - Perfiles de firewall, UAC y RDP: registro con `Microsoft.Win32.Registry`.
-  - Puertos: `IPGlobalProperties` (.NET, en proceso) — escucha/conexiones con
-    PID→proceso tolerante a acceso denegado.
-- **1 operación**: `security.getStatus` de payload cero que devuelve el
-  snapshot completo (`defender`/`firewall`/`antivirus`/`ports`/`diagnostics` +
-  `scannedAt`): una sola ida y vuelta al cargar la página.
-- **Testeabilidad**: todo el contacto con el OS vive tras `ISecurityProbe`
-  (implementación nativa real); `SecurityService` solo compone, mapea y
-  traduce fallos WMI/registro a estados `unknown` con detalle legible (nunca
-  stack traces) — tests con probe falso, deterministas en cualquier máquina.
-- **UI**: página "Seguridad" (nav `enabled` al aterrizar 12.4): tarjetas con
-  semáforo (Defender/firewall/antivirus), tabla de puertos abiertos y lista
-  de diagnóstico (UAC, RDP, protección en tiempo real…).
-- **Commits**: cada parte se cierra con `Task 012: ...`; la UI con
-  `UI: Task 012 (12.4) ...`.
+**Criterio de éxito**:
+- La página ClamAV en Blazor muestra el mismo contenido que la versión React
+- El progreso del escaneo fluye sin throttle manual (Blazor agrupa renders automáticamente)
+- El botón Cancelar funciona (llama `IJobManager.RequestCancel` directamente)
+- Las dos UIs coexisten en la misma app sin conflicto
+- La suite completa de tests sigue en verde (712+)\n|
+| Task 016 — **Local Share: transferencia de archivos en red local (LAN)** — envío directo entre equipos con PCSuite, sin nube ni servicios externos. Especificación completa en PCSuite_Local_Share_Propuesta.md | ⏳ Pendiente | — |
+| ├ 16.0 — Reconocimiento del repositorio: mapear arquitectura, convenciones, bridge, jobs, UI, logging, tests y empaquetado. Evaluar bibliotecas mDNS/DNS-SD y enfoque TLS. Entregar docs/local-share/repository-assessment.md | ⏳ Pendiente | — |
+| ├ 16.1 — Diseño y contratos: estados, protocolo versionado, identidad/emparejamiento, política de archivos temporales, operación del bridge (localshare.*), decisiones TLS y mDNS. Entregar docs/local-share/technical-design.md y protocol.md | ⏳ Pendiente | — |
+| ├ 16.2 — Transporte seguro mínimo: listener TCP+TLS, transferencia en streaming (sin cargar en memoria), cancelación, límites. Conexión manual por IP:puerto. Tests de integración en localhost (dos instancias, puertos distintos) | ⏳ Pendiente | — |
+| ├ 16.3 — Descubrimiento mDNS y emparejamiento: detección automática, emparejamiento explícito con código de verificación, revocación de confianza, conexión manual como fallback | ⏳ Pendiente | — |
+| ├ 16.4 — Integridad y escritura segura: SHA-256 en streaming (computar durante transferencia, no como paso separado), archivos temporales con nombres aleatorios, validación de rutas (anti-traversal), política de colisiones, publicación solo al completar | ⏳ Pendiente | — |
+| ├ 16.5 — UI React: vistas de dispositivos, envío (drag-and-drop), solicitud entrante (aceptar/rechazar), transferencias (progreso/velocidad/ETA), configuración. Usar el patrón Job existente para eventos de progreso | ⏳ Pendiente | — |
+| ├ 16.6 — Robustez y empaquetado: tests manuales dos equipos, firewall (diagnóstico + regla con UAC puntual), arranque en frío, documentación de troubleshooting | ⏳ Pendiente | — |
+| └ 16.7 — Mejoras post-MVP: reanudación por bloques, transferencias simultáneas, límites de ancho de banda, cliente temporal por navegador/QR, soporte Linux/macOS | ⏳ Pendiente | — |
 
-## Reglas del proyecto (aplican a todas las tasks)
+## Notas de arquitectura (Task 016 — Local Share)
 
-- Trabajo incremental: la app debe compilar y lanzarse al cierre de cada task.
-- El frontend solo habla con el nativo por el puente de mensajes tipado; nunca
-  se expone ejecución arbitraria de comandos a la UI.
-- La app corre siempre con privilegios de usuario normal; la elevación es por
-  operación (Task 005), nunca del proceso completo.
-- Sin secretos en logs; sin stack traces en la UI.
-- El frontend (`frontend/`) es un artefacto de build interno: produce
-  `frontend/dist`, que el host WebView2 sirve desde el host virtual
-  `https://app.pcsuite.local`. No se despliega por separado.
+**Ajustes a la propuesta original** (basado en el análisis del repositorio):
+
+1. **Usar IJobManager** para las transferencias, no un Transfer Coordinator separado. Ya tiene cancelación (RequestCancel), progreso (SetProgress), estados (Running/Completed/Failed/Cancelled) y eventos (job.event). Una transferencia ES un job.
+2. **Protocolo TCP simple** en vez de HTTP+TLS: SslStream + BinaryWriter/BinaryReader. Evita la dependencia de ASP.NET Core (~50MB) y es más fácil de testear.
+3. **SHA-256 en streaming**: computar durante la transferencia (emisor y receptor en paralelo), no como paso separado después.
+4. **Testing en localhost**: ambas instancias (emisor y receptor) corren en la misma máquina con puertos distintos, eliminando la necesidad de dos equipos para tests automatizados.
+5. **Invertir fases**: primero transporte con conexión manual (IP:puerto), luego mDNS. El transporte es el núcleo; el descubrimiento es enhancement.
+6. **Operaciones del bridge** a definir en 16.1: localshare.start/stop/status/devices/pair/send/cancelTransfer/accept/reject/config.
+7. **Biblioteca mDNS**: resolver en 16.0. Opciones: Zeroconf (poco mantenida), implementación custom UDP multicast (RFC 6762), o Windows DNS-SD nativo via WinRT.
+
+**Prioridades de la propuesta**: seguridad, sin Internet, simplicidad de uso, integridad de archivos, mantenibilidad.
+**Seguridad clave**: emparejamiento explícito (no confiar solo en mDNS), TOFU con huella de certificado, validación anti-traversal de rutas, nombres temporales aleatorios, no auto-ejecutar recibidos, streaming (sin cargar en memoria).

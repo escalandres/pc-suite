@@ -1,0 +1,333 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens centralizados (plan §34) — TODO color de la UI sale de
+ * aquí: los componentes solo usan var(--pcs-*). El tema OSCURO es la
+ * experiencia primaria: vive en :root como valor por defecto; el claro
+ * es la única capa de sobrescritura, activada por data-theme en <html>
+ * (theme.ts resuelve "system" antes del primer render, por eso no hace
+ * falta un bloque prefers-color-scheme aquí).
+ */
+:root {
+  color-scheme: dark;
+  --pcs-bg: #0b1220;
+  --pcs-surface: #121a2b;
+  --pcs-surface-2: #182338;
+  --pcs-border: #24314c;
+  --pcs-text: #e6edf7;
+  --pcs-text-muted: #93a3bd;
+  --pcs-accent: #3b82f6;
+  --pcs-accent-hover: #2f6fe0;
+  --pcs-success: #34d399;
+  --pcs-danger: #f87171;
+  --pcs-warning: #fbbf24;
+  --pcs-orange: #f97316;
+
+  /* Motion tokens (Task 14.2) */
+  --pcs-motion-fast: 120ms;
+  --pcs-motion-base: 200ms;
+  --pcs-motion-slow: 300ms;
+  --pcs-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --pcs-easing-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --pcs-easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Elevation / Shadow scale (Task 14.2) */
+  --pcs-elevation-0: none;
+  --pcs-elevation-1: 0 1px 2px rgba(0,0,0,0.15);
+  --pcs-elevation-2: 0 4px 8px rgba(0,0,0,0.2);
+  --pcs-elevation-3: 0 8px 24px rgba(0,0,0,0.25);
+  --pcs-elevation-4: 0 16px 48px rgba(0,0,0,0.3);
+
+  /* Z-index scale (Task 14.2) */
+  --pcs-z-base: 0;
+  --pcs-z-dropdown: 100;
+  --pcs-z-sticky: 200;
+  --pcs-z-modal-backdrop: 400;
+  --pcs-z-modal: 500;
+  --pcs-z-toast: 600;
+  --pcs-z-tooltip: 700;
+
+  /* Border radius scale */
+  --pcs-radius-sm: 4px;
+  --pcs-radius-md: 8px;
+  --pcs-radius-lg: 12px;
+  --pcs-radius-xl: 16px;
+  --pcs-radius-full: 9999px;
+
+  /* Density tokens (Task 14.3.6) — valores base "comfy". Derivados de
+     las variables de tema de Tailwind: TODA la UI compila contra ellas
+     (p-*, m-*, gap-* → calc(var(--spacing) * n); text-sm → var(--text-sm)),
+     así que el modo compacto escala la interfaz entera, no solo estos
+     tokens. Mapeo comfy: space-N = 4px·N; text-base 14 / sm 12 / lg 16. */
+  --pcs-space-1: var(--spacing);
+  --pcs-space-2: calc(var(--spacing) * 2);
+  --pcs-space-3: calc(var(--spacing) * 3);
+  --pcs-space-4: calc(var(--spacing) * 4);
+  --pcs-space-6: calc(var(--spacing) * 6);
+  --pcs-space-8: calc(var(--spacing) * 8);
+  --pcs-text-base: var(--text-sm); /* 14px */
+  --pcs-text-sm: var(--text-xs);   /* 12px */
+  --pcs-text-lg: var(--text-base); /* 16px */
+  --pcs-button-py: var(--pcs-space-2);
+  --pcs-button-px: var(--pcs-space-4);
+  --pcs-input-py: var(--pcs-space-2);
+  --pcs-card-padding: var(--pcs-space-4);
+  --pcs-gap: var(--pcs-space-4);
+}
+
+/* Tema claro — sobrescribir SOLO tokens, nunca estilos de componentes. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --pcs-bg: #f4f7fb;
+  --pcs-surface: #ffffff;
+  --pcs-surface-2: #eaeff7;
+  --pcs-border: #d4dcea;
+  --pcs-text: #16202f;
+  --pcs-text-muted: #566480;
+  --pcs-accent: #2563eb;
+  --pcs-accent-hover: #1d4ed8;
+  --pcs-success: #059669;
+  --pcs-danger: #dc2626;
+  --pcs-warning: #b45309;
+
+  /* Light mode shadows use darker tint */
+  --pcs-elevation-1: 0 1px 2px rgba(0,0,0,0.08);
+  --pcs-elevation-2: 0 4px 8px rgba(0,0,0,0.12);
+  --pcs-elevation-3: 0 8px 24px rgba(0,0,0,0.16);
+  --pcs-elevation-4: 0 16px 48px rgba(0,0,0,0.2);
+}
+
+/* Density: modo compacto (Task 14.3.6) — reduce espaciado y tamaños.
+   Tailwind v4 compila TODAS las utilidades de espaciado/tipografía contra
+   --spacing y --text-*, que son custom properties normales (heredan), así
+   que sobrescribirlas aquí escala la UI completa — y con ella los tokens
+   --pcs-* de arriba, definidos como derivados. La escala de anchos de
+   contenedor (--container-*, p. ej. max-w-6xl del contenido) no se toca. */
+:root[data-density='compact'] {
+  --spacing: 3px; /* 0.75× el espaciado base (4px → 3px) */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--pcs-bg);
+  color: var(--pcs-text);
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+ * ACCESSIBILITY & INTERACTION FOUNDATIONS (Task 14.1)
+ * ============================================================ */
+
+/* 14.1.1 — Focus visible global: outline visible al navegar por teclado */
+*:focus-visible {
+  outline: 2px solid var(--pcs-accent);
+  outline-offset: 2px;
+}
+
+/* Excepción: elementos que ya gestionan su focus (inputs, textareas) */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--pcs-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Clases de componentes en @layer components (Tailwind v4): las
+ * utilidades viven en @layer utilities, declarado DESPUÉS, así que
+ * pueden sobrescribir estas clases cuando se combinan. Sin capa, el
+ * CSS de autor sin capa gana SIEMPRE a las utilidades (p. ej.
+ * `pcs-touch-target absolute` quedaba `position: relative` y las
+ * estrellas de favoritos se posicionaban en el flujo, rompiendo la
+ * alineación de la sidebar).
+ */
+@layer components {
+  /* Skip link — solo visible al recibir foco (14.1.1) */
+  .pcs-skip-link {
+    position: absolute;
+    top: -100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--pcs-z-tooltip);
+    padding: var(--pcs-space-2) var(--pcs-space-4);
+    background: var(--pcs-accent);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--pcs-radius-md);
+    white-space: nowrap;
+    transition: top var(--pcs-motion-fast) var(--pcs-easing-standard);
+  }
+  .pcs-skip-link:focus {
+    top: var(--pcs-space-4);
+  }
+}
+
+/* 14.1.2 — Reduced motion: respetar preferencia del usuario */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  /* 14.1.4 — Touch target minimum: clase utilitaria para expandir hit area */
+  .pcs-touch-target {
+    position: relative;
+  }
+  .pcs-touch-target::before {
+    content: '';
+    position: absolute;
+    inset: -8px; /* expande 8px en cada dirección = 44px mínimo si elemento es 28px */
+    border-radius: inherit;
+  }
+
+  /* Press feedback utility (Task 14.2) */
+  .pcs-press-feedback:active {
+    transform: scale(0.98);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pcs-press-feedback:active {
+      transform: none;
+    }
+  }
+
+  /* Scrollbar sutil para contenedores scrollables (sidebar, tablas).
+     La scrollbar por defecto ocupa demasiado en paneles estrechos. */
+  .pcs-scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--pcs-border) transparent;
+  }
+
+  /* Barra de progreso indeterminada (p. ej. escaneo ClamAV sin percent
+     conocido): un fragmento del 30% se desliza en bucle — nunca ancho
+     100%, que visualmente parece "completado". El contenedor debe llevar
+     su propio fondo de track y border-radius (heredado por el fragmento). */
+  .pcs-progress-indeterminate {
+    position: relative;
+    overflow: hidden;
+  }
+  .pcs-progress-indeterminate::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    left: -30%;
+    width: 30%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--pcs-accent), var(--pcs-accent-hover));
+    animation: pcs-progress-indeterminate 1.2s var(--pcs-easing-standard) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pcs-progress-indeterminate::after {
+      animation: none;
+      left: 0;
+    }
+  }
+}
+
+@layer components {
+  /* Tabular numbers para datos (Task 14.2.7) */
+  .pcs-tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  }
+}
+
+/* Skeleton loader base (Task 14.2.3) — la animación vive fuera de la capa
+   porque @keyframes es global; el resto de propiedades sí van en capa
+   para que utilidades como `rounded-full` puedan ajustar el radio. */
+@layer components {
+  .pcs-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--pcs-surface-2) 25%,
+      var(--pcs-border) 50%,
+      var(--pcs-surface-2) 75%
+    );
+    background-size: 200% 100%;
+    animation: pcs-skeleton-shimmer 1.5s infinite;
+    border-radius: var(--pcs-radius-md);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pcs-skeleton {
+      animation: none;
+      background: var(--pcs-surface-2);
+    }
+  }
+}
+@keyframes pcs-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Stagger entrance utility (Task 14.2.4) */
+@layer components {
+  .pcs-stagger-in > * {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: pcs-fade-in-up var(--pcs-motion-base) var(--pcs-easing-standard) forwards;
+  }
+  .pcs-stagger-in > *:nth-child(1)  { animation-delay: 0ms; }
+  .pcs-stagger-in > *:nth-child(2)  { animation-delay: 30ms; }
+  .pcs-stagger-in > *:nth-child(3)  { animation-delay: 60ms; }
+  .pcs-stagger-in > *:nth-child(4)  { animation-delay: 90ms; }
+  .pcs-stagger-in > *:nth-child(5)  { animation-delay: 120ms; }
+  .pcs-stagger-in > *:nth-child(6)  { animation-delay: 150ms; }
+  .pcs-stagger-in > *:nth-child(7)  { animation-delay: 180ms; }
+  .pcs-stagger-in > *:nth-child(8)  { animation-delay: 210ms; }
+  .pcs-stagger-in > *:nth-child(9)  { animation-delay: 240ms; }
+  .pcs-stagger-in > *:nth-child(10) { animation-delay: 270ms; }
+  .pcs-stagger-in > *:nth-child(11) { animation-delay: 300ms; }
+  .pcs-stagger-in > *:nth-child(12) { animation-delay: 330ms; }
+  @media (prefers-reduced-motion: reduce) {
+    .pcs-stagger-in > * {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+@keyframes pcs-fade-in-up {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pcs-progress-indeterminate {
+  from { left: -30%; }
+  to { left: 100%; }
+}
+
+/* 14.3.6 — Transición suave del contenido principal al colapsar sidebar */
+main[id="main-content"] {
+  transition: margin-left var(--pcs-motion-base) var(--pcs-easing-standard);
+}
+
+/* Asegurar que el contenido se ajuste suavemente */
+@media (prefers-reduced-motion: reduce) {
+  main[id="main-content"] {
+    transition: none;
+  }
+}

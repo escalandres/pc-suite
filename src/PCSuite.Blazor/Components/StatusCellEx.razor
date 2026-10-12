@@ -1,0 +1,16 @@
+@* StatusCell compartido: replica el componente de React con los mismos tokens. *@
+<div style="min-width: 0">
+    <p style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+              color: var(--pcs-text-muted); margin: 0 0 0.125rem">@Label</p>
+    <p style="margin: 0; font-size: 0.875rem; font-weight: 500; overflow: hidden;
+              text-overflow: ellipsis; white-space: nowrap @(Mono ? "; font-family: monospace" : "")"
+       title="@Value">
+        @Value
+    </p>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; } = "—";
+    [Parameter] public bool Mono { get; set; }
+}
