@@ -24,6 +24,7 @@ namespace PCSuite.Infrastructure.LocalShare;
 public sealed class LocalShareService : ILocalShareService, IDisposable
 {
     private readonly CertificateStore _certificateStore;
+    private readonly PartialsStore _partials;
     private readonly string _settingsPath;
     private readonly string _devicesPath;
     private readonly ILogger? _logger;
@@ -37,6 +38,13 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     private readonly Dictionary<string, TaskCompletionSource<bool>> _pendingDecisions = new(StringComparer.Ordinal);
     private readonly IElevationManager? _elevation;
     private readonly IProcessRunner _processRunner;
+
+    /// <summary>
+    /// Claves de parciales en uso por transferencias activas (16.7.3).
+    /// Evita que dos transferencias simultáneas del MISMO archivo del MISMO
+    /// par pisen el mismo temporal del manifiesto.
+    /// </summary>
+    private readonly HashSet<string> _claimedPartials = new(StringComparer.Ordinal);
 
     // ------------------------------------------------------------------
     // Estado
@@ -73,6 +81,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         var localShareDir = Path.Combine(dataDirectory, "LocalShare");
         Directory.CreateDirectory(localShareDir);
         _certificateStore = new CertificateStore(localShareDir);
+        _partials = new PartialsStore(localShareDir);
         _settingsPath = Path.Combine(localShareDir, "settings.json");
         _devicesPath = Path.Combine(localShareDir, "devices.json");
         _settings = LoadSettings();
@@ -94,14 +103,45 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         try
         {
             _fileWriter = new SafeFileWriter(_settings.DownloadDirectory);
-            _fileWriter.CleanupOrphanedTempFiles();
+
+            // Reanudación (16.7.3): podar entradas caducadas (>7 días o temp
+            // desaparecido) y conservar los temporales vivos del manifiesto.
+            foreach (var staleTemp in _partials.Prune(PartialsMaxAge))
+            {
+                try { File.Delete(staleTemp); } catch { /* best-effort */ }
+            }
+
+            _fileWriter.CleanupOrphanedTempFiles(_partials.ActiveTempFiles());
 
             _server = new TlsTransferServer(
                 _certificateStore.Certificate,
                 _logger,
                 Math.Clamp(_settings.MaxSimultaneousTransfers, 1, 10));
             _server.TrustedThumbprints = GetTrustedThumbprints();
-            _server.PeerConnected += HandleIncomingConnectionAsync;
+
+            // Adaptador (16.7.3): al terminar el diálogo por CUALQUIER camino
+            // (éxito, rechazo, cancelación o caída de conexión) se persiste el
+            // manifiesto de parciales y se liberan los claims de esta conexión.
+            // Un claim filtrado desactivaría la reanudación de ese par+ruta
+            // hasta reiniciar el servicio.
+            _server.PeerConnected += async (sslStream, remoteIp) =>
+            {
+                var claimedKeys = new List<string>();
+                try
+                {
+                    await HandleIncomingConnectionAsync(sslStream, remoteIp, claimedKeys).ConfigureAwait(false);
+                }
+                finally
+                {
+                    foreach (var key in claimedKeys)
+                    {
+                        ReleasePartialClaim(key);
+                    }
+
+                    _partials.Save();
+                }
+            };
+
             _server.Start(_settings.Port);
 
             _settings.CertificateThumbprint = _certificateStore.Thumbprint;
@@ -148,6 +188,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             }
 
             _pendingDecisions.Clear();
+            _claimedPartials.Clear();
         }
 
         _discovery?.Dispose();
@@ -656,13 +697,19 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             }
         }
 
-        _fileWriter?.CleanupOrphanedTempFiles();
+        _fileWriter?.CleanupOrphanedTempFiles(_partials.ActiveTempFiles());
         return Task.CompletedTask;
     }
 
     // ------------------------------------------------------------------
     // Handlers internos
     // ------------------------------------------------------------------
+
+    /// <summary>Vida máxima del estado de reanudación sin actividad.</summary>
+    private static readonly TimeSpan PartialsMaxAge = TimeSpan.FromDays(7);
+
+    /// <summary>Cada cuántos chunks se persiste el manifiesto de parciales.</summary>
+    private const int PartialsSaveEveryChunks = 64; // 4 MB a chunks de 64KB
 
     /// <summary>¿El deviceId remoto está emparejado (confianza activa)?</summary>
     private bool IsDevicePaired(string deviceId)
@@ -674,12 +721,27 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         }
     }
 
+    /// <summary>Libera el claim de un parcial (idempotente, thread-safe).</summary>
+    private void ReleasePartialClaim(string partialKey)
+    {
+        lock (_lock)
+        {
+            _claimedPartials.Remove(partialKey);
+        }
+    }
+
     /// <summary>
     /// Diálogo de protocolo con un par conectado. La firma coincide con
     /// TlsTransferServer.PeerConnected (Func) para que el servidor espere
     /// a que este método termine antes de disponer la conexión.
+    /// <paramref name="claimedKeys"/> recibe las claves de reanudación
+    /// reclamadas por ESTA conexión: el adaptador de la suscripción las
+    /// libera al terminar, vaya como vaya.
     /// </summary>
-    private async Task HandleIncomingConnectionAsync(SslStream stream, string remoteIp)
+    private async Task HandleIncomingConnectionAsync(
+        SslStream stream,
+        string remoteIp,
+        List<string> claimedKeys)
     {
         // 1. HELLO del emisor
         var (helloType, helloPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
@@ -850,18 +912,88 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 continue;
             }
 
-            // Crear archivo temporal
-            var tempPath = _fileWriter!.CreateTempFile();
+            // ------------------------------------------------------------
+            // RESUME (16.7.3): ¿existe un intento anterior de este par y
+            // esta ruta con un prefijo resumible?
+            // ------------------------------------------------------------
+            var writer = _fileWriter!;
+            var partialKey = $"{hello.DeviceId}\u001F{item.RelativePath}";
+            var existing = _partials.Get(hello.DeviceId, item.RelativePath);
+            long resumeOffset = 0;
+            string tempPath;
+            bool weClaimed;
+
+            lock (_lock)
+            {
+                weClaimed = _claimedPartials.Add(partialKey);
+                if (weClaimed)
+                {
+                    claimedKeys.Add(partialKey);
+                }
+
+                if (existing is not null
+                    && weClaimed
+                    && File.Exists(existing.TempPath)
+                    && existing.Bytes > 0
+                    && existing.Bytes <= item.ExpectedSize)
+                {
+                    // Prefijo válido de un intento anterior: continuar desde ahí.
+                    resumeOffset = existing.Bytes;
+                    tempPath = existing.TempPath;
+                }
+                else
+                {
+                    // Sin estado resumible (o en uso por otra transferencia
+                    // simultánea): empezar desde cero. Si la clave está en
+                    // uso por otra transferencia, NO tocamos su entrada del
+                    // manifiesto ni su claim.
+                    if (!weClaimed)
+                    {
+                        existing = null;
+                    }
+                    else if (existing is not null)
+                    {
+                        _partials.Remove(hello.DeviceId, item.RelativePath);
+                        existing = null;
+                    }
+
+                    tempPath = writer.CreateTempFile();
+                }
+            }
+
             item.TempPath = tempPath;
             item.Status = TransferStatus.Transferring;
+            item.TransferredBytes = resumeOffset;
+
+            // Decir al emisor desde dónde continuar (v2: siempre responde).
+            await ShareProtocol.WriteControlAsync(
+                stream,
+                ShareProtocol.MsgResume,
+                new ShareProtocol.ResumePayload(item.ItemId, resumeOffset)).ConfigureAwait(false);
+
+            // Registrar/actualizar el estado parcial (solo si esta
+            // transferencia es la dueña del claim).
+            if (weClaimed)
+            {
+                var entry = existing is not null
+                    ? existing with { TempPath = tempPath, Bytes = resumeOffset }
+                    : new PartialsStore.PartialEntry { TempPath = tempPath, Bytes = resumeOffset };
+                _partials.Set(hello.DeviceId, item.RelativePath, entry);
+            }
+
+            var partialEntry = _partials.Get(hello.DeviceId, item.RelativePath);
 
             // Recibir chunks de FILE_DATA hasta FILE_END (capturado EN el bucle:
             // una lectura extra aquí consumiría el FILE_START del siguiente
             // archivo y rompería las transferencias multi-archivo).
             ShareProtocol.FileEndPayload? fileEnd = null;
-            using (var fileStream = File.OpenWrite(tempPath))
+            using (var fileStream = new FileStream(
+                tempPath,
+                resumeOffset > 0 ? FileMode.Append : FileMode.Create,
+                FileAccess.Write))
             {
-                var itemBytes = 0L;
+                var itemBytes = resumeOffset;
+                var chunkCount = 0;
                 while (true)
                 {
                     var (dataType, dataPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
@@ -874,7 +1006,15 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
                     if (dataType == ShareProtocol.MsgTransferCancel)
                     {
-                        _fileWriter.DiscardTemp(tempPath);
+                        // El emisor abortó: el prefijo recibido ES reanudable
+                        // (mismo criterio que una caída de conexión). NO borrar
+                        // el temporal; Prune lo recogerá si nadie reintenta.
+                        if (weClaimed)
+                        {
+                            partialEntry!.Bytes = itemBytes;
+                            ReleasePartialClaim(partialKey);
+                            _partials.Save();
+                        }
                         transfer.Status = TransferStatus.Cancelled;
                         transfer.CompletedAt = DateTimeOffset.UtcNow;
                         TransferFinished?.Invoke(transfer);
@@ -883,7 +1023,13 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
                     if (dataType != ShareProtocol.MsgFileData)
                     {
-                        _fileWriter.DiscardTemp(tempPath);
+                        writer.DiscardTemp(tempPath);
+                        if (weClaimed)
+                        {
+                            ReleasePartialClaim(partialKey);
+                            _partials.Remove(hello.DeviceId, item.RelativePath);
+                            _partials.Save();
+                        }
                         transfer.Status = TransferStatus.Failed;
                         transfer.ErrorMessage = "Protocolo inválido durante datos de archivo.";
                         await ShareProtocol.WriteControlAsync(
@@ -900,6 +1046,18 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     item.TransferredBytes = itemBytes;
                     transfer.TransferredBytes = receivedBytes;
 
+                    // Mantener el manifiesto al día (cada 4 MB: si el proceso
+                    // muere, se pierde como mucho esa ventana; el SHA-256 de
+                    // Publish protege contra desalineos de offset).
+                    if (weClaimed)
+                    {
+                        partialEntry!.Bytes = itemBytes;
+                        if (++chunkCount % PartialsSaveEveryChunks == 0)
+                        {
+                            _partials.Save();
+                        }
+                    }
+
                     ProgressChanged?.Invoke(new TransferProgress
                     {
                         TransferId = transfer.TransferId,
@@ -913,23 +1071,37 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 }
             }
 
-            // Verificar (tamaño + SHA-256 en streaming) y publicar. Publish
-            // solo devuelve si TODO validó; si no, lanza y el archivo NUNCA
-            // aparece como completo en la carpeta de recepción.
+            // Verificar (tamaño + SHA-256 del archivo COMPLETO, incluida la
+            // parte reanudada) y publicar. Publish solo devuelve si TODO
+            // validó; si no, lanza y el archivo NUNCA aparece como completo.
             try
             {
-                item.FinalPath = _fileWriter.Publish(
+                item.FinalPath = writer.Publish(
                     tempPath,
                     item.RelativePath,
                     item.ExpectedSize,
                     item.ExpectedHash);
                 item.Status = TransferStatus.Completed;
+                if (weClaimed)
+                {
+                    _partials.Remove(hello.DeviceId, item.RelativePath);
+                    ReleasePartialClaim(partialKey);
+                    _partials.Save();
+                }
             }
             catch (Exception ex)
             {
-                _fileWriter.DiscardTemp(tempPath);
+                writer.DiscardTemp(tempPath);
                 item.Status = TransferStatus.Failed;
                 failedItems.Add(item.RelativePath);
+                // Estado de reanudación inservible: el prefijo no validó
+                // (archivo fuente cambiado o desalineo). Forzar restart total.
+                if (weClaimed)
+                {
+                    _partials.Remove(hello.DeviceId, item.RelativePath);
+                    ReleasePartialClaim(partialKey);
+                    _partials.Save();
+                }
                 _logger?.LogWarning(ex, "Fallo al publicar {File}: {Message}", item.RelativePath, ex.Message);
             }
         }

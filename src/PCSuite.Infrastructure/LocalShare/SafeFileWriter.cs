@@ -156,11 +156,20 @@ public sealed class SafeFileWriter : IDisposable
         }
     }
 
-    /// <summary>Limpia todos los temporales huérfanos (al arrancar o al limpiar historial).</summary>
-    public void CleanupOrphanedTempFiles()
+    /// <summary>
+    /// Limpia los temporales huérfanos (al arrancar o al limpiar historial).
+    /// Los archivos listados en <c>keep</c> se conservan: son estado de
+    /// reanudación vivo (16.7.3).
+    /// </summary>
+    public void CleanupOrphanedTempFiles(IReadOnlySet<string>? keep = null)
     {
         foreach (var file in Directory.EnumerateFiles(_tempDirectory, "*.part"))
         {
+            if (keep is not null && keep.Contains(file))
+            {
+                continue;
+            }
+
             try
             {
                 File.Delete(file);
@@ -191,5 +200,12 @@ public sealed class SafeFileWriter : IDisposable
         return Path.Combine(directory, $"{nameWithoutExt} ({Guid.NewGuid():N}){extension}");
     }
 
-    public void Dispose() => CleanupOrphanedTempFiles();
+    /// <summary>
+    /// Dispose SIN limpiar: los temporales pueden ser estado de reanudación
+    /// (16.7.3). La limpieza explícita es <see cref="CleanupOrphanedTempFiles"/>,
+    /// llamada por Start con la lista de temps vivos y por ClearHistory.
+    /// </summary>
+    public void Dispose()
+    {
+    }
 }

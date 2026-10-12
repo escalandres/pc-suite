@@ -358,6 +358,72 @@ public class LocalShareEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task InterruptedTransfer_ResumesFromWhereItStopped()
+    {
+        // A limitado a 32 KB/s: 256 KB tardan ~8s → ventana determinista
+        // para interrumpir a mitad de archivo.
+        var aSettings = _serviceA.Settings;
+        aSettings.MaxBandwidthBytesPerSecond = 32 * 1024;
+        await _serviceA.UpdateSettingsAsync(aSettings);
+
+        var bSettings = _serviceB.Settings;
+        bSettings.AutoAcceptFromPaired = true;
+        await _serviceB.UpdateSettingsAsync(bSettings);
+
+        await StartAndPairAsync();
+
+        var file = Path.Combine(_dirA, "reanudame.bin");
+        var payload = new byte[256 * 1024];
+        new Random(42).NextBytes(payload);
+        File.WriteAllBytes(file, payload);
+
+        // 1er intento: enviar y CANCELAR a mitad de archivo (la conexión muere
+        // sin frame de cancelación → B lo trata como caída y conserva el prefijo).
+        using var cts = new CancellationTokenSource();
+        var firstFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => firstFinished.TrySetResult(t);
+
+        await _serviceA.SendAsync("device-b", [file], cts.Token);
+        await Task.Delay(2500); // ~80 KB a 32 KB/s
+        cts.Cancel();
+
+        var first = await firstFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(TransferStatus.Cancelled, first.Status);
+
+        // Margen para que B procese el corte y persista el parcial.
+        await Task.Delay(750);
+
+        // 2o intento: reenviar el MISMO archivo.
+        var secondFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t =>
+        {
+            if (t.TransferId != first.TransferId)
+            {
+                secondFinished.TrySetResult(t);
+            }
+        };
+
+        await _serviceA.SendAsync("device-b", [file]);
+        var second = await secondFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(TransferStatus.Completed, second.Status);
+
+        // Prueba de que hubo reanudación real: el emisor solo envió los
+        // bytes que faltaban, no el archivo completo desde cero.
+        Assert.True(second.TransferredBytes > 0, "El segundo intento debió enviar algo.");
+        Assert.True(second.TransferredBytes < 256 * 1024,
+            $"Parece que empezó de cero: envió {second.TransferredBytes} de 262144 bytes.");
+
+        // El archivo llegó COMPLETO e íntegro: Publish verificó el SHA-256
+        // del archivo entero (prefijo reanudado + resto nuevo).
+        var received = Path.Combine(_dirB, "received", "reanudame.bin");
+        Assert.True(File.Exists(received));
+        Assert.Equal(payload, File.ReadAllBytes(received));
+    }
+
+    [Fact]
     public async Task MultiItemTransfer_AllFilesPublishedInOrder()
     {
         // Regresión del bug de la "lectura extra": un ReadFrameAsync de más

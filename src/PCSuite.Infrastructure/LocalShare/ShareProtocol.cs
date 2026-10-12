@@ -13,7 +13,13 @@ namespace PCSuite.Infrastructure.LocalShare;
 public static class ShareProtocol
 {
     public const uint Magic = 0x50435348; // "PCSH"
-    public const byte Version = 1;
+    /// <summary>
+    /// v2 (16.7.3): el flujo por archivo pasa a ser petición-respuesta —
+    /// tras FILE_START el receptor responde RESUME con el offset que ya
+    /// tiene de intentos anteriores. Un peer v1 moriría esperando datos
+    /// tras FILE_START, de ahí el salto de versión.
+    /// </summary>
+    public const byte Version = 2;
     public const int HeaderSize = 10; // 4 magic + 1 version + 1 type + 4 length
     public const int ChunkSize = 64 * 1024; // 64 KB
 
@@ -41,6 +47,15 @@ public static class ShareProtocol
     /// </summary>
     public const byte MsgTransferCompleteAck = 0x0C;
 
+    /// <summary>
+    /// Respuesta del receptor a FILE_START (16.7.3): offset en bytes que ya
+    /// posee de un intento anterior (0 = desde cero). El emisor busca ese
+    /// offset y envía solo el resto; Publish verifica el SHA-256 del archivo
+    /// COMPLETO, así que un archivo fuente cambiado entre intentos se
+    /// detecta y descarta.
+    /// </summary>
+    public const byte MsgResume = 0x0D;
+
     // ------------------------------------------------------------------
     // Payloads de control (JSON)
     // ------------------------------------------------------------------
@@ -58,6 +73,9 @@ public static class ShareProtocol
     public sealed record FileStartPayload(string ItemId, string RelativePath, long Size, string? Sha256);
 
     public sealed record FileEndPayload(string ItemId, long ActualSize, string ActualSha256);
+
+    /// <summary>Offset (en bytes) que el receptor ya tiene del archivo.</summary>
+    public sealed record ResumePayload(string ItemId, long Offset);
 
     public sealed record ErrorPayload(string Code, string Message);
 

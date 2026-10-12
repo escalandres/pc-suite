@@ -146,8 +146,36 @@ public sealed class TransferClient
                 new ShareProtocol.FileStartPayload(item.ItemId, item.RelativePath, item.ExpectedSize, itemHash),
                 ct).ConfigureAwait(false);
 
-            // FILE_DATA: leer en chunks de 64KB, escribir, actualizar progreso
+            // v2 (16.7.3): el receptor responde con el offset que ya posee de
+            // intentos anteriores. 0 = desde cero; == tamaño = nada que enviar.
+            var (resumeType, resumePayloadBytes) = await ShareProtocol.ReadFrameAsync(sslStream, ct).ConfigureAwait(false);
+            if (resumeType != ShareProtocol.MsgResume)
+            {
+                var resumeError = ShareProtocol.Deserialize<ShareProtocol.ErrorPayload>(resumePayloadBytes);
+                throw new InvalidOperationException(
+                    $"Respuesta inesperada tras FILE_START: {resumeError?.Message ?? resumeType.ToString()}");
+            }
+
+            var resume = ShareProtocol.Deserialize<ShareProtocol.ResumePayload>(resumePayloadBytes);
+            var resumeOffset = resume?.Offset ?? 0;
+            if (resumeOffset < 0 || resumeOffset > item.ExpectedSize)
+            {
+                throw new InvalidOperationException("El receptor pidió un offset de reanudación inválido.");
+            }
+
+            if (resumeOffset > 0)
+            {
+                item.TransferredBytes = resumeOffset;
+                _logger?.LogInformation(
+                    "Reanudando {File} desde el byte {Offset} de {Size}",
+                    item.RelativePath, resumeOffset, item.ExpectedSize);
+            }
+
+            // FILE_DATA: leer en chunks de 64KB desde el offset, escribir,
+            // actualizar progreso. totalTransferred cuenta SOLO bytes nuevos:
+            // en una reanudación es menor que el tamaño del archivo.
             using var fileStream = File.OpenRead(item.LocalSourcePath);
+            fileStream.Seek(resumeOffset, SeekOrigin.Begin);
             var buffer = new byte[ShareProtocol.ChunkSize];
             int bytesRead;
             while ((bytesRead = await fileStream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
