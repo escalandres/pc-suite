@@ -212,8 +212,13 @@ public sealed class LocalShareSettings
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "Downloads", "PCSuite");
 
-    /// <summary>Puerto TCP del listener (0 = auto-assign).</summary>
-    public int Port { get; set; } = 51980;
+    /// <summary>
+    /// Puerto TCP del listener (0 = auto-assign). Por defecto FUERA del rango
+    /// efímero de Windows (49152-65535): un puerto dentro de ese rango puede
+    /// colisionar con conexiones salientes aleatorias del sistema (socket en
+    /// TIME_WAIT bloquea el bind y el servicio no arranca).
+    /// </summary>
+    public int Port { get; set; } = 45180;
 
     /// <summary>Descubrimiento mDNS activado.</summary>
     public bool DiscoveryEnabled { get; set; } = true;
