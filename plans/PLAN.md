@@ -95,7 +95,7 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 16.4 — Integridad y escritura segura: SHA-256 en streaming (computar durante transferencia, no como paso separado), archivos temporales con nombres aleatorios, validación de rutas (anti-traversal), política de colisiones, publicación solo al completar | ✅ Completado | 2026-10-11 | — |
 | ├ 16.5 — UI React: vistas de dispositivos, envío (drag-and-drop), solicitud entrante (aceptar/rechazar), transferencias (progreso/velocidad/ETA), configuración. Usar el patrón Job existente para eventos de progreso | ✅ Completado | 2026-10-11 | — |
 | ├ 16.6 — Robustez y empaquetado: tests manuales dos equipos, firewall (diagnóstico + regla con UAC puntual), arranque en frío, documentación de troubleshooting | ✅ Completado | 2026-10-11: E2E localhost 4/4; firewall con UAC puntual + 14 tests; troubleshooting.md; puerto por defecto fuera del rango efímero. 762/762 tests |
-| └ 16.7 — Mejoras post-MVP: reanudación por bloques, transferencias simultáneas, límites de ancho de banda, cliente temporal por navegador/QR, soporte Linux/macOS | ⏳ Pendiente | — |
+| └ 16.7 — Mejoras post-MVP: reanudación por bloques, transferencias simultáneas, límites de ancho de banda, cliente temporal por navegador/QR, soporte Linux/macOS | 🚧 En progreso | Sub-fases: 16.7.1 transferencias simultáneas → 16.7.2 límites banda/tamaño/espacio → 16.7.3 reanudación → 16.7.4 pausa. Cliente navegador/QR diferido (requiere revisión de seguridad específica, §4.2 propuesta); Linux/macOS fuera de alcance |
 
 ## Notas de arquitectura (Task 016 — Local Share)
 

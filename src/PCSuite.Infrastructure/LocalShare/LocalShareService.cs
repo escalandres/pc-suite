@@ -96,7 +96,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             _fileWriter = new SafeFileWriter(_settings.DownloadDirectory);
             _fileWriter.CleanupOrphanedTempFiles();
 
-            _server = new TlsTransferServer(_certificateStore.Certificate, _logger);
+            _server = new TlsTransferServer(
+                _certificateStore.Certificate,
+                _logger,
+                Math.Clamp(_settings.MaxSimultaneousTransfers, 1, 10));
             _server.TrustedThumbprints = GetTrustedThumbprints();
             _server.PeerConnected += HandleIncomingConnectionAsync;
             _server.Start(_settings.Port);
@@ -134,6 +137,19 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
     public Task StopAsync(CancellationToken ct = default)
     {
+        // Resolver decisiones pendientes como rechazadas: los handlers que
+        // esperaban la confirmación del usuario terminan limpiamente en vez
+        // de quedar esperando un TCS que ya nadie resolverá.
+        lock (_lock)
+        {
+            foreach (var tcs in _pendingDecisions.Values)
+            {
+                tcs.TrySetResult(false);
+            }
+
+            _pendingDecisions.Clear();
+        }
+
         _discovery?.Dispose();
         _discovery = null;
         _server?.Dispose();

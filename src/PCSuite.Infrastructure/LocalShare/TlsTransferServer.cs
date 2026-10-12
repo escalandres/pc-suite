@@ -11,8 +11,9 @@ namespace PCSuite.Infrastructure.LocalShare;
 
 /// <summary>
 /// Listener TCP+TLS para recibir transferencias de otros PCSuite en la LAN.
-/// Acepta una conexión a la vez (SemaphoreSlim), valida el certificado del
-/// par contra la lista de huellas emparejadas, y delega el protocolo.
+/// Acepta hasta <c>maxConnections</c> conexiones simultáneas (cada una con
+/// su propio diálogo de protocolo); las conexiones extra reciben un frame
+/// ERROR "busy" y cierre limpio en vez de un EOF silencioso.
 /// </summary>
 public sealed class TlsTransferServer : IDisposable
 {
@@ -21,10 +22,13 @@ public sealed class TlsTransferServer : IDisposable
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptTask;
-    private readonly SemaphoreSlim _connectionGate = new(1, 1);
+    private readonly SemaphoreSlim _connectionGate;
 
     public int Port { get; private set; }
     public bool IsRunning => _listener is not null;
+
+    /// <summary>Conexiones entrantes permitidas en paralelo.</summary>
+    public int MaxConnections { get; }
 
     /// <summary>Conexión entrante lista para procesar (con SslStream autenticado).</summary>
     /// <remarks>
@@ -38,10 +42,17 @@ public sealed class TlsTransferServer : IDisposable
     /// <summary>Huellas SHA-256 de certificados emparejados (hex minúscula). Se actualiza externamente.</summary>
     public IReadOnlySet<string> TrustedThumbprints { get; set; } = new HashSet<string>();
 
-    public TlsTransferServer(X509Certificate2 serverCertificate, ILogger? logger = null)
+    public TlsTransferServer(X509Certificate2 serverCertificate, ILogger? logger = null, int maxConnections = 3)
     {
+        if (maxConnections < 1)
+        {
+            maxConnections = 1;
+        }
+
         _serverCertificate = serverCertificate;
         _logger = logger;
+        MaxConnections = maxConnections;
+        _connectionGate = new SemaphoreSlim(maxConnections, maxConnections);
     }
 
     public void Start(int preferredPort)
@@ -108,8 +119,15 @@ public sealed class TlsTransferServer : IDisposable
     {
         var remoteIp = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "desconocido";
 
-        // Una transferencia a la vez
-        await _connectionGate.WaitAsync(ct).ConfigureAwait(false);
+        // Slot NO bloqueante: con el límite de conexiones alcanzado, responder
+        // "busy" y cerrar. Antes (gate=1) una solicitud pendiente de decisión
+        // del usuario bloqueaba todas las demás conexiones indefinidamente.
+        if (!await _connectionGate.WaitAsync(0, ct).ConfigureAwait(false))
+        {
+            await SendBusyAsync(client, remoteIp, ct).ConfigureAwait(false);
+            return;
+        }
+
         try
         {
             using var sslStream = new SslStream(
@@ -151,6 +169,49 @@ public sealed class TlsTransferServer : IDisposable
         finally
         {
             _connectionGate.Release();
+            client.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// TLS + frame ERROR "busy" + cierre: el emisor ve un mensaje claro en
+    /// vez de un EOF inesperado. Best-effort: si el par cierra antes, no pasa
+    /// nada (finally dispone el TcpClient).
+    /// </summary>
+    private async Task SendBusyAsync(TcpClient client, string remoteIp, CancellationToken ct)
+    {
+        try
+        {
+            using var sslStream = new SslStream(
+                client.GetStream(),
+                leaveInnerStreamOpen: false,
+                ValidatePeerCertificate);
+
+            var sslOptions = new SslServerAuthenticationOptions
+            {
+                ServerCertificate = _serverCertificate,
+                ClientCertificateRequired = true,
+                EnabledSslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+            };
+
+            await sslStream.AuthenticateAsServerAsync(sslOptions, ct).ConfigureAwait(false);
+            _logger?.LogInformation("Receptor ocupado: conexión de {Ip} rechazada con 'busy'", remoteIp);
+
+            await ShareProtocol.WriteControlAsync(
+                sslStream,
+                ShareProtocol.MsgError,
+                new ShareProtocol.ErrorPayload(
+                    "busy",
+                    "El receptor está ocupado con otras transferencias. Inténtalo de nuevo en unos segundos."),
+                ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "No se pudo enviar 'busy' a {Ip}", remoteIp);
+        }
+        finally
+        {
             client.Dispose();
         }
     }

@@ -437,6 +437,7 @@ export interface LocalShareConfigResult {
   port: number;
   discoveryEnabled: boolean;
   autoAcceptFromPaired: boolean;
+  maxSimultaneousTransfers: number;
   maxTransferSizeBytes: number;
 }
 

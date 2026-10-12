@@ -226,6 +226,13 @@ public sealed class LocalShareSettings
     /// <summary>Aceptar automáticamente de dispositivos emparejados (false = siempre pedir confirmación).</summary>
     public bool AutoAcceptFromPaired { get; set; } = false;
 
+    /// <summary>
+    /// Transferencias entrantes simultáneas (1-10). Cada una retiene una
+    /// conexión mientras espera la decisión del usuario, por lo que un valor
+    /// bajo con solicitudes pendientes hace que el receptor responda "busy".
+    /// </summary>
+    public int MaxSimultaneousTransfers { get; set; } = 3;
+
     /// <summary>Tamaño máximo por transferencia en bytes (0 = sin límite).</summary>
     public long MaxTransferSizeBytes { get; set; } = 0;
 

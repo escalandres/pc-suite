@@ -187,4 +187,67 @@ public class LocalShareEndToEndTests : IDisposable
         await _serviceA.StartAsync();
         Assert.Equal(LocalShareServiceStatus.Running, _serviceA.Status);
     }
+
+    [Fact]
+    public async Task SimultaneousTransfers_TwoPendingThirdGetsBusy()
+    {
+        // Límite de B: 2 transferencias entrantes simultáneas.
+        var settings = _serviceB.Settings;
+        settings.MaxSimultaneousTransfers = 2;
+        await _serviceB.UpdateSettingsAsync(settings);
+
+        await StartAndPairAsync();
+
+        // Contador de solicitudes entrantes en B.
+        var incomingCount = 0;
+        var incomingIds = new List<string>();
+        var countLock = new object();
+        _serviceB.IncomingRequest += (t, _) =>
+        {
+            lock (countLock)
+            {
+                incomingCount++;
+                incomingIds.Add(t.TransferId);
+            }
+        };
+
+        // Tres archivos distintos, tres envíos desde A.
+        for (var i = 1; i <= 3; i++)
+        {
+            var path = Path.Combine(_dirA, $"lote-{i}.txt");
+            File.WriteAllText(path, $"contenido {i}");
+            await _serviceA.SendAsync("device-b", [path]);
+        }
+
+        // El tercer envío debe fallar en A con el error "busy" del receptor.
+        var failedTcs = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t =>
+        {
+            if (t.Status == TransferStatus.Failed)
+            {
+                failedTcs.TrySetResult(t);
+            }
+        };
+
+        var failed = await failedTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // El error llega limpio (frame ERROR), no como EOF críptico.
+        Assert.NotNull(failed.ErrorMessage);
+        Assert.Contains("ocupado", failed.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+
+        // Los dos primeros envíos SÍ llegaron a B y siguen esperando decisión:
+        // con el gate antiguo (1 conexión), el segundo habría quedado bloqueado.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        lock (countLock)
+        {
+            Assert.Equal(2, incomingCount);
+        }
+
+        // Limpiar: rechazar los dos pendientes para que los handlers terminen.
+        foreach (var id in incomingIds)
+        {
+            await _serviceB.RejectAsync(id);
+        }
+    }
 }
