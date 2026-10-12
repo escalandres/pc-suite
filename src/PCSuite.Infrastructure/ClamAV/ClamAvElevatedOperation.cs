@@ -36,6 +36,13 @@ public sealed class ClamAvElevatedOperation : IElevatedOperation
         _installDirectories = installDirectories ?? ClamAvPaths.DefaultInstallDirectories();
     }
 
+    private const string FreshclamConfigFileName = "freshclam.conf";
+
+    private static readonly string DefaultDatabaseDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "ClamAV",
+        "database");
+
     public string Id => ElevatedOperationIds.ClamavUpdateDefinitions;
 
     public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken cancellationToken)
@@ -60,6 +67,10 @@ public sealed class ClamAvElevatedOperation : IElevatedOperation
                     BridgeErrorCodes.NotInstalled,
                     "No se encontró freshclam.exe junto a clamscan.exe.");
             }
+
+            var clamAvDirectory = Path.GetDirectoryName(freshclam)!;
+            // Asegurar freshclam.conf y directorio de BD (best-effort, igual que en el servicio).
+            EnsureFreshclamConfig(clamAvDirectory);
 
             ProcessResult result;
             try
@@ -98,6 +109,37 @@ public sealed class ClamAvElevatedOperation : IElevatedOperation
         {
             // El hijo elevado no tiene logger ni expone detalles internos.
             return OperationResult.Fail(BridgeErrorCodes.OperationFailed, "La operación elevada falló.");
+        }
+    }
+
+    private static void EnsureFreshclamConfig(string clamAvDirectory)
+    {
+        var configPath = Path.Combine(clamAvDirectory, FreshclamConfigFileName);
+        if (File.Exists(configPath))
+        {
+            return; // Ya existe, no tocar.
+        }
+
+        try
+        {
+            // Crear directorio de base de datos si no existe.
+            Directory.CreateDirectory(DefaultDatabaseDirectory);
+
+            // Config mínima para freshclam: base de datos en ProgramData (escribible con elevación)
+            // y espejo oficial. Sin proxy, sin compresión diferencial (keep it simple).
+            var config = $@"# Configuración mínima generada por PCSuite
+DatabaseDirectory {DefaultDatabaseDirectory}
+DatabaseMirror database.clamav.net
+MaxAttempts 3
+ConnectTimeout 30
+ReceiveTimeout 30
+";
+            File.WriteAllText(configPath, config);
+        }
+        catch
+        {
+            // Best-effort: si no se puede crear, freshclam fallará con su error habitual
+            // y se mostrará en la UI. No lanzamos para no bloquear la operación.
         }
     }
 }
