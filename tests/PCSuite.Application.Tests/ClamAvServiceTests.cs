@@ -18,7 +18,12 @@ public sealed class ClamAvServiceTests
 {
     private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan UpdateTimeout = TimeSpan.FromSeconds(900);
-    private static readonly TimeSpan QuickScanTimeout = TimeSpan.FromSeconds(900);
+
+    // 1 h: el quick escanea las carpetas del usuario (Escritorio/Descargas/
+    // Temp), que crecen arbitrariamente. Medición 2026-10-08: ~5.300
+    // archivos con zips de ~1 GB a ~70 líneas/min ≈ 72 min. Este guard
+    // evita que el presupuesto vuelva a quedar en 20 min "por defecto".
+    private static readonly TimeSpan QuickScanTimeout = TimeSpan.FromSeconds(3600);
     private static readonly TimeSpan CustomScanTimeout = TimeSpan.FromSeconds(3600);
 
     // ------------------------------------------------------------------
@@ -305,7 +310,7 @@ public sealed class ClamAvServiceTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task QuickScan_Success_BuildsFixedArgv_900s_NoUac()
+    public async Task QuickScan_Success_BuildsFixedArgv_1HourTimeout_NoUac()
     {
         using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(ClamAvFixtures.CleanScan));
 
@@ -322,8 +327,8 @@ public sealed class ClamAvServiceTests
         Assert.Empty(fx.Elevation.Requests);
 
         var request = Assert.Single(fx.Runner.Requests);
-        Assert.Equal("--infected", request.Arguments[0]);
-        Assert.Equal("--recursive", request.Arguments[1]);
+        Assert.Equal("--recursive", request.Arguments[0]);
+        Assert.Equal("--verbose", request.Arguments[1]);
         Assert.All(request.Arguments.Skip(2), target => Assert.True(Path.IsPathRooted(target)));
         Assert.Equal(QuickScanTimeout, request.Timeout);
     }
@@ -347,6 +352,47 @@ public sealed class ClamAvServiceTests
     }
 
     [Fact]
+    public async Task QuickScan_LongScan_ThrottlesProgressEvents_ButKeepsExactCounts()
+    {
+        // Guard del throttle: 200 líneas "OK" llegan en microsegundos y NO
+        // pueden generar 200 eventos IPC (escaneos de 1 h saturarían el
+        // puente). La amenaza y el resumen pasan siempre; el evento final
+        // lleva los contadores EXACTOS del resumen de clamscan.
+        var lines = new List<string>();
+        for (var i = 0; i < 200; i++)
+        {
+            lines.Add($@"C:\Users\test\Downloads\file{i}.txt: OK");
+        }
+
+        lines.Add(@"C:\Users\test\Downloads\evil.com: Win.Trojan.FakeMS-123 FOUND");
+        lines.Add("----------- SCAN SUMMARY -----------");
+        lines.Add("Known viruses: 8700000");
+        lines.Add("Scanned directories: 5");
+        lines.Add("Scanned files: 201");
+        lines.Add("Infected files: 1");
+        var output = string.Join("\n", lines);
+
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.Pumping(output, exitCode: 1));
+        var progress = new InlineProgress();
+        var outcome = await fx.Service.QuickScanAsync(progress: progress);
+        var events = progress.Items;
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(1, outcome.InfectedFiles);
+        Assert.Equal(201, outcome.ScannedFiles);
+
+        // Muy por debajo de las ~205 líneas bombeadas…
+        Assert.InRange(events.Count, 3, 50);
+        // …la amenaza se emitió siempre…
+        Assert.Contains(events, e => e.InfectedFiles > 0);
+        // …y el evento final lleva los totales exactos del resumen.
+        var last = events[^1];
+        Assert.True(last.IsComplete);
+        Assert.Equal(201, last.ScannedFiles);
+        Assert.Equal(1, last.InfectedFiles);
+    }
+
+    [Fact]
     public async Task FullScan_Exit2WithSummary_SucceedsAsPartial_WithFixedDetail()
     {
         using var fx = ClamAvFixture.Create(
@@ -356,16 +402,16 @@ public sealed class ClamAvServiceTests
 
         Assert.True(outcome.Succeeded);
         Assert.Equal(2, outcome.ExitCode);
-        Assert.Equal(
-            "Escaneo parcial: alguno de los archivos o carpetas no se pudo leer.",
-            outcome.Detail); // mensaje fijo: jamás salida cruda
+        Assert.StartsWith(
+            "Escaneo completado con accesos limitados:",
+            outcome.Detail); // mensaje informativo mejorado
         Assert.Equal(10, outcome.ScannedFiles);
         Assert.Empty(fx.Elevation.Requests);
 
         var request = Assert.Single(fx.Runner.Requests);
-        Assert.Equal("--infected", request.Arguments[0]);
-        Assert.True(request.Arguments.Count >= 3); // al menos un disco fijo listo (C:\)
-        Assert.All(request.Arguments.Skip(2), root => Assert.True(Path.IsPathRooted(root)));
+        Assert.Equal("--recursive", request.Arguments[0]);
+        Assert.True(request.Arguments.Count >= 2); // al menos un disco fijo listo (C:\)
+        Assert.All(request.Arguments.Skip(1), root => Assert.True(Path.IsPathRooted(root)));
         Assert.Equal(TimeSpan.FromSeconds(7200), request.Timeout);
     }
 
@@ -433,6 +479,8 @@ public sealed class ClamAvServiceTests
         Assert.True(outcome.Succeeded);
         var request = Assert.Single(fx.Runner.Requests);
         Assert.Equal(3, request.Arguments.Count);
+        Assert.Equal("--recursive", request.Arguments[0]);
+        Assert.Equal("--verbose", request.Arguments[1]);
         Assert.Equal(fx.ClamScanPath, request.Arguments[2]);
         Assert.Equal(CustomScanTimeout, request.Timeout);
     }
@@ -448,6 +496,8 @@ public sealed class ClamAvServiceTests
 
         var request = Assert.Single(fx.Runner.Requests);
         Assert.Equal(3, request.Arguments.Count);
+        Assert.Equal("--recursive", request.Arguments[0]);
+        Assert.Equal("--verbose", request.Arguments[1]);
         Assert.Equal(Path.GetFullPath(target), request.Arguments[2]); // "…& calc.exe" viaja entero
     }
 
@@ -601,5 +651,17 @@ public sealed class ClamAvServiceTests
 
         Assert.Equal(2, fx.Runner.Requests.Count);
         Assert.Equal(1, counters[1]); // nunca dos clamscan solapados
+    }
+
+    /// <summary>
+    /// IProgress síncrono: <see cref="Progress{T}"/> postea los callbacks
+    /// async al thread pool y haría flaky el assert del throttle; este
+    /// captura los eventos en el mismo hilo.
+    /// </summary>
+    private sealed class InlineProgress : IProgress<ClamAvScanProgress>
+    {
+        public List<ClamAvScanProgress> Items { get; } = [];
+
+        public void Report(ClamAvScanProgress value) => Items.Add(value);
     }
 }

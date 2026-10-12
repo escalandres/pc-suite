@@ -1,4 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using PCSuite.Application.Jobs;
+using PCSuite.Core.Events;
+using PCSuite.Core.Jobs;
 using PCSuite.Core.Operations;
 using PCSuite.Infrastructure.ClamAV;
 using PCSuite.Infrastructure.Developers;
@@ -26,6 +29,7 @@ internal sealed class ClamAvFixture : IDisposable
         FakeWinGetService winget,
         ClamAvHistoryStore history,
         ClamAvService service,
+        IJobManager jobs,
         CommandRouter router)
     {
         _temp = temp;
@@ -36,6 +40,7 @@ internal sealed class ClamAvFixture : IDisposable
         Winget = winget;
         History = history;
         Service = service;
+        Jobs = jobs;
         Router = router;
     }
 
@@ -55,7 +60,10 @@ internal sealed class ClamAvFixture : IDisposable
 
     public ClamAvService Service { get; }
 
-    /// <summary>Router con las 7 operaciones clamav.* que registra MainForm.</summary>
+    /// <summary>JobManager real de los escaneos (para polls de los tests).</summary>
+    public IJobManager Jobs { get; }
+
+    /// <summary>Router con las operaciones clamav.* + job.* que registra MainForm.</summary>
     public CommandRouter Router { get; }
 
     /// <summary>Carpeta temporal (para crear archivos objetivo del customScan).</summary>
@@ -80,22 +88,39 @@ internal sealed class ClamAvFixture : IDisposable
             history,
             installDirectories: Array.Empty<string>());
 
+        // JobManager real con publisher hacia un no-op (los tests leen
+        // directamente fx.Jobs; no necesitan el puente).
+        var jobs = new JobManager(
+            new BridgeJobEventPublisher(NoOpEventPublisher.Instance));
+
         var router = new CommandRouter(
             new IOperation[]
             {
                 new ClamAvStatusOperation(service),
                 new ClamAvInstallOperation(service),
                 new ClamAvUpdateDefinitionsOperation(service),
-                new ClamAvQuickScanOperation(service),
-                new ClamAvFullScanOperation(service),
-                new ClamAvCustomScanOperation(service),
+                new ClamAvQuickScanOperation(service, jobs),
+                new ClamAvFullScanOperation(service, jobs),
+                new ClamAvCustomScanOperation(service, jobs),
                 new ClamAvHistoryOperation(service),
+                new JobGetOperation(jobs),
+                new JobCancelOperation(jobs),
             },
             NullLogger<CommandRouter>.Instance);
 
         return new ClamAvFixture(
-            temp, clamScanPath, freshclamPath, runner, elevation, winget, history, service, router);
+            temp, clamScanPath, freshclamPath, runner, elevation, winget, history, service, jobs, router);
     }
 
     public void Dispose() => _temp.Dispose();
+
+    /// <summary>IEventPublisher que descarta todo: para fixture y asserts rápidos.</summary>
+    public sealed class NoOpEventPublisher : IEventPublisher
+    {
+        public static readonly NoOpEventPublisher Instance = new();
+
+        public void SendEvent<TPayload>(string eventId, TPayload payload)
+        {
+        }
+    }
 }

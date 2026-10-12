@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace PCSuite.Core.Jobs;
 
 /// <summary>
@@ -11,7 +13,7 @@ public interface IJobManager
     /// <summary>Crea un job y lo deja en estado <see cref="JobStatus.Running"/>.</summary>
     Job Start(string type);
 
-    void Complete(string jobId, int? exitCode = null);
+    void Complete(string jobId, int? exitCode = null, JsonElement? result = null);
 
     void Fail(string jobId, string error, int? exitCode = null);
 

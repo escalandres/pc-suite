@@ -1,6 +1,7 @@
 using System.Text.Json;
 using PCSuite.Contracts;
 using PCSuite.Core.ClamAV;
+using PCSuite.Core.Jobs;
 using PCSuite.Core.Operations;
 
 namespace PCSuite.Infrastructure.Operations;
@@ -103,6 +104,77 @@ public abstract class ClamAvOperation : IOperation
         });
 }
 
+/// <summary>
+/// Base de los escaneos clamav.* como JOBS: la respuesta es {"jobId"} EN EL
+/// ACTO y el desenlace llega por evento job.event (o sondeo job.get) con el
+/// resultado del escaneo como Result del job. Cancelación vía job.cancel.
+/// La promesa del puente ya no queda retenida durante un escaneo de horas.
+/// </summary>
+public abstract class ClamAvScanJobOperation : ClamAvOperation
+{
+    private readonly IJobManager _jobs;
+
+    protected ClamAvScanJobOperation(IClamAvService service, IJobManager jobs)
+        : base(service) => _jobs = jobs;
+
+    protected abstract string JobType { get; }
+
+    /// <summary>
+    /// Valida el payload y devuelve la función que arranca el escaneo con el
+    /// token del job y su progreso. Se llama ANTES de crear el job: un
+    /// payload inválido responde con el error controlado sin job residual.
+    /// </summary>
+    protected abstract Func<CancellationToken, IProgress<ClamAvScanProgress>?, Task<ClamAvScanOutcome>> PrepareScan(
+        OperationContext context);
+
+    protected sealed override Task<JsonElement?> ExecuteCoreAsync(
+        OperationContext context, CancellationToken cancellationToken)
+    {
+        var scan = PrepareScan(context);
+        var job = _jobs.Start(JobType);
+        var token = _jobs.GetCancellationToken(job.Id);
+
+        // Fire-and-forget con desenlace SIEMPRE controlado (nunca lanza ni
+        // deja excepciones sin observar): el ciclo de vida del job refleja
+        // el resultado del escaneo.
+        _ = Task.Run(() => RunScanJobAsync(job.Id, token, scan));
+
+        return Task.FromResult(BridgeJson.ToJson(new ClamAvScanStartResult { JobId = job.Id }));
+    }
+
+    private async Task RunScanJobAsync(
+        string jobId,
+        CancellationToken token,
+        Func<CancellationToken, IProgress<ClamAvScanProgress>?, Task<ClamAvScanOutcome>> scan)
+    {
+        try
+        {
+            // El progreso 0..1 alimenta el job (throttled por el reporter);
+            // el evento clamav.scan.progress sigue llevando el detalle vivo.
+            var progress = new Progress<ClamAvScanProgress>(p =>
+                _jobs.SetProgress(jobId, (p.Percent ?? 0) / 100d));
+
+            var outcome = await scan(token, progress).ConfigureAwait(false);
+
+            // El outcome viaja completo como Result del job (evento + job.get).
+            _jobs.Complete(jobId, outcome.ExitCode, ToScan(outcome));
+        }
+        catch (ClamAvException exception)
+        {
+            _jobs.Fail(jobId, exception.ErrorMessage);
+        }
+        catch (OperationCanceledException)
+        {
+            _jobs.MarkCancelled(jobId);
+        }
+        catch (Exception)
+        {
+            // Fallo inesperado: mensaje controlado, sin stack hacia la UI.
+            _jobs.Fail(jobId, "El escaneo falló de forma inesperada.");
+        }
+    }
+}
+
 public sealed class ClamAvStatusOperation : ClamAvOperation
 {
     public ClamAvStatusOperation(IClamAvService service)
@@ -146,51 +218,63 @@ public sealed class ClamAvUpdateDefinitionsOperation : ClamAvOperation
         ToMutation(await Service.UpdateDefinitionsAsync(cancellationToken).ConfigureAwait(false));
 }
 
-public sealed class ClamAvQuickScanOperation : ClamAvOperation
+public sealed class ClamAvQuickScanOperation : ClamAvScanJobOperation
 {
-    public ClamAvQuickScanOperation(IClamAvService service)
-        : base(service)
+    public ClamAvQuickScanOperation(IClamAvService service, IJobManager jobs)
+        : base(service, jobs)
     {
     }
 
     public override string Id => OperationIds.ClamavQuickScan;
 
-    protected override async Task<JsonElement?> ExecuteCoreAsync(OperationContext context, CancellationToken cancellationToken) =>
-        ToScan(await Service.QuickScanAsync(cancellationToken).ConfigureAwait(false));
+    protected override string JobType => "clamav.quickScan";
+
+    protected override Func<CancellationToken, IProgress<ClamAvScanProgress>?, Task<ClamAvScanOutcome>> PrepareScan(
+        OperationContext context) =>
+        (token, progress) => Service.QuickScanAsync(token, progress);
 }
 
-public sealed class ClamAvFullScanOperation : ClamAvOperation
+public sealed class ClamAvFullScanOperation : ClamAvScanJobOperation
 {
-    public ClamAvFullScanOperation(IClamAvService service)
-        : base(service)
+    public ClamAvFullScanOperation(IClamAvService service, IJobManager jobs)
+        : base(service, jobs)
     {
     }
 
     public override string Id => OperationIds.ClamavFullScan;
 
-    protected override async Task<JsonElement?> ExecuteCoreAsync(OperationContext context, CancellationToken cancellationToken) =>
-        ToScan(await Service.FullScanAsync(cancellationToken).ConfigureAwait(false));
+    protected override string JobType => "clamav.fullScan";
+
+    protected override Func<CancellationToken, IProgress<ClamAvScanProgress>?, Task<ClamAvScanOutcome>> PrepareScan(
+        OperationContext context) =>
+        (token, progress) => Service.FullScanAsync(token, progress);
 }
 
-public sealed class ClamAvCustomScanOperation : ClamAvOperation
+public sealed class ClamAvCustomScanOperation : ClamAvScanJobOperation
 {
-    public ClamAvCustomScanOperation(IClamAvService service)
-        : base(service)
+    public ClamAvCustomScanOperation(IClamAvService service, IJobManager jobs)
+        : base(service, jobs)
     {
     }
 
     public override string Id => OperationIds.ClamavCustomScan;
 
-    protected override async Task<JsonElement?> ExecuteCoreAsync(OperationContext context, CancellationToken cancellationToken)
+    protected override string JobType => "clamav.customScan";
+
+    protected override Func<CancellationToken, IProgress<ClamAvScanProgress>?, Task<ClamAvScanOutcome>> PrepareScan(
+        OperationContext context)
     {
         if (!ToolMapper.TryParsePayload(context.Payload, out ClamAvScanPayload payload))
         {
             throw new ClamAvException(BridgeErrorCodes.MalformedMessage, "El payload debe ser un objeto JSON.");
         }
 
-        // payload.Path null/vacío o ruta inválida → ClamAvException controlada
-        // desde el servicio (validación de raíz, existencia y sin NUL).
-        return ToScan(await Service.CustomScanAsync(payload.Path ?? string.Empty, cancellationToken).ConfigureAwait(false));
+        // Validación INMEDIATA (antes de crear el job): payload.Path
+        // null/vacío o ruta inválida → ClamAvException controlada desde el
+        // servicio (raíz absoluta, existente y sin NUL).
+        var path = payload.Path ?? string.Empty;
+        Service.ValidateScanPath(path);
+        return (token, progress) => Service.CustomScanAsync(path, token, progress);
     }
 }
 

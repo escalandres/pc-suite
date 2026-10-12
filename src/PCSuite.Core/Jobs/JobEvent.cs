@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace PCSuite.Core.Jobs;
 
 public enum JobEventType
@@ -39,4 +41,7 @@ public sealed class JobEvent
 
     /// <summary>Detalle del error cuando el job pasa a estado fallido.</summary>
     public string? Error { get; init; }
+
+    /// <summary>Resultado estructurado al llegar a estado completado.</summary>
+    public JsonElement? Result { get; init; }
 }

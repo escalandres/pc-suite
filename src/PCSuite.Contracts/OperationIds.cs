@@ -101,6 +101,15 @@ public static class OperationIds
     /// <summary>Historial de escaneos persistido (más reciente primero).</summary>
     public const string ClamavHistory = "clamav.history";
 
+    // Operaciones de jobs (larga duración): los escaneos clamav.* ya no
+    // retienen la respuesta — devuelven {jobId} y la UI consulta/cancela.
+
+    /// <summary>Snapshot de un job por id (payload: {"jobId"}).</summary>
+    public const string JobGet = "job.get";
+
+    /// <summary>Cancela un job en curso (payload: {"jobId"}).</summary>
+    public const string JobCancel = "job.cancel";
+
     // Operaciones SSH (Task 009 / §5.1–5.2): payloads estructurados validados
     // en el servicio (ruta, algoritmo, tamaño, nombre de archivo); la
     // generación invoca ssh-keygen con argv fijo y el resto (listado,
@@ -171,4 +180,29 @@ public static class OperationIds
 
     /// <summary>Snapshot de solo lectura: Defender, firewall, puertos, antivirus y diagnóstico (payload cero).</summary>
     public const string SecurityGetStatus = "security.getStatus";
+
+    // Operaciones Plugins (Task 013 / §17 "Plugins extensibles"): sistema de
+    // complementos extensibles para PCSuite. Todas las operaciones son de solo
+    // lectura o con payloads validados; sin ejecución arbitraria de comandos.
+
+    /// <summary>Lista de plugins instalados (payload cero).</summary>
+    public const string PluginList = "plugin.list";
+
+    /// <summary>Comprobar actualización de un plugin (payload: { pluginId }).</summary>
+    public const string PluginCheckUpdate = "plugin.checkUpdate";
+
+    /// <summary>Lanzar un plugin (payload: { pluginId }).</summary>
+    public const string PluginLaunch = "plugin.launch";
+
+    /// <summary>Estado de un plugin (payload cero).</summary>
+    public const string PluginStatus = "plugin.status";
+
+    /// <summary>Abrir una ruta en el Explorador de Windows (payload: { path }).</summary>
+    public const string ExplorerOpenPath = "explorer.openPath";
+
+    /// <summary>Abrir una URL http/https en el navegador del sistema (payload: { url }).</summary>
+    public const string ExplorerOpenUrl = "explorer.openUrl";
+
+    /// <summary>Alterna el piloto Blazor WebView (Task 015; solo en Debug).</summary>
+    public const string BlazorToggle = "blazor.toggle";
 }

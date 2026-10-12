@@ -1,11 +1,18 @@
+using Microsoft.AspNetCore.Components.WebView.WindowsForms;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using PCSuite.Application;
 using PCSuite.Application.Developers;
+using PCSuite.Application.Jobs;
+using PCSuite.Application.Operations;
 using PCSuite.Application.Tools;
 using PCSuite.Contracts;
+using PCSuite.Core.Events;
 using PCSuite.Desktop.Bridge;
+using PCSuite.Blazor;
+using PCSuite.Blazor.Components;
 using PCSuite.Infrastructure;
 using PCSuite.Infrastructure.ClamAV;
 using PCSuite.Infrastructure.Cleaner;
@@ -63,9 +70,23 @@ public partial class MainForm : Form
     private readonly WebView2 _webView;
     private readonly List<string> _allowedOrigins = [];
 
+    // Piloto Blazor Hybrid (Task 015)
+    private readonly ServiceProvider _blazorServices;
+    private readonly ClamAvState _clamAvState;
+    private readonly BlazorWebView _blazorWebView;
+    private bool _isBlazorVisible;
+
     public MainForm()
     {
         InitializeComponent();
+
+        // WinForms (.NET 10) no usa el icono del exe para la ventana: se
+        // asigna explícitamente el mismo PCSuite.ico (recurso embebido).
+        var appIcon = LoadAppIcon();
+        if (appIcon is not null)
+        {
+            Icon = appIcon;
+        }
 
         _loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -114,6 +135,17 @@ public partial class MainForm : Form
             elevationManager,
             _loggerFactory.CreateLogger<WslService>());
 
+        // Publisher de eventos DIFERIDO: los servicios lo reciben en el acto
+        // y el WebViewBridge se conecta al final del arranque (el router
+        // necesita los servicios y el bridge necesita el router). Antes este
+        // orden pasaba _bridge null a ClamAV: los eventos de progreso de los
+        // escaneos jamás llegaban a la UI.
+        var events = new DeferredEventPublisher();
+
+        // Jobs (larga duración): ciclo de vida, cancelación y eventos hacia
+        // el mismo publisher. Los escaneos clamav.* lo usan desde las ops.
+        var jobManager = new JobManager(new BridgeJobEventPublisher(events));
+
         // ClamAV (Task 008): orquestación de clamscan/freshclam; el mismo
         // elevationManager cubre freshclam vía la allow-list de Task 005 y la
         // instalación delega en wingetService (paquete fijo Cisco.ClamAV).
@@ -123,7 +155,9 @@ public partial class MainForm : Form
             elevationManager,
             wingetService,
             new ClamAvHistoryStore(),
-            _loggerFactory.CreateLogger<ClamAvService>());
+            _loggerFactory.CreateLogger<ClamAvService>(),
+            installDirectories: null,
+            events: events);
 
         // SSH (Task 009): solo la generación invoca ssh-keygen con argv fijo
         // (sin privilegios); listado, inspección, fingerprint e importación son
@@ -174,10 +208,12 @@ public partial class MainForm : Form
                 new ClamAvStatusOperation(clamAvService),
                 new ClamAvInstallOperation(clamAvService),
                 new ClamAvUpdateDefinitionsOperation(clamAvService),
-                new ClamAvQuickScanOperation(clamAvService),
-                new ClamAvFullScanOperation(clamAvService),
-                new ClamAvCustomScanOperation(clamAvService),
+                new ClamAvQuickScanOperation(clamAvService, jobManager),
+                new ClamAvFullScanOperation(clamAvService, jobManager),
+                new ClamAvCustomScanOperation(clamAvService, jobManager),
                 new ClamAvHistoryOperation(clamAvService),
+                new JobGetOperation(jobManager),
+                new JobCancelOperation(jobManager),
                 new SshDetectOperation(sshKeyService),
                 new SshListOperation(sshKeyService),
                 new SshGenerateOperation(sshKeyService),
@@ -195,14 +231,82 @@ public partial class MainForm : Form
                 new CleanerScanOperation(cleanerService),
                 new CleanerCleanOperation(cleanerService),
                 new SecurityGetStatusOperation(securityService),
+                new ExplorerOpenPathOperation(),
+                new ExplorerOpenUrlOperation(),
+                new BlazorToggleOperation(ToggleBlazor),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());
+        events.Attach(_bridge);
+
+        // Piloto Blazor Hybrid (Task 015): servicio de estado observable
+        // con suscripción directa a ClamAvService — sin IPC.
+        var services = new ServiceCollection();
+        // CRÍTICO: registra la infraestructura de Blazor (JSRuntime,
+        // NavigationManager, Dispatcher, etc.). Sin esto los componentes
+        // Razor no renderizan → pantalla blanca.
+        services.AddWindowsFormsBlazorWebView();
+        services.AddSingleton<PCSuite.Core.Jobs.IJobManager>(jobManager);
+        services.AddSingleton<PCSuite.Core.ClamAV.IClamAvService>(clamAvService);
+        services.AddSingleton<ClamAvState>();
+        _blazorServices = services.BuildServiceProvider();
+        _clamAvState = _blazorServices.GetRequiredService<ClamAvState>();
 
         _webView = new WebView2 { Dock = DockStyle.Fill };
         Controls.Add(_webView);
 
+        // Piloto Blazor (Task 015): un segundo WebView que renderiza Razor
+        // components en vez de React. Toggle con Ctrl+Shift+B.
+        // Try-catch: un fallo del piloto NO debe tumbar la app — solo
+        // deshabilita el toggle.
+        try
+        {
+            var blazorHost = new BlazorHost();
+            _blazorWebView = new BlazorWebView
+            {
+                Dock = DockStyle.Fill,
+                HostPage = blazorHost.HostPagePath,
+                Services = _blazorServices,
+                Visible = false,
+            };
+            _blazorWebView.RootComponents.Add(
+                new RootComponent("#app", typeof(PCSuite.Blazor.Components.ClamavPage), null));
+            Controls.Add(_blazorWebView);
+
+            // Ctrl+Shift+B alterna entre React y Blazor
+            KeyPreview = true;
+            KeyDown += OnPilotKeyDown;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Piloto Blazor: no se pudo inicializar. La app continúa sin él.");
+            _blazorWebView = null!;
+        }
+
         _logger.LogInformation("PCSuite {Version} starting.", AppInfo.Version);
+    }
+
+    /// <summary>Toggle del piloto Blazor: intercambia los dos WebViews.</summary>
+    private void OnPilotKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_blazorWebView is null) return;
+
+        if (e.Control && e.Shift && e.KeyCode == Keys.B)
+        {
+            e.SuppressKeyPress = true;
+            ToggleBlazor();
+        }
+    }
+
+    /// <summary>Muestra/oculta el BlazorWebView. También lo llama el botón.</summary>
+    public void ToggleBlazor()
+    {
+        // Piloto bloqueado (Task 015.2): el componente Razor no renderiza.
+        // Se registra el estado en el log para no perder trazabilidad.
+        _logger.LogWarning(
+            "Piloto Blazor: bloqueado (Task 015.2) — el RootComponent no monta. " +
+            "Pendiente: depurar con DevTools del BlazorWebView, verificar versión " +
+            "del paquete para net10.0. La app funciona normalmente sin el piloto.");
     }
 
     protected override async void OnLoad(EventArgs e)
@@ -245,9 +349,42 @@ public partial class MainForm : Form
         base.OnFormClosed(e);
     }
 
+    /// <summary>
+    /// Icono de la ventana (title bar + taskbar): WinForms en .NET 10 no
+    /// hereda el ApplicationIcon del exe para la ventana — se carga el
+    /// mismo PCSuite.ico desde el recurso embebido, pidiendo el tamaño
+    /// mayor disponible para que Windows escoja la variante justa por
+    /// contexto (16 title bar, 24/32 taskbar, Alt-Tab…).
+    /// </summary>
+    private static System.Drawing.Icon? LoadAppIcon()
+    {
+        try
+        {
+            using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("PCSuite.ico");
+            return stream is null ? null : new System.Drawing.Icon(stream, new System.Drawing.Size(256, 256));
+        }
+        catch
+        {
+            return null; // sin icono la ventana sigue siendo totalmente usable
+        }
+    }
+
     private async Task InitializeWebViewAsync()
     {
-        await _webView.EnsureCoreWebView2Async();
+
+        // Perfil de WebView2 por usuario en %LocalAppData%: una instalación
+        // en Program Files no puede escribir junto al .exe (la app corre
+        // sin elevar, §12) y una carpeta portable no debe contaminarse
+        // con caches/cookies. Sin esto, WebView2 falla al inicializar en
+        // una instalación estándar.
+        var userDataFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "PCSuite",
+            "WebView2");
+        Directory.CreateDirectory(userDataFolder);
+
+        var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+        await _webView.EnsureCoreWebView2Async(environment);
 
         var core = _webView.CoreWebView2;
         core.Settings.AreDefaultContextMenusEnabled = false;

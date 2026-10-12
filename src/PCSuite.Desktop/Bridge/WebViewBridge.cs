@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using PCSuite.Application;
 using PCSuite.Contracts;
+using PCSuite.Core.Events;
 
 namespace PCSuite.Desktop.Bridge;
 
@@ -10,7 +11,7 @@ namespace PCSuite.Desktop.Bridge;
 /// structured responses and pushes events. The frontend can only reach
 /// allow-listed operations through <see cref="CommandRouter"/>.
 /// </summary>
-public sealed class WebViewBridge
+public sealed class WebViewBridge : IEventPublisher
 {
     private readonly CommandRouter _router;
     private readonly ILogger<WebViewBridge> _logger;

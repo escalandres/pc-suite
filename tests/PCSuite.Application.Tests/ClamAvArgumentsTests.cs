@@ -17,8 +17,8 @@ public sealed class ClamAvArgumentsTests
     {
         var args = ClamAvArguments.QuickScan();
 
-        Assert.Equal("--infected", args[0]);
-        Assert.Equal("--recursive", args[1]);
+        Assert.Equal("--recursive", args[0]);
+        Assert.Equal("--verbose", args[1]);
         // Mínimo: escritorio + temp (Descargas se suma si la Known Folder resuelve).
         Assert.True(args.Length >= 4);
         Assert.Contains(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), args);
@@ -32,7 +32,7 @@ public sealed class ClamAvArgumentsTests
     {
         var args = ClamAvArguments.FullScan(["C:\\", "D:\\"]);
 
-        Assert.Equal<string>(["--infected", "--recursive", "C:\\", "D:\\"], args);
+        Assert.Equal<string>(["--recursive", "C:\\", "D:\\"], args);
     }
 
     [Fact]
@@ -43,8 +43,8 @@ public sealed class ClamAvArgumentsTests
         var args = ClamAvArguments.CustomScan(@"C:\safe\file & calc.exe");
 
         Assert.Equal(3, args.Length);
-        Assert.Equal("--infected", args[0]);
-        Assert.Equal("--recursive", args[1]);
+        Assert.Equal("--recursive", args[0]);
+        Assert.Equal("--verbose", args[1]);
         Assert.Equal(@"C:\safe\file & calc.exe", args[2]);
     }
 }

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace PCSuite.Core.Jobs;
 
 /// <summary>
@@ -24,6 +26,13 @@ public sealed class Job
 
     /// <summary>Detalle del error (mensaje controlado, sin stack traces).</summary>
     public string? Error { get; set; }
+
+    /// <summary>
+    /// Resultado estructurado de la operación al completarse (p. ej. el
+    /// outcome de un escaneo). Viaja en el snapshot y en el evento terminal
+    /// para que la UI no necesite una segunda llamada.
+    /// </summary>
+    public JsonElement? Result { get; set; }
 
     public bool IsFinished => Status is JobStatus.Completed or JobStatus.Failed or JobStatus.Cancelled;
 }

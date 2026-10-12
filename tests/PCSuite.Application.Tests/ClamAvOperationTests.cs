@@ -1,5 +1,6 @@
 using System.Text.Json;
 using PCSuite.Contracts;
+using PCSuite.Core.Jobs;
 using PCSuite.Core.Processes;
 using PCSuite.Core.WinGet;
 using PCSuite.Infrastructure.Operations;
@@ -7,10 +8,14 @@ using PCSuite.Infrastructure.Operations;
 namespace PCSuite.Application.Tests;
 
 /// <summary>
-/// Las 7 operaciones clamav.* por el puente (Task 008): contrato camelCase,
-/// payload estructurado SOLO en customScan (malformado → MALFORMED_MESSAGE),
-/// fallos controlados (NOT_INSTALLED/CLAMAV_TIMEOUT, nunca INTERNAL_ERROR ni
-/// stack traces) y metadato RequiresElevation solo en install/updateDefinitions.
+/// Las operaciones clamav.* + job.* por el puente (Task 008): contrato
+/// camelCase, payload estructurado SOLO en customScan (malformado →
+/// MALFORMED_MESSAGE), fallos controlados (nunca INTERNAL_ERROR ni stack
+/// traces) y metadato RequiresElevation solo en install/updateDefinitions.
+///
+/// Los escaneos son JOBS: responden {"jobId"} al instante y el desenlace
+/// (resultado completo, error controlado o cancelación) vive en el job —
+/// consultable con job.get y cancelable con job.cancel.
 /// </summary>
 public sealed class ClamAvOperationTests
 {
@@ -35,15 +40,23 @@ public sealed class ClamAvOperationTests
     }
 
     [Fact]
-    public async Task QuickScan_ReturnsThreatsAndSummary_CamelCase()
+    public async Task QuickScan_StartsJob_RespondsJobIdAtOnce_ResultCarriesOutcome()
     {
         using var fx = ClamAvFixture.Create(
             FakeProcessRunner.Returning(ClamAvFixtures.InfectedScan, exitCode: 1));
 
         var response = await Send(fx.Router, "q1", OperationIds.ClamavQuickScan);
 
+        // Contrato nuevo: {"jobId"} EN EL ACTO; el desenlace va en el job.
         Assert.True(response.Success);
-        var data = response.Result!.Value;
+        var jobId = response.Result!.Value.GetProperty("jobId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(jobId));
+
+        var job = await WaitForJobAsync(fx.Jobs, jobId!);
+        Assert.Equal(JobStatus.Completed, job.Status);
+        Assert.Equal(1, job.ExitCode);
+
+        var data = job.Result!.Value;
         Assert.True(data.GetProperty("succeeded").GetBoolean());
         Assert.Equal(1, data.GetProperty("exitCode").GetInt32());
         Assert.Equal(99, data.GetProperty("scannedFiles").GetInt32());
@@ -124,7 +137,14 @@ public sealed class ClamAvOperationTests
         var response = await Send(fx.Router, "c1", OperationIds.ClamavCustomScan, payloadJson);
 
         Assert.True(response.Success);
+        var jobId = response.Result!.Value.GetProperty("jobId").GetString()!;
+        await WaitForJobAsync(fx.Jobs, jobId);
+
+        // El argv fijo viaja como lista: la ruta validada es el único dato
+        // que la UI aporta y va SIEMPRE como elemento final.
         var request = Assert.Single(fx.Runner.Requests);
+        Assert.Equal("--recursive", request.Arguments[0]);
+        Assert.Equal("--verbose", request.Arguments[1]);
         Assert.Equal(fx.ClamScanPath, request.Arguments[2]);
         Assert.Equal(3, request.Arguments.Count);
     }
@@ -173,16 +193,22 @@ public sealed class ClamAvOperationTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task MissingClamAv_SurfacesNotInstalled_NotInternalError()
+    public async Task MissingClamAv_JobFailsWithControlledMessage()
     {
         using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(""), withClamAv: false);
 
         var response = await Send(fx.Router, "f1", OperationIds.ClamavQuickScan);
 
-        Assert.False(response.Success);
-        Assert.Equal(BridgeErrorCodes.NotInstalled, response.Error!.Code);
-        Assert.Equal("ClamAV no está instalado. Usa clamav.install para instalarlo.", response.Error.Message);
-        Assert.DoesNotContain("   at ", response.Error.Message);
+        // El arranque responde con jobId (el error ocurre DENTRO del job);
+        // el desenlace es el mensaje controlado del servicio, sin stack.
+        Assert.True(response.Success);
+        var jobId = response.Result!.Value.GetProperty("jobId").GetString()!;
+        var job = await WaitForJobAsync(fx.Jobs, jobId);
+
+        Assert.Equal(JobStatus.Failed, job.Status);
+        Assert.Equal("ClamAV no está instalado. Usa clamav.install para instalarlo.", job.Error);
+        Assert.DoesNotContain("   at ", job.Error);
+        Assert.Empty(fx.Runner.Requests);
     }
 
     [Fact]
@@ -220,6 +246,14 @@ public sealed class ClamAvOperationTests
             return;
         }
 
+        // Los escaneos son jobs: el proceso corre en segundo plano, se espera
+        // al desenlace antes de inspeccionar el argv efectivo.
+        if (operation == OperationIds.ClamavQuickScan)
+        {
+            var jobId = response.Result!.Value.GetProperty("jobId").GetString()!;
+            await WaitForJobAsync(fx.Jobs, jobId);
+        }
+
         var request = Assert.Single(fx.Runner.Requests);
         switch (operation)
         {
@@ -230,8 +264,16 @@ public sealed class ClamAvOperationTests
                 Assert.Empty(request.Arguments); // freshclam: argv vacío fijo
                 break;
             default:
-                Assert.Equal("--infected", request.Arguments[0]);
-                Assert.Equal("--recursive", request.Arguments[1]);
+                if (operation == OperationIds.ClamavFullScan)
+                {
+                    Assert.Equal("--recursive", request.Arguments[0]);
+                    Assert.DoesNotContain("--verbose", request.Arguments);
+                }
+                else
+                {
+                    Assert.Equal("--recursive", request.Arguments[0]);
+                    Assert.Equal("--verbose", request.Arguments[1]);
+                }
                 break;
         }
     }
@@ -250,9 +292,9 @@ public sealed class ClamAvOperationTests
             new ClamAvStatusOperation(fx.Service),
             new ClamAvInstallOperation(fx.Service),
             new ClamAvUpdateDefinitionsOperation(fx.Service),
-            new ClamAvQuickScanOperation(fx.Service),
-            new ClamAvFullScanOperation(fx.Service),
-            new ClamAvCustomScanOperation(fx.Service),
+            new ClamAvQuickScanOperation(fx.Service, fx.Jobs),
+            new ClamAvFullScanOperation(fx.Service, fx.Jobs),
+            new ClamAvCustomScanOperation(fx.Service, fx.Jobs),
             new ClamAvHistoryOperation(fx.Service),
         };
 
@@ -273,5 +315,21 @@ public sealed class ClamAvOperationTests
         var payload = payloadJson is null ? string.Empty : $",\"payload\":{payloadJson}";
         return router.RouteAsync(
             $"{{\"id\":\"{id}\",\"operation\":\"{operation}\"{payload}}}");
+    }
+
+    /// <summary>Espera (acotado) a que un job llegue a estado terminal.</summary>
+    private static async Task<Job> WaitForJobAsync(IJobManager jobs, string jobId)
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            if (jobs.Get(jobId) is { IsFinished: true } job)
+            {
+                return job;
+            }
+
+            await Task.Delay(10);
+        }
+
+        throw new TimeoutException($"El job '{jobId}' no terminó en el plazo de prueba.");
     }
 }

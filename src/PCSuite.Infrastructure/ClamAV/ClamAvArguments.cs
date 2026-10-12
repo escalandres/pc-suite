@@ -15,14 +15,20 @@ internal static class ClamAvArguments
     /// <summary>freshclam sin argumentos: corre con WorkingDirectory = su carpeta (conf + BD).</summary>
     public static readonly string[] Freshclam = [];
 
-    /// <summary>Flags comunes de escaneo (los objetivos van siempre después).</summary>
-    private static readonly string[] ScanFlags = ["--infected", "--recursive"];
+    /// <summary>Flags base de escaneo (los objetivos van siempre después).</summary>
+    private static readonly string[] BaseScanFlags = ["--recursive"];
 
-    public static string[] QuickScan() => [.. ScanFlags, .. QuickTargets()];
+    /// <summary>Flags para escaneos con progreso detallado (quick, custom).</summary>
+    private static readonly string[] VerboseScanFlags = ["--recursive", "--verbose"];
 
-    public static string[] FullScan(IReadOnlyList<string> driveRoots) => [.. ScanFlags, .. driveRoots];
+    public static string[] QuickScan() => [.. VerboseScanFlags, .. QuickTargets()];
 
-    public static string[] CustomScan(string fullPath) => [.. ScanFlags, fullPath];
+    /// <summary>Escaneo completo SIN --verbose para evitar millones de líneas de salida
+    /// al escanear discos enteros. El parser usa el SCAN SUMMARY para contadores exactos.
+    /// </summary>
+    public static string[] FullScan(IReadOnlyList<string> driveRoots) => [.. BaseScanFlags, .. driveRoots];
+
+    public static string[] CustomScan(string fullPath) => [.. VerboseScanFlags, fullPath];
 
     /// <summary>
     /// Escaneo rápido: escritorio, Descargas y temp del usuario. Descargas se

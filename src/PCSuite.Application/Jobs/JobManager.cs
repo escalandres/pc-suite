@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PCSuite.Core.Jobs;
 
 namespace PCSuite.Application.Jobs;
@@ -49,14 +50,14 @@ public sealed class JobManager : IJobManager
         return Snapshot(job);
     }
 
-    public void Complete(string jobId, int? exitCode = null)
-        => Finish(jobId, JobStatus.Completed, exitCode, error: null);
+    public void Complete(string jobId, int? exitCode = null, JsonElement? result = null)
+        => Finish(jobId, JobStatus.Completed, exitCode, error: null, result);
 
     public void Fail(string jobId, string error, int? exitCode = null)
-        => Finish(jobId, JobStatus.Failed, exitCode, error);
+        => Finish(jobId, JobStatus.Failed, exitCode, error, result: null);
 
     public void MarkCancelled(string jobId, int? exitCode = null)
-        => Finish(jobId, JobStatus.Cancelled, exitCode, error: null);
+        => Finish(jobId, JobStatus.Cancelled, exitCode, error: null, result: null);
 
     public void SetProgress(string jobId, double progress)
     {
@@ -143,7 +144,7 @@ public sealed class JobManager : IJobManager
         }
     }
 
-    private void Finish(string jobId, JobStatus status, int? exitCode, string? error)
+    private void Finish(string jobId, JobStatus status, int? exitCode, string? error, JsonElement? result = null)
     {
         JobEvent jobEvent;
         lock (_sync)
@@ -158,7 +159,15 @@ public sealed class JobManager : IJobManager
             entry.Job.FinishedAt = DateTimeOffset.UtcNow;
             entry.Job.ExitCode = exitCode;
             entry.Job.Error = error;
-            jobEvent = new JobEvent { JobId = jobId, Type = JobEventType.StatusChanged, Status = status, Error = error };
+            entry.Job.Result = result;
+            jobEvent = new JobEvent
+            {
+                JobId = jobId,
+                Type = JobEventType.StatusChanged,
+                Status = status,
+                Error = error,
+                Result = result,
+            };
         }
 
         _events.Publish(jobEvent);
@@ -188,6 +197,7 @@ public sealed class JobManager : IJobManager
         ExitCode = job.ExitCode,
         Progress = job.Progress,
         Error = job.Error,
+        Result = job.Result,
     };
 
     private sealed record Entry(Job Job, CancellationTokenSource Cancellation);
