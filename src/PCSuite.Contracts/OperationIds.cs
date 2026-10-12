@@ -205,4 +205,50 @@ public static class OperationIds
 
     /// <summary>Alterna el piloto Blazor WebView (Task 015; solo en Debug).</summary>
     public const string BlazorToggle = "blazor.toggle";
+
+    // Operaciones Local Share (Task 016): transferencia de archivos en LAN.
+    // El frontend envía payloads estructurados validados en el servicio;
+    // el protocolo TCP/TLS es construcción interna del host .NET.
+
+    /// <summary>Estado del servicio (stopped/running/error + puerto + config resumida).</summary>
+    public const string LocalShareStatus = "localshare.status";
+
+    /// <summary>Inicia el listener TCP+TLS y el responder mDNS (payload cero).</summary>
+    public const string LocalShareStart = "localshare.start";
+
+    /// <summary>Detiene el listener y cancela transferencias activas (payload cero).</summary>
+    public const string LocalShareStop = "localshare.stop";
+
+    /// <summary>Lista dispositivos conocidos: detectados por mDNS + emparejados (payload cero).</summary>
+    public const string LocalShareDevices = "localshare.devices";
+
+    /// <summary>Empareja un dispositivo por IP:puerto (payload: { address, port }).</summary>
+    public const string LocalSharePair = "localshare.pair";
+
+    /// <summary>Confirma el PIN del emparejamiento (payload: { deviceId, pin }).</summary>
+    public const string LocalShareConfirmPairing = "localshare.confirmPairing";
+
+    /// <summary>Revoca la confianza de un dispositivo (payload: { deviceId }).</summary>
+    public const string LocalShareRevoke = "localshare.revoke";
+
+    /// <summary>Inicia un envío de archivos (payload: { deviceId, paths }).</summary>
+    public const string LocalShareSend = "localshare.send";
+
+    /// <summary>Acepta una solicitud entrante (payload: { transferId }).</summary>
+    public const string LocalShareAccept = "localshare.accept";
+
+    /// <summary>Rechaza una solicitud entrante (payload: { transferId }).</summary>
+    public const string LocalShareReject = "localshare.reject";
+
+    /// <summary>Lista transferencias activas + historial (payload cero).</summary>
+    public const string LocalShareTransfers = "localshare.transfers";
+
+    /// <summary>Cancela una transferencia en curso (payload: { transferId }).</summary>
+    public const string LocalShareCancelTransfer = "localshare.cancelTransfer";
+
+    /// <summary>Lee la configuración (payload cero) o la actualiza (payload con campos opcionales).</summary>
+    public const string LocalShareConfig = "localshare.config";
+
+    /// <summary>Limpia el historial de transferencias terminadas (payload cero).</summary>
+    public const string LocalShareClearHistory = "localshare.clearHistory";
 }

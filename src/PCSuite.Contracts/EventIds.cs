@@ -12,4 +12,18 @@ public static class EventIds
 
     /// <summary>Ciclo de vida de jobs: estado, progreso y resultado.</summary>
     public const string JobEvent = "job.event";
+
+    // Eventos Local Share (Task 016)
+
+    /// <summary>Un dispositivo fue descubierto, emparejado o revocado.</summary>
+    public const string LocalShareDeviceChanged = "localshare.device-changed";
+
+    /// <summary>Llega una solicitud de transferencia que el usuario debe aceptar/rechazar.</summary>
+    public const string LocalShareIncomingRequest = "localshare.incoming-request";
+
+    /// <summary>Progreso de una transferencia en curso (throttled ~4/s).</summary>
+    public const string LocalShareTransferProgress = "localshare.transfer-progress";
+
+    /// <summary>Una transferencia llegó a estado terminal (completed/cancelled/failed).</summary>
+    public const string LocalShareTransferFinished = "localshare.transfer-finished";
 }

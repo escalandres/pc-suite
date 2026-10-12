@@ -74,7 +74,6 @@ public partial class MainForm : Form
     private readonly ServiceProvider _blazorServices;
     private readonly ClamAvState _clamAvState;
     private readonly BlazorWebView _blazorWebView;
-    private bool _isBlazorVisible;
 
     public MainForm()
     {
