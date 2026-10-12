@@ -1,4 +1,5 @@
 using PCSuite.Core.Security;
+using System.Runtime.Versioning;
 
 namespace PCSuite.Infrastructure.Security;
 
@@ -18,6 +19,9 @@ public sealed class SecurityService : ISecurityService
     private readonly ISecurityProbe _probe;
 
     /// <summary>Sondeo nativo real (WSC/WMI/registro/puertos).</summary>
+    // Solo ESTE constructor es Windows-only (instancia el probe nativo): el
+    // que inyecta el probe sigue neutral para los tests (net10.0).
+    [SupportedOSPlatform("windows")]
     public SecurityService()
         : this(new WindowsSecurityProbe())
     {

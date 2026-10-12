@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.Win32;
 using PCSuite.Core.Security;
 
@@ -15,6 +16,9 @@ namespace PCSuite.Infrastructure.Security;
 // IPGlobalProperties + GetExtendedTcpTable/UdpTable (iphlpapi) para puertos y
 // su PID. Cada helper degrada a null/vacío ante CUALQUIER fallo (contrato del
 // probe): la página de Seguridad siempre se renderiza, jamás lanza.
+// [SupportedOSPlatform]: toda la API usada aquí es Windows-only por diseño
+// (WSC/WMI/registro/iphlpapi); así CA1416 no avisa sitio a sitio.
+[SupportedOSPlatform("windows")]
 public sealed class WindowsSecurityProbe : ISecurityProbe
 {
     // WSC_SECURITY_PROVIDER: firewall=0x1, antivirus=0x4 (la salud se pide por proveedor).

@@ -40,6 +40,39 @@ La app abre una ventana de escritorio con la pantalla Inicio de PCSuite.
 **Nunca ejecutar la app como Administrador.** La elevación es puntual, por
 operación y con UAC (ver «Elevación por operación» más abajo).
 
+## Empaquetar e instalar
+
+```bat
+empaquetar.bat
+```
+
+Compila el frontend, publica la app y el helper elevado **autocontenidos**
+(win-x64, sin necesidad de .NET en la máquina destino) y coloca la UI junto
+al ejecutable. Produce `dist\PCSuite-win-x64\` (portable) y
+`dist\PCSuite-<version>-win-x64.zip`. Para instalar: copia la carpeta
+`PCSuite-win-x64` donde quieras (p. ej. `C:\Program Files\PCSuite` o una
+carpeta local) y ejecuta `PCSuite.exe` — solo necesita WebView2 Runtime
+(preinstalado en Windows 11 / Edge). La versión sale de `<Version>` en
+`Directory.Build.props`.
+
+### Instalador Setup.exe (Inno Setup)
+
+```bat
+empaquetar.bat
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" instalador.iss
+```
+
+`instalador.iss` empaqueta el dist en `dist\instalador\PCSuite-Setup-<version>-win64.exe`:
+asistente en español/inglés, instalación por usuario o por máquina (lo
+pregunta), accesos directos opcionales, desinstalación completa desde
+«Aplicaciones» y checkbox para ejecutar la app al terminar. Requiere Inno
+Setup 6.5+ y ejecutar antes `empaquetar.bat` (el instalador empaqueta lo
+que hay en `dist\PCSuite-win-x64`).
+
+El perfil de WebView2 (caches, cookies de la UI embebida) vive en
+`%LocalAppData%\PCSuite\WebView2`, nunca junto al ejecutable — así la app
+funciona sin elevar incluso instalada en `C:\Program Files`.
+
 ### Desarrollo (hot reload de la UI)
 
 ```powershell

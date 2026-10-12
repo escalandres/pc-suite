@@ -25,6 +25,22 @@ internal static class WinGetOutput
         "acceso denegado",
         "permission denied",
         "permiso denegado",
+        // freshclam-specific: errores genéricos que a menudo son por permisos
+        // al escribir en Program Files / directorio de base de datos
+        "error: update failed",
+        "error: update failed.",
+        "can't create",
+        "can't open",
+        "could not open",
+        "failed to create",
+        "failed to open",
+        "write error",
+        "unable to create",
+        "unable to open",
+        "no se puede crear",
+        "no se puede abrir",
+        "error al crear",
+        "error al abrir",
     ];
 
     /// <summary>True si el fallo parece de permisos (candidato a reintentar elevado).</summary>

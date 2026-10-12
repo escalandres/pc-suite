@@ -144,6 +144,42 @@ public sealed class WslService : IWslService
                 throw new WslException(BridgeErrorCodes.NotInstalled, "No se encontró wsl.exe en la PATH.");
             }
 
+            // Si la operación tiene ID de elevación (p. ej. wsl --update), ir DIRECTAMENTE a elevación.
+            // wsl --update requiere permisos de administrador para descargar/instalar actualizaciones.
+            if (elevatedOperationId is not null)
+            {
+                _logger?.LogInformation("Operación {Op} requiere elevación; ejecutando wsl elevado desde el inicio.", elevatedOperationId);
+
+                var elevated = await _elevation.RunElevatedAsync(
+                    new ElevatedOperation
+                    {
+                        OperationId = elevatedOperationId,
+                        Payload = null,
+                    },
+                    cancellationToken).ConfigureAwait(false);
+
+                if (!elevated.Success)
+                {
+                    // p. ej. ELEVATION_CANCELLED si el usuario rechaza el UAC.
+                    throw new WslException(
+                        elevated.ErrorCode ?? BridgeErrorCodes.ElevationFailed,
+                        elevated.ErrorMessage ?? "No se pudo ejecutar la operación elevada.");
+                }
+
+                var dto = elevated.Data is { } element
+                    ? JsonSerializer.Deserialize<WslMutationResult>(element.GetRawText(), BridgeJson.Options)
+                    : null;
+                if (dto is null)
+                {
+                    throw new WslException(
+                        BridgeErrorCodes.ElevationFailed,
+                        "El proceso elevado no devolvió un resultado válido.");
+                }
+
+                return new WslMutationOutcome(dto.Succeeded, dto.ExitCode, dto.Elevated, dto.Detail);
+            }
+
+            // Operaciones SIN elevación (--shutdown, --start): ejecutan sin UAC
             var result = await RunAsync(path, args, timeout, MutationTimeoutMessage, cancellationToken).ConfigureAwait(false);
             if (result is null)
             {
@@ -155,54 +191,7 @@ public sealed class WslService : IWslService
                 return new WslMutationOutcome(true, 0, false, null);
             }
 
-            if (elevatedOperationId is null || !WslOutput.NeedsElevation(result))
-            {
-                // Fallo de wsl sin indicios de permisos (p. ej. E_INVALIDARG) o
-                // una operación que nunca eleva (--shutdown/--start): resultado
-                // estructurado, sin UAC.
-                return new WslMutationOutcome(false, result.ExitCode, false, WslOutput.Detail(result));
-            }
-
-            if (await _elevation.IsAdministratorAsync().ConfigureAwait(false))
-            {
-                // Reintentar elevado no aportaría nada: ya corre con privilegios
-                // y el fallo NO es de permisos.
-                return new WslMutationOutcome(false, result.ExitCode, false, WslOutput.Detail(result));
-            }
-
-            _logger?.LogInformation(
-                "wsl requirió privilegios (código {ExitCode}); se pide elevación por operación.",
-                result.ExitCode);
-
-            // El semaphore sigue tomado durante toda la elevación: ninguna
-            // otra operación wsl se lanza mientras el hijo elevado trabaja.
-            var elevated = await _elevation.RunElevatedAsync(
-                new ElevatedOperation
-                {
-                    OperationId = elevatedOperationId,
-                    Payload = null,
-                },
-                cancellationToken).ConfigureAwait(false);
-
-            if (!elevated.Success)
-            {
-                // p. ej. ELEVATION_CANCELLED si el usuario rechaza el UAC.
-                throw new WslException(
-                    elevated.ErrorCode ?? BridgeErrorCodes.ElevationFailed,
-                    elevated.ErrorMessage ?? "No se pudo ejecutar la operación elevada.");
-            }
-
-            var dto = elevated.Data is { } element
-                ? JsonSerializer.Deserialize<WslMutationResult>(element.GetRawText(), BridgeJson.Options)
-                : null;
-            if (dto is null)
-            {
-                throw new WslException(
-                    BridgeErrorCodes.ElevationFailed,
-                    "El proceso elevado no devolvió un resultado válido.");
-            }
-
-            return new WslMutationOutcome(dto.Succeeded, dto.ExitCode, dto.Elevated, dto.Detail);
+            return new WslMutationOutcome(false, result.ExitCode, false, WslOutput.Detail(result));
         }
         finally
         {

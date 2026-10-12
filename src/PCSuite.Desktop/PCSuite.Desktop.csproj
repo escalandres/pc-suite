@@ -5,16 +5,39 @@
     <ProjectReference Include="..\PCSuite.Infrastructure\PCSuite.Infrastructure.csproj" />
     <ProjectReference Include="..\PCSuite.Core\PCSuite.Core.csproj" />
     <ProjectReference Include="..\PCSuite.Contracts\PCSuite.Contracts.csproj" />
+    <ProjectReference Include="..\PCSuite.Blazor\PCSuite.Blazor.csproj" />
 
     <!-- Solo para orden de build: el helper se copia junto al ejecutable
          más abajo (Task 005); su ensamblado no se referencia. -->
-    <ProjectReference Include="..\PCSuite.Elevated\PCSuite.Elevated.csproj"
-                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\PCSuite.Elevated\PCSuite.Elevated.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.WindowsForms" Version="9.0.108" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- El mismo PCSuite.ico que ApplicationIcon incrusta en el exe, como
+         recurso managed: MainForm lo carga para el icono de la VENTANA
+         (WinForms .NET 10 no hereda el ApplicationIcon del exe). -->
+    <EmbeddedResource Include="PCSuite.ico">
+      <LogicalName>PCSuite.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- El paquete WebView2 añade Microsoft.Web.WebView2.Wpf.dll (lib_manual)
+       a TODO proyecto net5.0+ sin opción de exclusión: ese DLL se compiló
+       contra WindowsBase 5.0.0.0 y choca con el WindowsBase 4.0.0.0 del ref
+       pack de .NET 10 (warning MSB3277). Esta app es WinForms puro — se
+       elimina la referencia que no se usa: raíz del warning y además deja
+       de enviarse el DLL (y su .xml) en el paquete. -->
+  <Target Name="QuitarReferenciaWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <_WebView2WpfRef Include="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+      <Reference Remove="@(_WebView2WpfRef)" />
+    </ItemGroup>
+  </Target>
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -22,18 +45,19 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- La app instalada es PCSuite.exe (el nombre del proyecto es solo
+         convención de capas: el namespace sigue siendo PCSuite.Desktop). -->
+    <AssemblyName>PCSuite</AssemblyName>
+    <ApplicationIcon>PCSuite.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Task 005: PCSuite.Elevated.exe debe quedar al lado de la app para que
        ElevationManager pueda lanzarlo con runas (misma configuración). -->
   <Target Name="CopyElevatedHelper" AfterTargets="Build">
     <ItemGroup>
-      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0\**\*.*"
-                            Exclude="..\PCSuite.Elevated\bin\$(Configuration)\net10.0\**\*.pdb" />
+      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0\**\*.*" Exclude="..\PCSuite.Elevated\bin\$(Configuration)\net10.0\**\*.pdb" />
     </ItemGroup>
-    <Copy SourceFiles="@(_ElevatedHelperFiles)"
-          DestinationFiles="@(_ElevatedHelperFiles->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_ElevatedHelperFiles)" DestinationFiles="@(_ElevatedHelperFiles->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

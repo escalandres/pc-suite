@@ -3,9 +3,21 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
     <Product>PCSuite</Product>
     <Company>PCSuite</Company>
     <Description>The Swiss Army Knife for Windows developers and power users.</Description>
+  </PropertyGroup>
+
+  <!-- CS1668 (ruta LIB/INCLUDE inexistente): este repo es 100% C# y las
+       variables nativas de entorno solo generan ruido — cuando Visual
+       Studio actualiza su MSVC interno, la variable LIB de máquina queda
+       apuntando a la versión retirada y el compilador avisa en cada build.
+       No se puede corregir desde el proyecto (el csc compartido lee el
+       entorno real del proceso), así que se silencia a nivel de repo.
+       Fix real de máquina (requiere admin): actualizar o borrar la
+       variable LIB/INCLUDE desde "Editar las variables de entorno". -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CS1668</NoWarn>
   </PropertyGroup>
 </Project>

@@ -12,6 +12,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Mismo icono que la app: es el que muestra el prompt UAC. -->
+    <ApplicationIcon>..\PCSuite.Desktop\PCSuite.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>

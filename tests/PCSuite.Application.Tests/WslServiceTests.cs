@@ -209,7 +209,7 @@ public sealed class WslServiceTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task Update_Success_SucceedsWithoutUac_900sFixedArgv()
+    public async Task Update_Success_SucceedsElevated_900sFixedArgv()
     {
         using var fx = WslFixture.Create(FakeProcessRunner.Returning(""));
 
@@ -217,13 +217,15 @@ public sealed class WslServiceTests
 
         Assert.True(outcome.Succeeded);
         Assert.Equal(0, outcome.ExitCode);
-        Assert.False(outcome.Elevated);
+        Assert.True(outcome.Elevated); // ahora SIEMPRE eleva
         Assert.Null(outcome.Detail);
-        Assert.Empty(fx.Elevation.Requests); // nunca UAC preventivo
 
-        var request = Assert.Single(fx.Runner.Requests);
-        Assert.Equal<string>(new[] { "--update" }, request.Arguments);
-        Assert.Equal(UpdateTimeout, request.Timeout);
+        Assert.Single(fx.Elevation.Requests); // SIEMPRE eleva
+        var elevated = Assert.Single(fx.Elevation.Requests);
+        Assert.Equal(ElevatedOperationIds.WslUpdate, elevated.OperationId);
+        Assert.Contains(elevated.OperationId, ElevatedOperationIds.Allowed);
+        Assert.Null(elevated.Payload);
+        Assert.Empty(fx.Runner.Requests); // no se ejecuta en el proceso no elevado
     }
 
     [Fact]
@@ -239,41 +241,60 @@ public sealed class WslServiceTests
         Assert.True(outcome.Elevated);
         Assert.Equal(0, outcome.ExitCode);
 
-        Assert.Single(fx.Runner.Requests);
+        Assert.Single(fx.Elevation.Requests);
         var elevated = Assert.Single(fx.Elevation.Requests);
         Assert.Equal(ElevatedOperationIds.WslUpdate, elevated.OperationId);
         Assert.Contains(elevated.OperationId, ElevatedOperationIds.Allowed);
-        Assert.Null(elevated.Payload); // wsl.update es de payload cero
+        Assert.Null(elevated.Payload);
+        Assert.Empty(fx.Runner.Requests);
     }
 
     [Fact]
-    public async Task Update_AlreadyAdministrator_FailureStaysStructured_NoUac()
+    public async Task Update_AlreadyAdministrator_FailureStaysStructured_Elevated()
     {
         using var fx = WslFixture.Create(FakeProcessRunner.Returning("Acceso denegado", 5));
         fx.Elevation.IsAdministrator = true;
+        // El proceso elevado devuelve fallo con exitCode 5
+        fx.Elevation.Result = ElevationResult.Ok(BridgeJson.ToJson(new WslMutationResult
+        {
+            Succeeded = false,
+            ExitCode = 5,
+            Elevated = true,
+            Detail = "Acceso denegado",
+        }));
 
         var outcome = await fx.Service.UpdateAsync();
 
         Assert.False(outcome.Succeeded);
-        Assert.False(outcome.Elevated);
+        Assert.True(outcome.Elevated); // SIEMPRE eleva, aunque sea admin
         Assert.Equal(5, outcome.ExitCode);
         Assert.Equal("Acceso denegado", outcome.Detail);
-        Assert.Empty(fx.Elevation.Requests);
+        Assert.Single(fx.Elevation.Requests);
+        Assert.Empty(fx.Runner.Requests);
     }
 
     [Fact]
-    public async Task Update_InvalidArgFixture_IsStructuredResult_NoUac()
+    public async Task Update_InvalidArgFixture_IsStructuredResult_Elevated()
     {
         using var fx = WslFixture.Create(FakeProcessRunner.Returning(
             WslFixtures.Read("wsl-invalidarg.txt"), exitCode: 1));
+        // El proceso elevado devuelve fallo con exitCode 1
+        fx.Elevation.Result = ElevationResult.Ok(BridgeJson.ToJson(new WslMutationResult
+        {
+            Succeeded = false,
+            ExitCode = 1,
+            Elevated = true,
+            Detail = "Código de error: Wsl/UpdatePackage/E_INVALIDARG",
+        }));
 
         var outcome = await fx.Service.UpdateAsync();
 
         Assert.False(outcome.Succeeded);
-        Assert.False(outcome.Elevated);
+        Assert.True(outcome.Elevated); // ahora SIEMPRE eleva
         Assert.Equal(1, outcome.ExitCode);
         Assert.Equal("Código de error: Wsl/UpdatePackage/E_INVALIDARG", outcome.Detail);
-        Assert.Empty(fx.Elevation.Requests);
+        Assert.Single(fx.Elevation.Requests);
+        Assert.Empty(fx.Runner.Requests);
     }
 
     [Fact]
@@ -304,16 +325,20 @@ public sealed class WslServiceTests
     }
 
     [Fact]
-    public async Task Update_Timeout_ThrowsWslTimeout_NoUac()
+    public async Task Update_Timeout_ThrowsWslTimeout_Elevated()
     {
         using var fx = WslFixture.Create(
             FakeProcessRunner.Throwing(new ProcessTimeoutException(TimeSpan.FromSeconds(10))));
+        // Simular timeout en el proceso elevado
+        fx.Elevation.Result = ElevationResult.Fail(
+            BridgeErrorCodes.WslTimeout,
+            "La operación wsl superó el tiempo límite y fue terminada.");
 
         var exception = await Assert.ThrowsAsync<WslException>(() => fx.Service.UpdateAsync());
 
         Assert.Equal(BridgeErrorCodes.WslTimeout, exception.ErrorCode);
         Assert.Equal("La operación wsl superó el tiempo límite y fue terminada.", exception.ErrorMessage);
-        Assert.Empty(fx.Elevation.Requests);
+        Assert.Single(fx.Elevation.Requests); // SIEMPRE eleva, timeout en proceso elevado
     }
 
     [Fact]
@@ -419,7 +444,7 @@ public sealed class WslServiceTests
             fx.Service.ListAsync(),
             fx.Service.UpdateAsync());
 
-        Assert.Equal(5, fx.Runner.Requests.Count);
+        Assert.Equal(4, fx.Runner.Requests.Count); // update va a elevación
         Assert.Equal(1, counters[1]);
     }
 

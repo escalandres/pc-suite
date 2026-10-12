@@ -59,7 +59,7 @@ public sealed class WslOperationTests
         var data = response.Result!.Value;
         Assert.True(data.GetProperty("succeeded").GetBoolean());
         Assert.Equal(0, data.GetProperty("exitCode").GetInt32());
-        Assert.False(data.GetProperty("elevated").GetBoolean());
+        Assert.True(data.GetProperty("elevated").GetBoolean()); // ahora SIEMPRE eleva
         Assert.False(data.TryGetProperty("detail", out _)); // sin salida → sin detalle
     }
 
@@ -79,14 +79,23 @@ public sealed class WslOperationTests
 
         // Payload cero: ni se parsea (sin MALFORMED) ni llega al argv.
         Assert.True(response.Success);
-        var request = Assert.Single(fx.Runner.Requests);
-        var expected = operation switch
+        if (operation == OperationIds.WslUpdate)
         {
-            OperationIds.WslUpdate => new[] { "--update" },
-            OperationIds.WslShutdown => new[] { "--shutdown" },
-            _ => new[] { "--exec", "true" },
-        };
-        Assert.Equal<string>(expected, request.Arguments);
+            // wsl.update va DIRECTAMENTE a elevación: no hay request en Runner
+            Assert.Empty(fx.Runner.Requests);
+            Assert.Single(fx.Elevation.Requests);
+            Assert.Equal(ElevatedOperationIds.WslUpdate, fx.Elevation.Requests[0].OperationId);
+        }
+        else
+        {
+            var request = Assert.Single(fx.Runner.Requests);
+            var expected = operation switch
+            {
+                OperationIds.WslShutdown => new[] { "--shutdown" },
+                _ => new[] { "--exec", "true" },
+            };
+            Assert.Equal<string>(expected, request.Arguments);
+        }
     }
 
     // ------------------------------------------------------------------

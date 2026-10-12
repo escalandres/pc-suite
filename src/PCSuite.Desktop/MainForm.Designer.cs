@@ -1,3 +1,4 @@
+#nullable enable
 namespace PCSuite.Desktop;
 
 partial class MainForm
