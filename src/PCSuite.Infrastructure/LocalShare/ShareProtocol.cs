@@ -33,6 +33,14 @@ public static class ShareProtocol
     public const byte MsgTransferCancel = 0x0A;
     public const byte MsgError = 0x0B;
 
+    /// <summary>
+    /// Confirmación de fin-a-fin (16.7.2): el receptor la envía tras publicar
+    /// TODOS los archivos con éxito. Hasta recibirla, el "Completed" del
+    /// emisor no es verdad: el receptor puede fallar al verificar hash o
+    /// al publicar (disco lleno, colisión, etc.).
+    /// </summary>
+    public const byte MsgTransferCompleteAck = 0x0C;
+
     // ------------------------------------------------------------------
     // Payloads de control (JSON)
     // ------------------------------------------------------------------

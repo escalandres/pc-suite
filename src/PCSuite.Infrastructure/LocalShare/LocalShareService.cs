@@ -471,6 +471,14 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             throw new InvalidOperationException("No se encontraron archivos válidos para enviar.");
         }
 
+        // Límite propio del emisor (16.7.2): falla rápido sin conectar. El
+        // receptor aplica además SU límite al recibir la solicitud.
+        if (_settings.MaxTransferSizeBytes > 0 && totalBytes > _settings.MaxTransferSizeBytes)
+        {
+            throw new InvalidOperationException(
+                $"La transferencia ({totalBytes / 1024.0 / 1024.0:F1} MB) supera tu límite configurado ({_settings.MaxTransferSizeBytes / 1024.0 / 1024.0:F1} MB).");
+        }
+
         var transfer = new ShareTransfer
         {
             TransferId = transferId,
@@ -501,6 +509,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     _settings.DeviceId,
                     _settings.DisplayName,
                     _settings.CertificateThumbprint ?? _certificateStore.Thumbprint,
+                    _settings.MaxBandwidthBytesPerSecond,
                     bytes =>
                     {
                         ProgressChanged?.Invoke(new TransferProgress
@@ -655,6 +664,16 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     // Handlers internos
     // ------------------------------------------------------------------
 
+    /// <summary>¿El deviceId remoto está emparejado (confianza activa)?</summary>
+    private bool IsDevicePaired(string deviceId)
+    {
+        lock (_lock)
+        {
+            return _devices.TryGetValue(deviceId, out var device)
+                && device.Trust == DeviceTrust.Paired;
+        }
+    }
+
     /// <summary>
     /// Diálogo de protocolo con un par conectado. La firma coincide con
     /// TlsTransferServer.PeerConnected (Func) para que el servidor espere
@@ -700,6 +719,24 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             return;
         }
 
+        // Límites del receptor (16.7.2): tamaño máximo y espacio disponible.
+        // Se comprueban ANTES de molestar al usuario con una solicitud que no
+        // puede completarse. El frame ERROR llega limpio al emisor.
+        var limitError = LocalShareLimits.ValidateIncoming(
+            request.Items.Sum(i => i.Size),
+            _settings,
+            _settings.DownloadDirectory);
+        if (limitError is { } limit)
+        {
+            _logger?.LogInformation(
+                "Solicitud de {Peer} rechazada por límites: {Code}", hello.DisplayName, limit.Code);
+            await ShareProtocol.WriteControlAsync(
+                stream,
+                ShareProtocol.MsgError,
+                new ShareProtocol.ErrorPayload(limit.Code, limit.Message)).ConfigureAwait(false);
+            return;
+        }
+
         // 4. Crear la transferencia entrante en estado PendingApproval
         var transfer = new ShareTransfer
         {
@@ -735,8 +772,18 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             _pendingDecisions[transfer.TransferId] = tcs;
         }
 
-        // 6. Notificar a la UI que hay una solicitud entrante
-        IncomingRequest?.Invoke(transfer, items);
+        if (_settings.AutoAcceptFromPaired && IsDevicePaired(hello.DeviceId))
+        {
+            // Aceptación automática de dispositivos emparejados: sin molestar
+            // al usuario. La transferencia aparece en la lista como aprobada.
+            transfer.Status = TransferStatus.Approved;
+            tcs.TrySetResult(true);
+        }
+        else
+        {
+            // 6. Notificar a la UI que hay una solicitud entrante
+            IncomingRequest?.Invoke(transfer, items);
+        }
 
         // 7. Esperar decisión del usuario (AcceptAsync/RejectAsync resuelven el TCS)
         var accepted = await tcs.Task.ConfigureAwait(false);
@@ -767,12 +814,13 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
         // 8. Recibir cada archivo en streaming
         var receivedBytes = 0L;
+        var failedItems = new List<string>();
         foreach (var item in items)
         {
             var (startType, startPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
             if (startType == ShareProtocol.MsgTransferComplete)
             {
-                break; // El emisor terminó
+                break; // El emisor terminó sin más archivos.
             }
 
             if (startType == ShareProtocol.MsgTransferCancel)
@@ -788,6 +836,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 _logger?.LogWarning("Se esperaba FILE_START, llegó {Type}", startType);
                 transfer.Status = TransferStatus.Failed;
                 transfer.ErrorMessage = "Protocolo inválido durante la recepción.";
+                await ShareProtocol.WriteControlAsync(
+                    stream,
+                    ShareProtocol.MsgError,
+                    new ShareProtocol.ErrorPayload("protocol", "Se esperaba FILE_START.")).ConfigureAwait(false);
                 TransferFinished?.Invoke(transfer);
                 return;
             }
@@ -803,7 +855,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             item.TempPath = tempPath;
             item.Status = TransferStatus.Transferring;
 
-            // Recibir chunks de FILE_DATA
+            // Recibir chunks de FILE_DATA hasta FILE_END (capturado EN el bucle:
+            // una lectura extra aquí consumiría el FILE_START del siguiente
+            // archivo y rompería las transferencias multi-archivo).
+            ShareProtocol.FileEndPayload? fileEnd = null;
             using (var fileStream = File.OpenWrite(tempPath))
             {
                 var itemBytes = 0L;
@@ -813,6 +868,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
                     if (dataType == ShareProtocol.MsgFileEnd)
                     {
+                        fileEnd = ShareProtocol.Deserialize<ShareProtocol.FileEndPayload>(dataPayload);
                         break;
                     }
 
@@ -830,6 +886,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                         _fileWriter.DiscardTemp(tempPath);
                         transfer.Status = TransferStatus.Failed;
                         transfer.ErrorMessage = "Protocolo inválido durante datos de archivo.";
+                        await ShareProtocol.WriteControlAsync(
+                            stream,
+                            ShareProtocol.MsgError,
+                            new ShareProtocol.ErrorPayload("protocol", "Se esperaba FILE_DATA.")).ConfigureAwait(false);
                         TransferFinished?.Invoke(transfer);
                         return;
                     }
@@ -853,11 +913,9 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 }
             }
 
-            // Verificar y publicar
-            var fileEnd = ShareProtocol.Deserialize<ShareProtocol.FileEndPayload>(
-                (await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false)).Payload);
-            _ = fileEnd; // hash ya viene en item.ExpectedHash
-
+            // Verificar (tamaño + SHA-256 en streaming) y publicar. Publish
+            // solo devuelve si TODO validó; si no, lanza y el archivo NUNCA
+            // aparece como completo en la carpeta de recepción.
             try
             {
                 item.FinalPath = _fileWriter.Publish(
@@ -871,9 +929,43 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             {
                 _fileWriter.DiscardTemp(tempPath);
                 item.Status = TransferStatus.Failed;
+                failedItems.Add(item.RelativePath);
                 _logger?.LogWarning(ex, "Fallo al publicar {File}: {Message}", item.RelativePath, ex.Message);
             }
         }
+
+        // 9. Cierre del emisor: TRANSFER_COMPLETE (o CANCEL si abortó al final).
+        var (closeType, _) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
+        if (closeType == ShareProtocol.MsgTransferCancel)
+        {
+            transfer.Status = TransferStatus.Cancelled;
+            transfer.CompletedAt = DateTimeOffset.UtcNow;
+            TransferFinished?.Invoke(transfer);
+            return;
+        }
+
+        // 10. Confirmación de fin-a-fin: hasta este punto el "Completed" del
+        // emisor no es verdad. Con fallos de publicación respondemos ERROR y
+        // la transferencia queda Failed en AMBOS lados.
+        if (failedItems.Count > 0)
+        {
+            transfer.Status = TransferStatus.Failed;
+            transfer.ErrorMessage = failedItems.Count == 1
+                ? $"No se pudo publicar '{failedItems[0]}' (integridad o disco)."
+                : $"{failedItems.Count} archivos no se pudieron publicar (integridad o disco).";
+            transfer.CompletedAt = DateTimeOffset.UtcNow;
+            await ShareProtocol.WriteControlAsync(
+                stream,
+                ShareProtocol.MsgError,
+                new ShareProtocol.ErrorPayload("publish_failed", transfer.ErrorMessage)).ConfigureAwait(false);
+            TransferFinished?.Invoke(transfer);
+            return;
+        }
+
+        await ShareProtocol.WriteControlAsync(
+            stream,
+            ShareProtocol.MsgTransferCompleteAck,
+            new { transferId = transfer.TransferId }).ConfigureAwait(false);
 
         transfer.Status = TransferStatus.Completed;
         transfer.CompletedAt = DateTimeOffset.UtcNow;

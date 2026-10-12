@@ -41,6 +41,7 @@ public sealed class TransferClient
         string selfDeviceId,
         string selfDisplayName,
         string selfThumbprint,
+        long maxBytesPerSecond,
         Action<long> onProgress,
         CancellationToken ct = default)
     {
@@ -117,6 +118,7 @@ public sealed class TransferClient
 
         // 4. Transferir cada archivo en streaming
         var totalTransferred = 0L;
+        var sendWatch = System.Diagnostics.Stopwatch.StartNew();
         foreach (var item in items)
         {
             if (ct.IsCancellationRequested)
@@ -159,6 +161,14 @@ public sealed class TransferClient
                 item.TransferredBytes += bytesRead;
                 transfer.TransferredBytes = totalTransferred;
                 onProgress(totalTransferred);
+
+                // Regulación de ancho de banda (16.7.2): pausa proporcional si
+                // vamos más rápido que el límite configurado (0 = sin límite).
+                var delayMs = ComputeThrottleDelayMs(totalTransferred, maxBytesPerSecond, sendWatch.ElapsedMilliseconds);
+                if (delayMs > 0)
+                {
+                    await Task.Delay(delayMs, ct).ConfigureAwait(false);
+                }
             }
 
             // FILE_END
@@ -171,12 +181,25 @@ public sealed class TransferClient
             item.Status = TransferStatus.Verifying;
         }
 
-        // 5. TRANSFER_COMPLETE
+        // 5. TRANSFER_COMPLETE + confirmación de fin-a-fin (16.7.2)
         await ShareProtocol.WriteControlAsync(
             sslStream,
             ShareProtocol.MsgTransferComplete,
             new { transferId = transfer.TransferId },
             ct).ConfigureAwait(false);
+
+        // El receptor responde ACK solo cuando TODOS los archivos se
+        // publicaron con integridad verificada. ERROR = fallo suyo (hash,
+        // disco). Cualquier otra cosa o EOF = fallo de conexión.
+        var (completeAckType, completeAckPayload) = await ShareProtocol.ReadFrameAsync(sslStream, ct).ConfigureAwait(false);
+        if (completeAckType != ShareProtocol.MsgTransferCompleteAck)
+        {
+            var completeError = ShareProtocol.Deserialize<ShareProtocol.ErrorPayload>(completeAckPayload);
+            transfer.Status = TransferStatus.Failed;
+            transfer.ErrorMessage = completeError?.Message ?? "El receptor no confirmó la transferencia.";
+            transfer.CompletedAt = DateTimeOffset.UtcNow;
+            return;
+        }
 
         transfer.Status = TransferStatus.Completed;
         transfer.CompletedAt = DateTimeOffset.UtcNow;
@@ -213,5 +236,31 @@ public sealed class TransferClient
         var hash = SHA256.HashData(certBytes);
         var actual = Convert.ToHexStringLower(hash);
         return string.Equals(actual, expectedThumbprint, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// MS de espera para no superar el límite de banda. Pacing proporcional:
+    /// el tiempo ideal para los bytes enviados menos el tiempo ya transcurrido.
+    /// Tope por chunk para mantener la capacidad de cancelar a tiempo.
+    /// </summary>
+    internal static int ComputeThrottleDelayMs(
+        long totalBytesSent,
+        long maxBytesPerSecond,
+        long elapsedMs)
+    {
+        if (maxBytesPerSecond <= 0 || totalBytesSent <= 0)
+        {
+            return 0;
+        }
+
+        var idealMs = totalBytesSent * 1000.0 / maxBytesPerSecond;
+        var delayMs = idealMs - elapsedMs;
+        if (delayMs < 1)
+        {
+            return 0;
+        }
+
+        // Tope por iteración: nunca esperar más de 2s de golpe.
+        return (int)Math.Min(delayMs, 2000);
     }
 }

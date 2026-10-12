@@ -259,6 +259,7 @@ public sealed class LocalShareConfigOperation(ILocalShareService service) : IOpe
                 DiscoveryEnabled = s.DiscoveryEnabled,
                 AutoAcceptFromPaired = s.AutoAcceptFromPaired,
                 MaxSimultaneousTransfers = s.MaxSimultaneousTransfers,
+                MaxBandwidthBytesPerSecond = s.MaxBandwidthBytesPerSecond,
                 MaxTransferSizeBytes = s.MaxTransferSizeBytes,
             };
             return OperationResult.Ok(BridgeJson.ToJson(dto));
@@ -276,6 +277,7 @@ public sealed class LocalShareConfigOperation(ILocalShareService service) : IOpe
         if (payload.DiscoveryEnabled is { } discovery) current.DiscoveryEnabled = discovery;
         if (payload.AutoAcceptFromPaired is { } auto) current.AutoAcceptFromPaired = auto;
         if (payload.MaxSimultaneousTransfers is { } maxSim) current.MaxSimultaneousTransfers = Math.Clamp(maxSim, 1, 10);
+        if (payload.MaxBandwidthBytesPerSecond is { } maxBw) current.MaxBandwidthBytesPerSecond = Math.Max(0, maxBw);
 
         await service.UpdateSettingsAsync(current, ct).ConfigureAwait(false);
         return OperationResult.Ok(BridgeJson.ToJson(new { updated = true }));

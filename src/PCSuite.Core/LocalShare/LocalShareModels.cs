@@ -233,6 +233,12 @@ public sealed class LocalShareSettings
     /// </summary>
     public int MaxSimultaneousTransfers { get; set; } = 3;
 
+    /// <summary>
+    /// Límite de velocidad de ENVÍO en bytes/segundo (0 = sin límite). Se aplica
+    /// regulando el ritmo de los chunks de 64KB; no afecta la recepción.
+    /// </summary>
+    public long MaxBandwidthBytesPerSecond { get; set; } = 0;
+
     /// <summary>Tamaño máximo por transferencia en bytes (0 = sin límite).</summary>
     public long MaxTransferSizeBytes { get; set; } = 0;
 

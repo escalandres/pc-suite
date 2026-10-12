@@ -136,6 +136,8 @@ public sealed class LocalShareConfigResult
 
     public int MaxSimultaneousTransfers { get; init; }
 
+    public long MaxBandwidthBytesPerSecond { get; init; }
+
     public long MaxTransferSizeBytes { get; init; }
 }
 
@@ -153,6 +155,8 @@ public sealed class LocalShareConfigPayload
     public bool? AutoAcceptFromPaired { get; init; }
 
     public int? MaxSimultaneousTransfers { get; init; }
+
+    public long? MaxBandwidthBytesPerSecond { get; init; }
 }
 
 /// <summary>Payload de localshare.send.</summary>

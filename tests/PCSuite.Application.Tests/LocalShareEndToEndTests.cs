@@ -250,4 +250,158 @@ public class LocalShareEndToEndTests : IDisposable
             await _serviceB.RejectAsync(id);
         }
     }
+
+    [Fact]
+    public async Task ReceiverSizeLimit_RejectsWithCleanError()
+    {
+        // El receptor solo acepta transferencias de hasta 100 bytes.
+        var bSettings = _serviceB.Settings;
+        bSettings.MaxTransferSizeBytes = 100;
+        await _serviceB.UpdateSettingsAsync(bSettings);
+
+        await StartAndPairAsync();
+
+        // El usuario de B nunca debe ser molestado.
+        var bWasAsked = false;
+        _serviceB.IncomingRequest += (_, _) => bWasAsked = true;
+
+        var file = Path.Combine(_dirA, "grande.txt");
+        File.WriteAllText(file, new string('x', 1024)); // 1 KB > 100 B
+
+        var aFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => aFinished.TrySetResult(t);
+
+        await _serviceA.SendAsync("device-b", [file]);
+
+        var failed = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // El emisor recibe el error LIMPIO del receptor (frame ERROR), no un EOF.
+        Assert.Equal(TransferStatus.Failed, failed.Status);
+        Assert.Contains("límite", failed.ErrorMessage ?? "", StringComparison.Ordinal);
+        Assert.False(bWasAsked);
+
+        var receivedDir = Path.Combine(_dirB, "received");
+        if (Directory.Exists(receivedDir))
+        {
+            Assert.Empty(Directory.GetFiles(receivedDir, "*", SearchOption.AllDirectories));
+        }
+    }
+
+    [Fact]
+    public async Task AutoAcceptFromPaired_SkipsUserPrompt()
+    {
+        var bSettings = _serviceB.Settings;
+        bSettings.AutoAcceptFromPaired = true;
+        await _serviceB.UpdateSettingsAsync(bSettings);
+
+        await StartAndPairAsync();
+
+        var bWasAsked = false;
+        _serviceB.IncomingRequest += (_, _) => bWasAsked = true;
+
+        var file = Path.Combine(_dirA, "auto-aceptado.txt");
+        File.WriteAllText(file, "contenido automático");
+
+        var aFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => aFinished.TrySetResult(t);
+
+        await _serviceA.SendAsync("device-b", [file]);
+        var result = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(TransferStatus.Completed, result.Status);
+        Assert.False(bWasAsked, "AutoAcceptFromPaired no debería pedir confirmación al usuario.");
+        Assert.Equal(
+            "contenido automático",
+            File.ReadAllText(Path.Combine(_dirB, "received", "auto-aceptado.txt")));
+    }
+
+    [Fact]
+    public async Task BandwidthLimit_ThrottlesTransfer()
+    {
+        // Emisor limitado a 32 KB/s: 128 KB deberían tardar ~4s.
+        var aSettings = _serviceA.Settings;
+        aSettings.MaxBandwidthBytesPerSecond = 32 * 1024;
+        await _serviceA.UpdateSettingsAsync(aSettings);
+
+        // Auto-aceptar en B para no depender del prompt en el test de ritmo.
+        var bSettings = _serviceB.Settings;
+        bSettings.AutoAcceptFromPaired = true;
+        await _serviceB.UpdateSettingsAsync(bSettings);
+
+        await StartAndPairAsync();
+
+        var file = Path.Combine(_dirA, "throttled.bin");
+        File.WriteAllBytes(file, new byte[128 * 1024]);
+
+        var aFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => aFinished.TrySetResult(t);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await _serviceA.SendAsync("device-b", [file]);
+        var result = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        watch.Stop();
+
+        Assert.Equal(TransferStatus.Completed, result.Status);
+
+        // Sin límite, loopback transfiere 128KB en <1s. Con 32KB/s: >=3.5s.
+        Assert.True(
+            watch.Elapsed >= TimeSpan.FromSeconds(3.5),
+            $"Esperado >= 3.5s con límite de 32KB/s, tomó {watch.Elapsed.TotalMilliseconds:F0}ms");
+
+        // El archivo llegó íntegro pese a la regulación.
+        var received = Path.Combine(_dirB, "received", "throttled.bin");
+        Assert.True(File.Exists(received));
+        Assert.Equal(128 * 1024, new FileInfo(received).Length);
+    }
+
+    [Fact]
+    public async Task MultiItemTransfer_AllFilesPublishedInOrder()
+    {
+        // Regresión del bug de la "lectura extra": un ReadFrameAsync de más
+        // tras el bucle de datos consumía el FILE_START del siguiente archivo
+        // y rompía toda transferencia de 2+ archivos.
+        await StartAndPairAsync();
+
+        var contents = new Dictionary<string, string>();
+        var files = new List<string>();
+        for (var i = 1; i <= 3; i++)
+        {
+            var path = Path.Combine(_dirA, $"lote-{i}.txt");
+            var content = $"contenido del archivo {i}";
+            File.WriteAllText(path, content);
+            files.Add(path);
+            contents[$"lote-{i}.txt"] = content;
+        }
+
+        var incomingTcs = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceB.IncomingRequest += (t, items) =>
+        {
+            Assert.Equal(3, items.Count);
+            incomingTcs.TrySetResult(t);
+        };
+
+        var aFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => aFinished.TrySetResult(t);
+
+        await _serviceA.SendAsync("device-b", files);
+        var incoming = await incomingTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await _serviceB.AcceptAsync(incoming.TransferId);
+
+        var result = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // "Completed" del emisor ahora es fin-a-fin: significa publicado.
+        Assert.Equal(TransferStatus.Completed, result.Status);
+
+        foreach (var (name, content) in contents)
+        {
+            var path = Path.Combine(_dirB, "received", name);
+            Assert.True(File.Exists(path), $"Falta {name}");
+            Assert.Equal(content, File.ReadAllText(path));
+        }
+    }
 }

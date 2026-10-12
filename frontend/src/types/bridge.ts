@@ -438,6 +438,7 @@ export interface LocalShareConfigResult {
   discoveryEnabled: boolean;
   autoAcceptFromPaired: boolean;
   maxSimultaneousTransfers: number;
+  maxBandwidthBytesPerSecond: number;
   maxTransferSizeBytes: number;
 }
 
