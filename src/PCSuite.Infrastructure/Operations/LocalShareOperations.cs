@@ -89,7 +89,7 @@ public sealed class LocalSharePairOperation(ILocalShareService service) : IOpera
 
     public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
     {
-        if (!ToolMapper.TryParsePayload(context.Payload, out LocalSharePairPayload? payload) || payload is null)
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalSharePairPayload payload) || payload is null)
         {
             return OperationResult.Fail("error", "El payload debe ser { address, port }.");
         }
@@ -121,7 +121,7 @@ public sealed class LocalShareSendOperation(ILocalShareService service) : IOpera
 
     public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
     {
-        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareSendPayload? payload) || payload is null)
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareSendPayload payload) || payload is null)
         {
             return OperationResult.Fail("error", "El payload debe ser { deviceId, paths }.");
         }
@@ -146,7 +146,7 @@ public sealed class LocalShareAcceptOperation(ILocalShareService service) : IOpe
 
     public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
     {
-        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareTransferPayload? payload) || payload is null)
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareTransferPayload payload) || payload is null)
         {
             return OperationResult.Fail("error", "El payload debe ser { transferId }.");
         }
@@ -164,7 +164,7 @@ public sealed class LocalShareRejectOperation(ILocalShareService service) : IOpe
 
     public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
     {
-        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareTransferPayload? payload) || payload is null)
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareTransferPayload payload) || payload is null)
         {
             return OperationResult.Fail("error", "El payload debe ser { transferId }.");
         }
@@ -226,7 +226,7 @@ public sealed class LocalShareCancelTransferOperation(ILocalShareService service
 
     public Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
     {
-        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareTransferPayload? payload) || payload is null)
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareTransferPayload payload) || payload is null)
         {
             return Task.FromResult(OperationResult.Fail("error", "El payload debe ser { transferId }."));
         }
@@ -263,7 +263,7 @@ public sealed class LocalShareConfigOperation(ILocalShareService service) : IOpe
             return OperationResult.Ok(BridgeJson.ToJson(dto));
         }
 
-        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareConfigPayload? payload) || payload is null)
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareConfigPayload payload) || payload is null)
         {
             return OperationResult.Fail("error", "Payload de configuración inválido.");
         }
@@ -301,7 +301,7 @@ public sealed class LocalShareRevokeOperation(ILocalShareService service) : IOpe
 
     public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
     {
-        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareRevokePayload? payload) || payload is null)
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareRevokePayload payload) || payload is null)
         {
             return OperationResult.Fail("error", "El payload debe ser { deviceId }.");
         }

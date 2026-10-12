@@ -42,7 +42,12 @@ public sealed class CertificateStore
         {
             try
             {
-                return X509CertificateLoader.LoadPkcs12FromFile(path, null);
+                return X509CertificateLoader.LoadPkcs12FromFile(
+                    path,
+                    null,
+                    // Clave persistida en el almacén del usuario: SChannel
+                    // (TLS a nivel OS) no puede usar claves efímeras.
+                    KeyStorageFlags);
             }
             catch
             {
@@ -54,6 +59,16 @@ public sealed class CertificateStore
         File.WriteAllBytes(path, cert.Export(X509ContentType.Pfx));
         return cert;
     }
+
+    /// <summary>
+    /// Flags de carga del PFX. UserKeySet persiste la clave privada en el
+    /// almacén de claves del usuario (protegida por DPAPI del perfil).
+    /// EphemeralKeySet NO sirve aquí: SChannel no soporta claves efímeras
+    /// para el handshake TLS y falla con "platform does not support
+    /// ephemeral keys".
+    /// </summary>
+    private const X509KeyStorageFlags KeyStorageFlags =
+        X509KeyStorageFlags.Exportable | X509KeyStorageFlags.UserKeySet;
 
     private static X509Certificate2 Generate()
     {
@@ -73,14 +88,15 @@ public sealed class CertificateStore
 
         var notBefore = DateTimeOffset.UtcNow.AddDays(-1);
         var notAfter = DateTimeOffset.UtcNow.AddYears(5);
-        var cert = request.CreateSelfSigned(notBefore, notAfter);
+        using var cert = request.CreateSelfSigned(notBefore, notAfter);
 
-        // Exportar sin contraseña: la clave privada del PFX en disco se
-        // protege con DPAPI vía la ACL del archivo en el directorio de
-        // %LOCALAPPDATA% del usuario (no en una ubicación compartida).
+        // Exportar a PFX y recargar con la clave PERSISTIDA (UserKeySet).
+        // El cert que devuelve CreateSelfSigned lleva la clave efímera del
+        // RSA.Create: SChannel la rechaza. El PFX en disco se protege con
+        // la ACL del directorio de datos del usuario (%LOCALAPPDATA%).
         return new X509Certificate2(
             cert.Export(X509ContentType.Pfx),
             (string?)null,
-            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+            KeyStorageFlags);
     }
 }

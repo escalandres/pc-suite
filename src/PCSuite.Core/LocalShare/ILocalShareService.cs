@@ -57,6 +57,18 @@ public interface ILocalShareService
     /// <summary>Revoca la confianza de un dispositivo emparejado.</summary>
     Task RevokeTrustAsync(string deviceId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Registra un dispositivo emparejado con su huella de certificado.
+    /// Se usa tras verificar el PIN: la huella del par ya se conoce
+    /// (fue intercambiada durante la negociación TLS).
+    /// </summary>
+    SharedDevice RegisterPairedDevice(
+        string deviceId,
+        string displayName,
+        string address,
+        int port,
+        string certificateThumbprint);
+
     // ------------------------------------------------------------------
     // Transferencias (salientes)
     // ------------------------------------------------------------------

@@ -86,7 +86,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
             _server = new TlsTransferServer(_certificateStore.Certificate, _logger);
             _server.TrustedThumbprints = GetTrustedThumbprints();
-            _server.PeerConnected += OnPeerConnected;
+            _server.PeerConnected += HandleIncomingConnectionAsync;
             _server.Start(_settings.Port);
 
             _settings.CertificateThumbprint = _certificateStore.Thumbprint;
@@ -312,6 +312,29 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         }
 
         return Task.CompletedTask;
+    }
+
+    public SharedDevice RegisterPairedDevice(
+        string deviceId, string displayName, string address, int port, string certificateThumbprint)
+    {
+        lock (_lock)
+        {
+            var device = new SharedDevice
+            {
+                DeviceId = deviceId,
+                DisplayName = displayName,
+                KnownAddresses = [address],
+                Port = port,
+                Trust = DeviceTrust.Paired,
+                CertificateThumbprint = certificateThumbprint,
+                LastSeenAt = DateTimeOffset.UtcNow,
+            };
+            _devices[deviceId] = device;
+            SaveDevices();
+            _server?.TrustedThumbprints = GetTrustedThumbprints();
+            DeviceChanged?.Invoke(device);
+            return device;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -566,18 +589,11 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     // Handlers internos
     // ------------------------------------------------------------------
 
-    private async void OnPeerConnected(SslStream stream, string remoteIp)
-    {
-        try
-        {
-            await HandleIncomingConnectionAsync(stream, remoteIp).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "Error procesando conexión entrante de {Ip}", remoteIp);
-        }
-    }
-
+    /// <summary>
+    /// Diálogo de protocolo con un par conectado. La firma coincide con
+    /// TlsTransferServer.PeerConnected (Func) para que el servidor espere
+    /// a que este método termine antes de disponer la conexión.
+    /// </summary>
     private async Task HandleIncomingConnectionAsync(SslStream stream, string remoteIp)
     {
         // 1. HELLO del emisor
@@ -645,16 +661,18 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             _transfers[transfer.TransferId] = (transfer, items);
         }
 
-        // 5. Notificar a la UI que hay una solicitud entrante
-        IncomingRequest?.Invoke(transfer, items);
-
-        // 6. Esperar decisión del usuario (AcceptAsync/RejectAsync resuelven el TCS)
+        // 5. Registrar la decisión pendiente ANTES de notificar: la UI podría
+        //    llamar AcceptAsync dentro del propio evento IncomingRequest.
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_lock)
         {
             _pendingDecisions[transfer.TransferId] = tcs;
         }
 
+        // 6. Notificar a la UI que hay una solicitud entrante
+        IncomingRequest?.Invoke(transfer, items);
+
+        // 7. Esperar decisión del usuario (AcceptAsync/RejectAsync resuelven el TCS)
         var accepted = await tcs.Task.ConfigureAwait(false);
         _pendingDecisions.Remove(transfer.TransferId, out _);
 

@@ -27,7 +27,13 @@ public sealed class TlsTransferServer : IDisposable
     public bool IsRunning => _listener is not null;
 
     /// <summary>Conexión entrante lista para procesar (con SslStream autenticado).</summary>
-    public event Action<SslStream, string>? PeerConnected;
+    /// <remarks>
+    /// Es Func (no Action) a propósito: el servidor espera a que el handler
+    /// termine el diálogo de protocolo ANTES de disponer la conexión. Con
+    /// Action el handler async void devolvería el control en el primer await
+    /// y el finally destruiría el stream a mitad de protocolo.
+    /// </remarks>
+    public event Func<SslStream, string, Task>? PeerConnected;
 
     /// <summary>Huellas SHA-256 de certificados emparejados (hex minúscula). Se actualiza externamente.</summary>
     public IReadOnlySet<string> TrustedThumbprints { get; set; } = new HashSet<string>();
@@ -126,7 +132,13 @@ public sealed class TlsTransferServer : IDisposable
                 "Conexión TLS de {Ip} (huella: {Thumbprint})",
                 remoteIp, thumbprint is null ? "sin certificado" : thumbprint[..Math.Min(16, thumbprint.Length)] + "...");
 
-            PeerConnected?.Invoke(sslStream, remoteIp);
+            // El handler es dueño del diálogo de protocolo; no disponemos
+            // la conexión hasta que termine (puede esperar decisión del usuario).
+            var handler = PeerConnected;
+            if (handler is not null)
+            {
+                await handler(sslStream, remoteIp).ConfigureAwait(false);
+            }
         }
         catch (AuthenticationException ex)
         {
