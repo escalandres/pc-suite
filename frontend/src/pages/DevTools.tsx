@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Download, RefreshCw, Rocket } from 'lucide-react';
+import { CheckCircle2, Download, Info, RefreshCw, Rocket } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type { DeveloperCollectionResult, DeveloperToolInfo, UpdateCheckResult } from '../types/bridge';
@@ -126,6 +126,21 @@ export function DevTools() {
         'success',
         from && to && from !== to ? `Actualizada de ${from} a ${to}.` : 'Actualización completada.',
       );
+      // La comprobación que habilitó el botón quedó obsoleta tras el update:
+      // se sustituye por el estado real para que «Actualizar» se deshabilite
+      // (y la línea de estado muestre la versión nueva, no la vieja "disponible").
+      setChecks((previous) => ({
+        ...previous,
+        [tool.id]: {
+          toolId: tool.id,
+          supported: previous[tool.id]?.supported ?? true,
+          updateAvailable: false,
+          // Sin versión reportada: null hace que la línea caiga al version
+          // fresco que trae load() en el listado.
+          currentVersion: to || null,
+          latestVersion: previous[tool.id]?.latestVersion ?? null,
+        },
+      }));
       // Refresca estado y comprobación de esta tool tras el update.
       await load();
     } catch (error) {
@@ -214,18 +229,35 @@ export function DevTools() {
                   <code className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                     {tool.id}
                   </code>
+                  {/* Novedad: icono de información cuando hay update pendiente.
+                      El title muestra versiones al pasar el ratón; para
+                      lectores la línea de estado inferior ya lo declara. */}
+                  {updateReady && (
+                    <span
+                      className="flex shrink-0 items-center"
+                      style={{ color: 'var(--pcs-orange)' }}
+                      title={`Nueva actualización disponible: v${check?.currentVersion ?? tool.version ?? '?'} → v${check?.latestVersion ?? '?'}`}
+                    >
+                      <Info size={13} aria-hidden />
+                    </span>
+                  )}
                   <span
                     className="ml-auto rounded px-2 py-0.5 text-xs font-medium"
                     style={
-                      tool.isInstalled
+                      updateReady
                         ? {
-                            background: 'color-mix(in srgb, var(--pcs-success) 18%, transparent)',
-                            color: 'var(--pcs-success)',
+                            background: 'color-mix(in srgb, var(--pcs-orange) 18%, transparent)',
+                            color: 'var(--pcs-orange)',
                           }
-                        : {
-                            background: 'var(--pcs-surface-2)',
-                            color: 'var(--pcs-text-muted)',
-                          }
+                        : tool.isInstalled
+                          ? {
+                              background: 'color-mix(in srgb, var(--pcs-success) 18%, transparent)',
+                              color: 'var(--pcs-success)',
+                            }
+                          : {
+                              background: 'var(--pcs-surface-2)',
+                              color: 'var(--pcs-text-muted)',
+                            }
                     }
                   >
                     {tool.isInstalled
@@ -267,7 +299,9 @@ export function DevTools() {
                       title={
                         updateReady
                           ? 'Ejecutar la actualización nativa'
-                          : 'Comprueba actualizaciones antes de actualizar'
+                          : check?.supported && !check.updateAvailable
+                            ? 'Ya tienes la última versión'
+                            : 'Comprueba actualizaciones antes de actualizar'
                       }
                       className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40"
                       style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text)' }}

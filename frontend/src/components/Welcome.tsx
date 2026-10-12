@@ -44,7 +44,7 @@ export function Welcome() {
           </li>
           <li>
             <strong>Estrellas</strong> en el menú fijan tus páginas y herramientas favoritas, y
-            en Ajustes cambias tema, notificaciones y detección de portapapeles.
+            en Ajustes cambias tema, notificaciones y densidad.
           </li>
         </ul>
 

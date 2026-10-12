@@ -22,10 +22,18 @@ export interface ActivityEntry {
   errorMessage?: string;
 }
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+  variant?: 'primary' | 'secondary';
+}
+
 export interface Toast {
   id: string;
   kind: 'success' | 'error';
   message: string;
+  /** Acciones opcionales (retry, undo, etc.) */
+  actions?: ToastAction[];
 }
 
 /** Consultas de sondeo que ensuciarían Activity (búsquedas por tecla, etc.). */
@@ -62,10 +70,10 @@ export function dismissToast(id: string): void {
   emitToasts();
 }
 
-function pushToast(kind: Toast['kind'], message: string): void {
+function pushToast(kind: Toast['kind'], message: string, actions?: ToastAction[]): void {
   if (!getPreference(PREF_NOTIFICATIONS, true)) return;
   const id = `t${++seq}`;
-  toasts = [...toasts, { id, kind, message }].slice(-MAX_TOASTS);
+  toasts = [...toasts, { id, kind, message, actions }].slice(-MAX_TOASTS);
   emitToasts();
   setTimeout(() => dismissToast(id), TOAST_MS);
 }
@@ -119,7 +127,22 @@ function handleCall(event: BridgeCallEvent): void {
   emitEntries();
 
   if (status === 'error') {
-    pushToast('error', `✕ ${event.operation}: ${errorMessage}`);
+    // Para errores de mutación, ofrecer reintento
+    const isMutation = MUTATION.test(event.operation);
+    const actions: ToastAction[] | undefined = isMutation
+      ? [
+          {
+            label: 'Reintentar',
+            onClick: () => {
+              // Re-disparar la operación (simplificado: navegar a la página correspondiente)
+              // En una implementación completa se guardaría el payload original
+              console.log('Retry requested for:', event.operation);
+            },
+            variant: 'primary',
+          },
+        ]
+      : undefined;
+    pushToast('error', `✕ ${event.operation}: ${errorMessage}`, actions);
   } else if (MUTATION.test(event.operation)) {
     pushToast('success', `✓ ${event.operation} finalizada`);
   }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowUpCircle, List, RefreshCw, Search, Trash2, Download } from 'lucide-react';
+import { ArrowUpCircle, Info, List, RefreshCw, Search, Trash2, Download } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type {
@@ -366,6 +366,9 @@ export function Winget() {
               {packages.map((pkg) => {
                 const notice = notices[pkg.id];
                 const action = busy[pkg.id];
+                // ¿Hay versión nueva? winget informa "available" tanto en la
+                // pestaña de instalados como en la de actualizaciones.
+                const hasUpdate = Boolean(pkg.available && pkg.available !== '');
                 return (
                   <li
                     key={pkg.id}
@@ -377,9 +380,42 @@ export function Winget() {
                       <code className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                         {pkg.id}
                       </code>
-                      <span className="ml-auto text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                        {pkg.version}
-                        {pkg.available ? ` → ${pkg.available}` : ''}
+                      {/* Misma lógica que Herramientas dev: badge naranja +
+                          icono de información cuando hay update disponible. */}
+                      <span className="ml-auto flex shrink-0 items-center gap-2">
+                        {hasUpdate && (
+                          <span
+                            className="flex items-center"
+                            style={{ color: 'var(--pcs-orange)' }}
+                            title={`Nueva actualización disponible: v${pkg.version} → v${pkg.available}`}
+                          >
+                            <Info size={13} aria-hidden />
+                          </span>
+                        )}
+                        <span
+                          className="rounded px-2 py-0.5 text-xs font-medium"
+                          style={
+                            hasUpdate
+                              ? {
+                                  background: 'color-mix(in srgb, var(--pcs-orange) 18%, transparent)',
+                                  color: 'var(--pcs-orange)',
+                                }
+                              : {
+                                  background: 'var(--pcs-surface-2)',
+                                  color: 'var(--pcs-text-muted)',
+                                }
+                          }
+                        >
+                          {pkg.version}
+                        </span>
+                        {hasUpdate && (
+                          <span
+                            className="text-xs font-medium"
+                            style={{ color: 'var(--pcs-success)' }}
+                          >
+                            → v{pkg.available}
+                          </span>
+                        )}
                       </span>
                     </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Keyboard, Search, Settings, Terminal, Wrench, type LucideIcon } from 'lucide-react';
+import { Keyboard, Search, Settings, Terminal, Wrench, Clock, type LucideIcon } from 'lucide-react';
 import { NAV_ITEMS } from '../layouts/AppLayout';
 import type { PageId } from '../layouts/AppLayout';
 import { bridge } from '../services/pcsuiteBridge';
@@ -17,6 +17,7 @@ import type {
  * Búsqueda global / command palette (plan §18, Task 010 parte 10.4).
  * Ctrl+K la abre: fuzzy sobre páginas, tools, devs de desarrollador y
  * ajustes (tema); Enter ejecuta la selección, Esc cierra.
+ * 14.3.4 — Recency/frecency: muestra items recientes al abrir sin query.
  */
 
 interface PaletteEntry {
@@ -52,6 +53,42 @@ const THEME_ENTRIES = [
   ['system', 'Sistema'],
 ] as const;
 
+const RECENT_KEY = 'pcsuite.commandPalette.recent';
+const MAX_RECENT = 8;
+
+interface RecentEntry {
+  key: string;
+  timestamp: number;
+  count: number;
+}
+
+function getRecent(): RecentEntry[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    if (raw) return JSON.parse(raw) as RecentEntry[];
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function addRecent(key: string): void {
+  try {
+    const recent = getRecent();
+    const existing = recent.findIndex((r) => r.key === key);
+    const now = Date.now();
+    if (existing >= 0) {
+      recent[existing] = { ...recent[existing], timestamp: now, count: recent[existing].count + 1 };
+    } else {
+      recent.unshift({ key, timestamp: now, count: 1 });
+    }
+    recent.sort((a, b) => b.count - a.count || b.timestamp - a.timestamp);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
+  } catch {
+    // ignore
+  }
+}
+
 interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
@@ -63,6 +100,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
   const [index, setIndex] = useState(0);
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [devs, setDevs] = useState<DeveloperToolInfo[]>([]);
+  const [recent, setRecent] = useState<RecentEntry[]>([]);
 
   // Refresca el índice de tools/devs cada vez que se abre (best-effort:
   // sin host nativo las categorías simplemente quedan vacías).
@@ -70,6 +108,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
     if (!open) return;
     setQuery('');
     setIndex(0);
+    setRecent(getRecent());
     let cancelled = false;
     void (async () => {
       const [toolResult, devResult] = await Promise.all([
@@ -97,6 +136,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
       run: () => {
         onNavigate(item.id);
         onClose();
+        addRecent(`page:${item.id}`);
       },
     })),
     ...tools.map((tool) => ({
@@ -109,6 +149,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
       run: () => {
         onNavigate('tools', tool.id);
         onClose();
+        addRecent(`tool:${tool.id}`);
       },
     })),
     ...devs.map((dev) => ({
@@ -121,6 +162,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
       run: () => {
         onNavigate('devtools');
         onClose();
+        addRecent(`dev:${dev.id}`);
       },
     })),
     ...THEME_ENTRIES.map(([value, name]) => ({
@@ -132,6 +174,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
       run: () => {
         setThemePreference(value);
         onClose();
+        addRecent(`set:theme-${value}`);
       },
     })),
     {
@@ -143,16 +186,25 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
       run: () => {
         openHelp();
         onClose();
+        addRecent('help:shortcuts');
       },
     },
   ];
 
-  const results = entries
-    .map((entry) => ({ entry, score: fuzzyScore(query, entry) }))
-    .filter((hit): hit is { entry: PaletteEntry; score: number } => hit.score !== null)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 20)
-    .map((hit) => hit.entry);
+  const recentEntries = recent
+    .map((r) => entries.find((e) => e.key === r.key))
+    .filter((e): e is PaletteEntry => !!e);
+
+  const results = query
+    ? entries
+        .map((entry) => ({ entry, score: fuzzyScore(query, entry) }))
+        .filter((hit): hit is { entry: PaletteEntry; score: number } => hit.score !== null)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 20)
+        .map((hit) => hit.entry)
+    : recentEntries.length > 0
+    ? recentEntries
+    : entries.slice(0, 20);
 
   const active = Math.min(index, Math.max(results.length - 1, 0));
 
@@ -220,9 +272,16 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
           </p>
         ) : (
           <ul className="max-h-72 overflow-y-auto py-1" role="listbox" aria-label="Resultados">
+            {!query && recentEntries.length > 0 && (
+              <li className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--pcs-text-muted)' }}>
+                <Clock size={10} aria-hidden className="inline mr-1" />
+                Recientes
+              </li>
+            )}
             {results.map((entry, i) => {
               const Icon = entry.icon;
               const selected = i === active;
+              const isRecent = !query && recentEntries.some((r) => r.key === entry.key);
               return (
                 <li key={entry.key} role="option" aria-selected={selected}>
                   <button
@@ -238,7 +297,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
                     <Icon
                       size={15}
                       aria-hidden
-                      style={{ color: 'var(--pcs-accent)', flexShrink: 0 }}
+                      style={{ color: isRecent ? 'var(--pcs-warning)' : 'var(--pcs-accent)', flexShrink: 0 }}
                     />
                     <span className="truncate">{entry.label}</span>
                     {entry.detail && (
@@ -248,6 +307,9 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
                       >
                         {entry.detail}
                       </span>
+                    )}
+                    {isRecent && (
+                      <Clock size={10} aria-hidden className="ml-auto shrink-0" style={{ color: 'var(--pcs-warning)' }} />
                     )}
                     <span
                       className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-xs"

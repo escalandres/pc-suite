@@ -1,7 +1,13 @@
 /**
  * Contratos del protocolo puente (espejo de PCSuite.Contracts).
- * Mantener sincronizados con src/PCSuite.Contracts/.
+ * Mantener sincronizados con src/PCSuite.Contracts.
  */
+
+/* =====================================================================
+   OperationIds — Identificadores de operaciones permitidas para el puente.
+   El frontend SOLO puede invocar operaciones registradas aquí.
+   Ejecución arbitraria de comandos NUNCA está expuesta.
+   ===================================================================== */
 
 export interface BridgeRequest {
   id: string;
@@ -26,23 +32,19 @@ export interface BridgeEvent {
   payload?: unknown;
 }
 
-/** Resultado de la operación system.info. */
-export interface SystemInfoResult {
-  appVersion: string;
-  runtimeVersion: string;
-  osDescription: string;
-  osVersion: string;
-  machineName: string;
-  processorCount: number;
-  is64BitOperatingSystem: boolean;
-  isAdministrator: boolean;
-}
+/* =====================================================================
+   System info
+   ===================================================================== */
 
 /** Payload del evento app.ready. */
 export interface AppReadyEvent {
   appVersion: string;
   startedAtUtc: string;
 }
+
+/* =====================================================================
+   OperationIds — Constantes string para los identificadores de operación.
+   ===================================================================== */
 
 export const OperationIds = {
   systemInfo: 'system.info',
@@ -75,11 +77,45 @@ export const OperationIds = {
   clamavHistory: 'clamav.history',
   cleanerScan: 'cleaner.scan',
   cleanerClean: 'cleaner.clean',
+  securityGetStatus: 'security.getStatus',
+  pluginList: 'plugin.list',
+  pluginCheckUpdate: 'plugin.checkUpdate',
+  pluginLaunch: 'plugin.launch',
+  pluginStatus: 'plugin.status',
+  explorerOpenPath: 'explorer.openPath',
+  explorerOpenUrl: 'explorer.openUrl',
+  jobGet: 'job.get',
+  jobCancel: 'job.cancel',
+  blazorToggle: 'blazor.toggle',
 } as const;
 
 export const EventIds = {
   appReady: 'app.ready',
+  clamavFreshclamProgress: 'clamav.freshclam.progress',
+  clamavScanProgress: 'clamav.scan.progress',
+  jobEvent: 'job.event',
 } as const;
+
+/* =====================================================================
+   Tool metadata
+   ===================================================================== */
+
+/** Parámetro de una tool: la UI genera el formulario desde esta lista. */
+export interface ToolParameter {
+  /** Clave del payload JSON que rellena el campo. */
+  name: string;
+  label: string;
+  type: 'text' | 'textArea' | 'number' | 'boolean' | 'select';
+  required: boolean;
+  default?: unknown;
+  placeholder?: string | null;
+  helpText?: string | null;
+  /** Valores admitidos (solo select). */
+  options: string[];
+  /** Límites (solo number). */
+  min?: number | null;
+  max?: number | null;
+}
 
 /** Metadato de una tool tal como lo devuelve el nativo. */
 export interface ToolInfo {
@@ -90,7 +126,13 @@ export interface ToolInfo {
   keywords: string[];
   /** Ejemplo de payload para precargar la UI genérica. */
   exampleInput?: unknown;
+  /** Formulario de configuración de la tool (vacío → editor JSON genérico). */
+  parameters: ToolParameter[];
 }
+
+/* =====================================================================
+   Tool collection results
+   ===================================================================== */
 
 /** Resultado de tools.list / tools.search. */
 export interface ToolCollectionResult {
@@ -102,6 +144,10 @@ export interface ToolExecuteResult {
   toolId: string;
   output?: unknown;
 }
+
+/* =====================================================================
+   Developer tools
+   ===================================================================== */
 
 /** Una herramienta de desarrollador tal como la devuelve developer.list. */
 export interface DeveloperToolInfo {
@@ -131,15 +177,9 @@ export interface UpdateCheckResult {
   supported: boolean;
 }
 
-/** Resultado de winget.detect. */
-export interface WinGetDetectResult {
-  installed: boolean;
-  /** Versión sin la 'v'; ausente si es desconocida. */
-  version?: string | null;
-  path?: string | null;
-  /** true: el proceso ya corre elevado (sin pedir UAC). */
-  isAdministrator: boolean;
-}
+/* =====================================================================
+   WinGet
+   ===================================================================== */
 
 /** Un paquete en winget.search / winget.list / winget.updates. */
 export interface WinGetPackageResult {
@@ -157,8 +197,7 @@ export interface WinGetPackageCollectionResult {
   packages: WinGetPackageResult[];
 }
 
-/**
- * Resultado de las mutaciones winget (install/upgrade/upgradeAll/uninstall).
+/** Resultado de las mutaciones winget (install/upgrade/upgradeAll/uninstall).
  * Un fallo del CLI NO es un error del puente: success:true con succeeded:false
  * y el detalle controlado en `detail`.
  */
@@ -171,6 +210,32 @@ export interface WinGetMutationResult {
   /** Última línea saneada de winget; ausente si no hay salida. */
   detail?: string | null;
 }
+
+/** Resultado de winget.detect. */
+export interface WinGetDetectResult {
+  /** Id del paquete. */
+  packageId: string;
+  /** Nombre del paquete. */
+  name: string;
+  /** Versión actual. */
+  version: string;
+  /** ¿Hay actualización disponible? */
+  updateAvailable: boolean;
+  /** Versión disponible. */
+  latestVersion?: string | null;
+  /** Fuente de la detección. */
+  source?: string | null;
+  /** ¿Está winget instalado en el sistema. */
+  installed: boolean;
+  /** Ruta de instalación del App Installer / winget. */
+  path?: string | null;
+  /** ¿El proceso tiene privilegios de administrador. */
+  isAdministrator: boolean;
+}
+
+/* =====================================================================
+   WSL
+   ===================================================================== */
 
 /** Resultado de wsl.status. */
 export interface WslStatusResult {
@@ -196,8 +261,7 @@ export interface WslListResult {
   distributions: WslDistroResult[];
 }
 
-/**
- * Resultado de las mutaciones wsl (update/shutdown/start). Igual que winget:
+/** Resultado de las mutaciones wsl (update/shutdown/start). Igual que winget:
  * un fallo del CLI vuelve como resultado estructurado, nunca como error del
  * puente.
  */
@@ -207,6 +271,10 @@ export interface WslMutationResult {
   elevated: boolean;
   detail?: string | null;
 }
+
+/* =====================================================================
+   ClamAV
+   ===================================================================== */
 
 /** Resultado de clamav.status. */
 export interface ClamAvStatusResult {
@@ -221,8 +289,7 @@ export interface ClamAvStatusResult {
   canUpdateDefinitions: boolean;
 }
 
-/**
- * Resultado de clamav.install / clamav.updateDefinitions. Igual que winget y
+/** Resultado de clamav.install / clamav.updateDefinitions. Igual que winget y
  * wsl: un fallo del CLI vuelve como resultado estructurado (succeeded:false +
  * detail controlado), nunca como error del puente.
  */
@@ -242,6 +309,42 @@ export interface ClamAvThreatResult {
   threat: string;
 }
 
+/** Respuesta de iniciar un escaneo clamav.*: el job queda corriendo. */
+export interface ClamAvScanStartResult {
+  jobId: string;
+}
+
+/** Evento job.event: ciclo de vida de un job (resultado en statusChanged). */
+export interface JobEventPayload {
+  jobId: string;
+  type: 'statusChanged' | 'output' | 'progress';
+  /** running | completed | failed | cancelled (en statusChanged). */
+  status?: string | null;
+  /** 0..1 (en progress). */
+  progress?: number | null;
+  error?: string | null;
+  /** Resultado estructurado al completarse (p. ej. el escaneo). */
+  result?: ClamAvScanResult | null;
+}
+
+/** Snapshot de job.get. */
+export interface JobSnapshot {
+  id: string;
+  type: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  exitCode?: number | null;
+  progress?: number | null;
+  error?: string | null;
+  result?: ClamAvScanResult | null;
+}
+
+/** Resultado de job.cancel. */
+export interface JobCancelResult {
+  cancelled: boolean;
+}
+
 /** Resultado de clamav.quickScan / clamav.fullScan / clamav.customScan. */
 export interface ClamAvScanResult {
   succeeded: boolean;
@@ -256,6 +359,10 @@ export interface ClamAvScanResult {
   /** Detalle controlado (parcial/fallo); ausente si no hay. */
   detail?: string | null;
   threats: ClamAvThreatResult[];
+  /** Duración del escaneo en segundos. */
+  duration?: number | null;
+  /** Ruta al archivo de log generado. */
+  logFile?: string | null;
 }
 
 /** Una entrada de clamav.history (la más reciente primero). */
@@ -277,6 +384,58 @@ export interface ClamAvHistoryEntryResult {
 export interface ClamAvHistoryResult {
   entries: ClamAvHistoryEntryResult[];
 }
+
+/** Progreso de actualización de definiciones ClamAV (freshclam). */
+export interface ClamAvFreshclamProgressPayload {
+  /** Archivo actual que se está descargando/procesando (p. ej. "main.cvd", "daily.cvd"). */
+  currentFile?: string | null;
+  /** Porcentaje de descarga del archivo actual (0-100). null si no aplica. */
+  percent?: number | null;
+  /** Bytes descargados del archivo actual. */
+  downloadedBytes?: number | null;
+  /** Total de bytes del archivo actual (si se conoce). */
+  totalBytes?: number | null;
+  /** Velocidad de descarga en bytes/segundo. */
+  bytesPerSecond?: number | null;
+  /** Mensaje de estado legible (p. ej. "Descargando main.cvd...", "Verificando firmas..."). */
+  statusText?: string | null;
+  /** Indica si la operación ha finalizado (éxito o fallo). */
+  isComplete: boolean;
+  /** Si isComplete=true, indica si la actualización tuvo éxito. */
+  succeeded?: boolean | null;
+  /** Mensaje de detalle si falló o terminó. */
+  detail?: string | null;
+}
+
+/** Progreso de escaneo ClamAV (clamscan). */
+export interface ClamAvScanProgressPayload {
+  /** Archivo actual siendo escaneado. */
+  currentFile?: string | null;
+  /** Directorio actual siendo escaneado. */
+  currentDirectory?: string | null;
+  /** Archivos escaneados hasta el momento. */
+  scannedFiles: number;
+  /** Directorios escaneados hasta el momento. */
+  scannedDirectories: number;
+  /** Amenazas encontradas hasta el momento. */
+  infectedFiles: number;
+  /** Mensaje de estado legible (p. ej. "Escaneando C:\Users\X\Downloads\..."). */
+  statusText?: string | null;
+  /** Indica si la operación ha finalizado (éxito o fallo). */
+  isComplete: boolean;
+  /** Si isComplete=true, indica si el escaneo tuvo éxito. */
+  succeeded?: boolean | null;
+  /** Mensaje de detalle si falló o terminó. */
+  detail?: string | null;
+  /** Tipo de escaneo (quick, full, custom). */
+  scanKind?: string | null;
+  /** Porcentaje de progreso estimado (0-100). Ausente si no se puede calcular. */
+  percent?: number | null;
+}
+
+/* =====================================================================
+   Cleaner
+   ===================================================================== */
 
 /** Categoría escaneada por cleaner.scan (raíz fija resuelta en .NET). */
 export interface CleanerCategoryScanResult {
@@ -312,4 +471,144 @@ export interface CleanerCategoryCleanResult {
 /** Resultado de cleaner.clean. */
 export interface CleanerCleanResult {
   categories: CleanerCategoryCleanResult[];
+}
+
+/* =====================================================================
+   Security Center (§14: solo lectura)
+   ===================================================================== */
+
+/** Tarjeta de Windows Defender en security.getStatus. */
+export interface DefenderStatusResult {
+  /** good | poor | notMonitored | snoozed | unknown. */
+  status: string;
+  /** Ausente si WMI no respondió — no significa "desactivado". */
+  antivirusEnabled?: boolean | null;
+  realTimeProtection?: boolean | null;
+  /** Ausente si Defender no expuso la fecha. */
+  signatureLastUpdated?: string | null;
+}
+
+/** Tarjeta de firewall con un semáforo por perfil. */
+export interface FirewallStatusResult {
+  /** good | poor | notMonitored | snoozed | unknown. */
+  status: string;
+  /** false: perfil desactivado; ausente: el registro no se pudo leer. */
+  domainEnabled?: boolean | null;
+  privateEnabled?: boolean | null;
+  publicEnabled?: boolean | null;
+}
+
+/** Antivirus registrados en el Centro de seguridad (WMI SecurityCenter2). */
+export interface AntivirusStatusResult {
+  /** good | poor | notMonitored | snoozed | unknown. */
+  status: string;
+  /** Vacío si WMI no respondió. */
+  products: string[];
+}
+
+/** Puerto en escucha (solo lectura, IPGlobalProperties + PID). */
+export interface PortResult {
+  /** TCP | UDP. */
+  protocol: string;
+  localAddress: string;
+  localPort: number;
+  /** Ausente si la ACL lo niega. */
+  pid?: number | null;
+  process?: string | null;
+}
+
+/** Una línea de diagnóstico de security.getStatus. */
+export interface SecurityCheckResult {
+  /** uac | rdp | realtime | signatures. */
+  id: string;
+  label: string;
+  /** ok | warn | unknown. */
+  status: string;
+  /** Ausente si no hay detalle legible. */
+  detail?: string | null;
+}
+
+/** Resultado de security.getStatus (§14: Security Center de solo lectura). */
+export interface SecurityStatusResult {
+  defender: DefenderStatusResult;
+  firewall: FirewallStatusResult;
+  antivirus: AntivirusStatusResult;
+  ports: PortResult[];
+  diagnostics: SecurityCheckResult[];
+  /** Marca de tiempo ISO 8601 de la lectura. */
+  scannedAt: string;
+}
+
+/* =====================================================================
+   System info (Task 001)
+   ===================================================================== */
+
+export interface SystemInfoResult {
+  machineName: string;
+  osDescription: string;
+  osVersion: string;
+  processorCount: number;
+  isAdministrator: boolean;
+  appVersion: string;
+  runtimeVersion: string;
+  is64BitOperatingSystem: boolean;
+}
+
+/* =====================================================================
+   Plugins (Task 013 / §17)
+   ===================================================================== */
+
+/** Tarjeta de plugin en plugin.list. */
+export interface PluginMetadata {
+  /** Id único del plugin (clave). */
+  id: string;
+  /** Nombre visible del plugin. */
+  name: string;
+  /** Versión actual del plugin. */
+  version: string;
+  /** Estado del plugin. */
+  status: string;
+  /** Indica si hay actualización disponible. */
+  updateAvailable: boolean;
+  /** Versión disponible (si hay update). */
+  availableVersion?: string | null;
+}
+
+/** Resultado de la operación plugin.list: colección de plugins instalados. */
+export interface PluginCollectionResult {
+  /** Lista de plugins instalados. */
+  plugins: PluginMetadata[];
+  /** Instante UTC de la lista (cuando fue escaneado). */
+  scannedAt: string;
+}
+
+/** Resultado de checkUpdate o launch de plugin. */
+export interface PluginOperationResult {
+  /** Indica si la operación succeeded. */
+  succeeded: boolean;
+  /** Mensaje descriptivo para la UI (toast, etc.). */
+  detail?: string | null;
+  /** Versión actual después de la operación. */
+  currentVersion?: string | null;
+  /** Versión más reciente disponible. */
+  latestVersion?: string | null;
+}
+
+/* =====================================================================
+   Activity
+   ===================================================================== */
+
+/** Metadato de una activity entry. */
+export interface ActivityEntry {
+  /** Marca de tiempo ISO 8601. */
+  timestamp: string;
+  /** Tipo de actividad (p. ej. tool.execute, plugin.launch). */
+  type: string;
+  /** Payload asociado (opcional). */
+  payload?: unknown;
+}
+
+/** Resultado de activity/history. */
+export interface ActivityHistoryResult {
+  entries: ActivityEntry[];
 }

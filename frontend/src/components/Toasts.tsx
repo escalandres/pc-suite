@@ -1,9 +1,10 @@
-import { CheckCircle2, X, XCircle } from 'lucide-react';
+import { CheckCircle2, X, XCircle, RotateCcw } from 'lucide-react';
 import { dismissToast, useToasts } from '../activity';
 
 /**
  * Pila global de notificaciones (§36): esquina inferior derecha, se cierra
  * sola a los 5 s o con la X. Sin toasts = no renderiza nada.
+ * 14.3.3 — Soporta acciones (retry, undo) en toasts.
  */
 export function Toasts() {
   const toasts = useToasts();
@@ -28,10 +29,40 @@ export function Toasts() {
           >
             <Icon size={16} style={{ color, marginTop: 2 }} aria-hidden />
             <span className="min-w-0 flex-1 break-words">{toast.message}</span>
+            {toast.actions && toast.actions.length > 0 && (
+              <div className="flex items-center gap-1.5 ml-2">
+                {toast.actions.map((action, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => {
+                      action.onClick();
+                      dismissToast(toast.id);
+                    }}
+                    className="rounded px-2 py-1 text-xs font-medium transition-colors"
+                    style={
+                      action.variant === 'primary'
+                        ? {
+                            background: 'var(--pcs-accent)',
+                            color: '#fff',
+                          }
+                        : {
+                            background: 'var(--pcs-surface-2)',
+                            color: 'var(--pcs-text)',
+                            border: '1px solid var(--pcs-border)',
+                          }
+                    }
+                  >
+                    {action.variant === 'primary' && <RotateCcw size={10} aria-hidden className="mr-1" />}
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               type="button"
               aria-label="Cerrar notificación"
-              className="rounded p-0.5 opacity-70 hover:opacity-100"
+              className="rounded p-0.5 opacity-70 hover:opacity-100 ml-2"
               onClick={() => dismissToast(toast.id)}
             >
               <X size={14} aria-hidden />

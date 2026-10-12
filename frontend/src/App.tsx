@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { AppLayout } from './layouts/AppLayout';
 import type { PageId } from './layouts/AppLayout';
 import { Home } from './pages/Home';
@@ -8,8 +8,9 @@ import { Winget } from './pages/Winget';
 import { Wsl } from './pages/Wsl';
 import { Clamav } from './pages/Clamav';
 import { Cleaner } from './pages/Cleaner';
+import { Security } from './pages/Security';
 import { Settings } from './pages/Settings';
-import { Clipboard } from './pages/Clipboard';
+import { Plugins } from './pages/Plugins';
 import { ActivityPage } from './pages/Activity';
 import { Toasts } from './components/Toasts';
 import { bridge } from './services/pcsuiteBridge';
@@ -23,17 +24,84 @@ import {
 } from './shortcuts';
 import type { AppReadyEvent } from './types/bridge';
 import { EventIds } from './types/bridge';
+import { usePreference, PREF_DENSITY } from './prefs';
+
+/** Parsea el hash de la URL: #/page o #/tools/tool-id */
+function parseHash(): { page: PageId; toolId?: string } {
+  const hash = window.location.hash.slice(1); // quita '#'
+  if (!hash || hash === '/') return { page: 'home' };
+  const parts = hash.split('/').filter(Boolean);
+  const page = parts[0] as PageId;
+  const toolId = parts[1];
+  // Validar que la página existe
+  const validPages: PageId[] = [
+    'home', 'tools', 'cleaner', 'security',
+    'devtools', 'plugins', 'winget', 'wsl', 'clamav', 'activity', 'settings'
+  ];
+  if (!validPages.includes(page)) return { page: 'home' };
+  return { page, toolId };
+}
+
+/** Construye hash para navegación */
+function buildHash(page: PageId, toolId?: string): string {
+  return toolId ? `#/${page}/${toolId}` : `#/${page}`;
+}
+
+/** Cache simple de nombres de tools */
+const toolNameCache = new Map<string, string>();
+
+/** Obtiene nombre de tool (usa cache o devuelve toolId como fallback) */
+function getToolName(page: PageId, toolId: string): string {
+  if (page !== 'tools') return toolId;
+  return toolNameCache.get(toolId) ?? toolId;
+}
+
+/** Precarga nombres de tools en cache */
+async function precacheToolNames(): Promise<void> {
+  try {
+    const result = await bridge.call<{ tools: { id: string; name: string }[] }>('tools.list');
+    result.tools?.forEach((tool) => {
+      toolNameCache.set(tool.id, tool.name);
+    });
+  } catch {
+    // Silencioso: fallback a toolId
+  }
+}
 
 export default function App() {
-  const [page, setPage] = useState<PageId>('home');
-  // Identidad nueva en cada navegación para re-seleccionar la misma tool.
-  const [focus, setFocus] = useState<{ toolId: string } | null>(null);
+  // 14.1.5 — Deep linking: estado inicial desde URL hash
+  const initial = parseHash();
+  const [page, setPage] = useState<PageId>(initial.page);
+  const [focus, setFocus] = useState<{ toolId: string } | null>(
+    initial.toolId ? { toolId: initial.toolId } : null
+  );
   const [readyNotice, setReadyNotice] = useState<string | null>(null);
 
-  const navigate = (target: PageId, toolId?: string) => {
+  // Sincroniza URL hash al navegar
+  const navigate = useCallback((target: PageId, toolId?: string) => {
     setPage(target);
     setFocus(toolId ? { toolId } : null);
-  };
+    window.location.hash = buildHash(target, toolId);
+  }, []);
+
+  // Escucha cambios de hash (botón atrás/adelante del navegador)
+  useEffect(() => {
+    const onHashChange = () => {
+      const { page: newPage, toolId } = parseHash();
+      setPage(newPage);
+      setFocus(toolId ? { toolId } : null);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // 14.3.6 — Densidad (compact/comfy) aplicada al <html>. usePreference
+  // suscribe App al store de preferencias: al cambiarla en Ajustes el
+  // efecto se re-ejecuta y la densidad aplica al instante, sin recargar.
+  const density = usePreference<'compact' | 'comfy'>(PREF_DENSITY, 'comfy');
+  useEffect(() => {
+    document.documentElement.dataset.density = density;
+  }, [density]);
 
   // Al cargar, informa disponibilidad del host y escucha app.ready.
   useEffect(() => {
@@ -41,6 +109,8 @@ export default function App() {
       setReadyNotice('UI sin host nativo: abre la app de escritorio de PCSuite.');
       return;
     }
+
+    void precacheToolNames();
 
     const unsubscribe = bridge.on<AppReadyEvent>(EventIds.appReady, (payload) => {
       setReadyNotice(`PCSuite ${payload?.appVersion ?? ''} listo.`);
@@ -94,8 +164,14 @@ export default function App() {
 
   return (
     <>
-      <AppLayout page={page} onNavigate={navigate} readyNotice={readyNotice}>
-        {renderPage(page, focus, navigate)}
+      <AppLayout
+        page={page}
+        onNavigate={navigate}
+        readyNotice={readyNotice}
+        currentToolId={focus?.toolId}
+        currentToolName={focus?.toolId ? getToolName(page, focus.toolId) : undefined}
+      >
+        {renderPage(page, focus)}
       </AppLayout>
       <CommandPalette
         open={paletteOpen}
@@ -112,13 +188,10 @@ export default function App() {
 function renderPage(
   page: PageId,
   focus: { toolId: string } | null,
-  navigate: (page: PageId, toolId?: string) => void,
 ) {
   switch (page) {
     case 'tools':
       return <Tools focus={focus} />;
-    case 'clipboard':
-      return <Clipboard onNavigate={navigate} />;
     case 'devtools':
       return <DevTools />;
     case 'winget':
@@ -127,8 +200,12 @@ function renderPage(
       return <Wsl />;
     case 'clamav':
       return <Clamav />;
+    case 'security':
+      return <Security />;
     case 'cleaner':
       return <Cleaner />;
+    case 'plugins':
+      return <Plugins />;
     case 'settings':
       return <Settings />;
     case 'activity':
