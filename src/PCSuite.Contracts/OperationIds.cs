@@ -257,4 +257,10 @@ public static class OperationIds
 
     /// <summary>Crea la regla de firewall entrante (UAC puntual vía ElevationManager).</summary>
     public const string LocalShareFirewallRule = "localshare.firewallRule";
+
+    /// <summary>Pausa un envío en curso (payload: { transferId }).</summary>
+    public const string LocalSharePauseTransfer = "localshare.pauseTransfer";
+
+    /// <summary>Reanuda un envío pausado (payload: { transferId }).</summary>
+    public const string LocalShareResumeTransfer = "localshare.resumeTransfer";
 }

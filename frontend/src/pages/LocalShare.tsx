@@ -50,6 +50,7 @@ function statusColor(status: string): string {
   switch (status) {
     case 'completed': return 'var(--pcs-success)';
     case 'transferring': return 'var(--pcs-accent)';
+    case 'paused': return 'var(--pcs-warning)';
     case 'failed': return 'var(--pcs-danger)';
     case 'cancelled':
     case 'rejected': return 'var(--pcs-text-muted)';
@@ -169,6 +170,16 @@ export function LocalShare() {
   const cancelTransfer = async (transferId: string) => {
     try { await bridge.call(OperationIds.localShareCancelTransfer, { transferId }, READ_TIMEOUT); await refresh(); }
     catch { /* best-effort */ }
+  };
+
+  const pauseTransfer = async (transferId: string) => {
+    try { await bridge.call(OperationIds.localSharePauseTransfer, { transferId }, READ_TIMEOUT); await refresh(); }
+    catch (e) { setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo pausar.' }); }
+  };
+
+  const resumeTransfer = async (transferId: string) => {
+    try { await bridge.call(OperationIds.localShareResumeTransfer, { transferId }, READ_TIMEOUT); await refresh(); }
+    catch (e) { setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo reanudar.' }); }
   };
 
   // ------------------------------------------------------------------
@@ -479,16 +490,38 @@ export function LocalShare() {
                   </div>
                   <div className="mt-1 flex items-center justify-between text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                     <span>{formatBytes(t.transferredBytes)} / {formatBytes(t.totalBytes)}</span>
-                    {(t.status === 'transferring' || t.status === 'pendingApproval') && (
-                      <button
-                        type="button"
-                        onClick={() => void cancelTransfer(t.transferId)}
-                        className="cursor-pointer text-xs font-medium"
-                        style={{ color: 'var(--pcs-danger)' }}
-                      >
-                        Cancelar
-                      </button>
-                    )}
+                    <span className="flex items-center gap-3">
+                      {t.direction === 'sending' && t.status === 'transferring' && (
+                        <button
+                          type="button"
+                          onClick={() => void pauseTransfer(t.transferId)}
+                          className="cursor-pointer text-xs font-medium"
+                          style={{ color: 'var(--pcs-warning)' }}
+                        >
+                          Pausar
+                        </button>
+                      )}
+                      {t.direction === 'sending' && t.status === 'paused' && (
+                        <button
+                          type="button"
+                          onClick={() => void resumeTransfer(t.transferId)}
+                          className="cursor-pointer text-xs font-medium"
+                          style={{ color: 'var(--pcs-success)' }}
+                        >
+                          Reanudar
+                        </button>
+                      )}
+                      {(t.status === 'transferring' || t.status === 'pendingApproval' || t.status === 'paused') && (
+                        <button
+                          type="button"
+                          onClick={() => void cancelTransfer(t.transferId)}
+                          className="cursor-pointer text-xs font-medium"
+                          style={{ color: 'var(--pcs-danger)' }}
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </span>
                   </div>
                   {t.errorMessage && (
                     <p className="mt-1 text-xs" style={{ color: 'var(--pcs-danger)' }}>

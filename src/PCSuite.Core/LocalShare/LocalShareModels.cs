@@ -43,6 +43,9 @@ public enum TransferStatus
     /// <summary>Contenido completo, computando hash final (normalmente instantáneo).</summary>
     Verifying,
 
+    /// <summary>Envío pausado por el usuario (16.7.4): sin flujo hasta reanudar.</summary>
+    Paused,
+
     /// <summary>Terminada con éxito, archivos publicados.</summary>
     Completed,
 

@@ -108,6 +108,16 @@ public interface ILocalShareService
     /// <summary>Rechaza una solicitud entrante (el usuario pulsó Rechazar).</summary>
     Task RejectAsync(string transferId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Pausa un ENVÍO en curso (16.7.4): el flujo de chunks se congela hasta
+    /// ResumeTransferAsync o cancelación. Solo transferencias salientes en
+    /// estado Transferring.
+    /// </summary>
+    Task PauseTransferAsync(string transferId, CancellationToken cancellationToken = default);
+
+    /// <summary>Reanuda un envío pausado.</summary>
+    Task ResumeTransferAsync(string transferId, CancellationToken cancellationToken = default);
+
     // ------------------------------------------------------------------
     // Transferencias (comunes)
     // ------------------------------------------------------------------

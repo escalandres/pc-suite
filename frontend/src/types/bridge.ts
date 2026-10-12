@@ -102,6 +102,8 @@ export const OperationIds = {
   localShareRevoke: 'localshare.revoke',
   localShareFirewallStatus: 'localshare.firewallStatus',
   localShareFirewallRule: 'localshare.firewallRule',
+  localSharePauseTransfer: 'localshare.pauseTransfer',
+  localShareResumeTransfer: 'localshare.resumeTransfer',
 } as const;
 
 export const EventIds = {

@@ -366,3 +366,53 @@ public sealed class LocalShareFirewallRuleOperation(ILocalShareService service) 
         }));
     }
 }
+
+/// <summary>localshare.pauseTransfer — pausa un envío en curso (payload: { transferId }).</summary>
+public sealed class LocalSharePauseTransferOperation(ILocalShareService service) : IOperation
+{
+    public string Id => OperationIds.LocalSharePauseTransfer;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareTransferPayload payload) || payload is null)
+        {
+            return OperationResult.Fail("error", "El payload debe ser { transferId }.");
+        }
+
+        try
+        {
+            await service.PauseTransferAsync(payload.TransferId, ct).ConfigureAwait(false);
+            return OperationResult.Ok(BridgeJson.ToJson(new { paused = true }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return OperationResult.Fail("pause_failed", ex.Message);
+        }
+    }
+}
+
+/// <summary>localshare.resumeTransfer — reanuda un envío pausado (payload: { transferId }).</summary>
+public sealed class LocalShareResumeTransferOperation(ILocalShareService service) : IOperation
+{
+    public string Id => OperationIds.LocalShareResumeTransfer;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareTransferPayload payload) || payload is null)
+        {
+            return OperationResult.Fail("error", "El payload debe ser { transferId }.");
+        }
+
+        try
+        {
+            await service.ResumeTransferAsync(payload.TransferId, ct).ConfigureAwait(false);
+            return OperationResult.Ok(BridgeJson.ToJson(new { resumed = true }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return OperationResult.Fail("resume_failed", ex.Message);
+        }
+    }
+}

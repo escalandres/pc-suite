@@ -46,6 +46,12 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     /// </summary>
     private readonly HashSet<string> _claimedPartials = new(StringComparer.Ordinal);
 
+    /// <summary>CTS por transferencia saliente (16.7.4): cancelación REAL del envío.</summary>
+    private readonly Dictionary<string, CancellationTokenSource> _transferCts = new(StringComparer.Ordinal);
+
+    /// <summary>Transferencias salientes pausadas por el usuario (16.7.4).</summary>
+    private readonly HashSet<string> _pausedTransfers = new(StringComparer.Ordinal);
+
     // ------------------------------------------------------------------
     // Estado
     // ------------------------------------------------------------------
@@ -189,6 +195,15 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
             _pendingDecisions.Clear();
             _claimedPartials.Clear();
+            _pausedTransfers.Clear();
+
+            // Cancelar los envíos activos (16.7.4): desenlace único vía OCE.
+            // No se vacía el diccionario: la tarea en background hace el
+            // Remove+Dispose de su propio CTS en su finally.
+            foreach (var cts in _transferCts.Values.ToList())
+            {
+                try { cts.Cancel(); } catch (ObjectDisposedException) { /* carrera con finally */ }
+            }
         }
 
         _discovery?.Dispose();
@@ -536,6 +551,15 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             _transfers[transferId] = (transfer, items);
         }
 
+        // CTS por transferencia (16.7.4): cancelación REAL del envío — tanto
+        // desde el caller como desde CancelTransfer — con desenlace único.
+        // La tarea en background es la dueña: lo dispone en su finally.
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        lock (_lock)
+        {
+            _transferCts[transferId] = linkedCts;
+        }
+
         // Ejecutar la transferencia en background (fire-and-forget con
         // desenlace controlado: actualiza el estado de la transferencia).
         _ = Task.Run(async () =>
@@ -551,6 +575,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     _settings.DisplayName,
                     _settings.CertificateThumbprint ?? _certificateStore.Thumbprint,
                     _settings.MaxBandwidthBytesPerSecond,
+                    () => IsTransferPaused(transferId),
                     bytes =>
                     {
                         ProgressChanged?.Invoke(new TransferProgress
@@ -564,7 +589,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                             CurrentFile = items.FirstOrDefault(i => i.Status == TransferStatus.Transferring)?.RelativePath,
                         });
                     },
-                    ct).ConfigureAwait(false);
+                    linkedCts.Token).ConfigureAwait(false);
 
                 foreach (var item in items)
                 {
@@ -587,7 +612,18 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 _logger?.LogWarning(ex, "Transferencia {Id} falló: {Message}", transferId, ex.Message);
                 TransferFinished?.Invoke(transfer);
             }
-        }, ct);
+            finally
+            {
+                CancellationTokenSource? toDispose;
+                lock (_lock)
+                {
+                    _transferCts.Remove(transferId, out toDispose);
+                    _pausedTransfers.Remove(transferId);
+                }
+
+                toDispose?.Dispose();
+            }
+        }, linkedCts.Token);
 
         return Task.FromResult(transfer);
     }
@@ -657,6 +693,8 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
     public bool CancelTransfer(string transferId)
     {
+        CancellationTokenSource? cts = null;
+
         lock (_lock)
         {
             if (!_transfers.TryGetValue(transferId, out var entry))
@@ -672,10 +710,78 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 return false;
             }
 
-            entry.Transfer.Status = TransferStatus.Cancelled;
-            entry.Transfer.CompletedAt = DateTimeOffset.UtcNow;
-            TransferFinished?.Invoke(entry.Transfer);
-            return true;
+            if (entry.Transfer.Direction == TransferDirection.Sending
+                && _transferCts.TryGetValue(transferId, out cts))
+            {
+                // Envío activo: cancelación REAL vía CTS. La transición de
+                // estado y el ÚNICO evento TransferFinished los hace la tarea
+                // en background al recibir la OCE (antes solo se cambiaba el
+                // estado y el flujo seguía hasta el final, sobrescribiendo
+                // Cancelled con Completed).
+            }
+            else
+            {
+                // Entrante (o saliente sin CTS, p. ej. pendiente de aprobación
+                // cuya tarea ya terminó): transición directa. El handler del
+                // receptor detecta el estado en el próximo chunk y para limpio.
+                entry.Transfer.Status = TransferStatus.Cancelled;
+                entry.Transfer.CompletedAt = DateTimeOffset.UtcNow;
+                _pausedTransfers.Remove(transferId);
+                TransferFinished?.Invoke(entry.Transfer);
+            }
+        }
+
+        cts?.Cancel();
+        return true;
+    }
+
+    public Task PauseTransferAsync(string transferId, CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            if (!_transfers.TryGetValue(transferId, out var entry))
+            {
+                throw new InvalidOperationException($"Transferencia {transferId} no encontrada.");
+            }
+
+            if (entry.Transfer.Direction != TransferDirection.Sending)
+            {
+                throw new InvalidOperationException("Solo se pueden pausar envíos.");
+            }
+
+            if (entry.Transfer.Status is not (TransferStatus.Transferring or TransferStatus.Paused))
+            {
+                throw new InvalidOperationException("Solo se puede pausar una transferencia en curso.");
+            }
+
+            _pausedTransfers.Add(transferId);
+            entry.Transfer.Status = TransferStatus.Paused;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task ResumeTransferAsync(string transferId, CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            if (_pausedTransfers.Remove(transferId)
+                && _transfers.TryGetValue(transferId, out var entry)
+                && entry.Transfer.Status == TransferStatus.Paused)
+            {
+                entry.Transfer.Status = TransferStatus.Transferring;
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>¿El envío está pausado? Lo consulta el bucle de chunks del emisor.</summary>
+    private bool IsTransferPaused(string transferId)
+    {
+        lock (_lock)
+        {
+            return _pausedTransfers.Contains(transferId);
         }
     }
 
@@ -688,6 +794,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     is TransferStatus.PendingApproval
                     or TransferStatus.Approved
                     or TransferStatus.Transferring
+                    or TransferStatus.Paused
                     or TransferStatus.Verifying)
                 .ToList();
             _transfers.Clear();
@@ -996,6 +1103,21 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 var chunkCount = 0;
                 while (true)
                 {
+                    // Cancelación entrante (16.7.4): CancelTransfer ya marcó el
+                    // estado y disparó el evento; el handler para limpio y el
+                    // prefijo queda como estado de reanudación.
+                    if (transfer.Status == TransferStatus.Cancelled)
+                    {
+                        if (weClaimed)
+                        {
+                            partialEntry!.Bytes = itemBytes;
+                            ReleasePartialClaim(partialKey);
+                            _partials.Save();
+                        }
+
+                        return;
+                    }
+
                     var (dataType, dataPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
 
                     if (dataType == ShareProtocol.MsgFileEnd)

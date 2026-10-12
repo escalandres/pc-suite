@@ -42,6 +42,7 @@ public sealed class TransferClient
         string selfDisplayName,
         string selfThumbprint,
         long maxBytesPerSecond,
+        Func<bool>? isPaused,
         Action<long> onProgress,
         CancellationToken ct = default)
     {
@@ -180,6 +181,16 @@ public sealed class TransferClient
             int bytesRead;
             while ((bytesRead = await fileStream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
             {
+                // Pausa del usuario (16.7.4): congelar el flujo hasta reanudar
+                // o cancelar. El Task.Delay responde a la cancelación con OCE.
+                if (isPaused is not null)
+                {
+                    while (isPaused())
+                    {
+                        await Task.Delay(200, ct).ConfigureAwait(false);
+                    }
+                }
+
                 await ShareProtocol.WriteDataAsync(
                     sslStream,
                     buffer.AsMemory(0, bytesRead),

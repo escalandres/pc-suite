@@ -256,6 +256,8 @@ public partial class MainForm : Form
                 new LocalShareRevokeOperation(localShareService),
                 new LocalShareFirewallStatusOperation(localShareService),
                 new LocalShareFirewallRuleOperation(localShareService),
+                new LocalSharePauseTransferOperation(localShareService),
+                new LocalShareResumeTransferOperation(localShareService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

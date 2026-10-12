@@ -61,8 +61,12 @@ public class PartialsStoreTests : IDisposable
         store.Set("peer-a", "x.txt", new PartialsStore.PartialEntry { TempPath = "a", Bytes = 1 });
         store.Set("peer-b", "x.txt", new PartialsStore.PartialEntry { TempPath = "b", Bytes = 2 });
 
-        Assert.Equal("a", store.Get("peer-a", "x.txt").TempPath);
-        Assert.Equal("b", store.Get("peer-b", "x.txt").TempPath);
+        var entryA = store.Get("peer-a", "x.txt");
+        var entryB = store.Get("peer-b", "x.txt");
+        Assert.NotNull(entryA);
+        Assert.NotNull(entryB);
+        Assert.Equal("a", entryA.TempPath);
+        Assert.Equal("b", entryB.TempPath);
     }
 
     [Fact]

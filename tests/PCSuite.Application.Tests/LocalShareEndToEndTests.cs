@@ -424,6 +424,105 @@ public class LocalShareEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task PauseAndResume_FreezesThenCompletes()
+    {
+        var aSettings = _serviceA.Settings;
+        aSettings.MaxBandwidthBytesPerSecond = 32 * 1024;
+        await _serviceA.UpdateSettingsAsync(aSettings);
+
+        var bSettings = _serviceB.Settings;
+        bSettings.AutoAcceptFromPaired = true;
+        await _serviceB.UpdateSettingsAsync(bSettings);
+
+        await StartAndPairAsync();
+
+        var file = Path.Combine(_dirA, "pausable.bin");
+        var payload = new byte[128 * 1024];
+        new Random(7).NextBytes(payload);
+        File.WriteAllBytes(file, payload);
+
+        var aFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => aFinished.TrySetResult(t);
+
+        var transfer = await _serviceA.SendAsync("device-b", [file]);
+
+        // Esperar a que el envío esté EN CURSO (aceptación + primer chunk).
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (transfer.Status != TransferStatus.Transferring && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.Equal(TransferStatus.Transferring, transfer.Status);
+
+        await _serviceA.PauseTransferAsync(transfer.TransferId);
+        Assert.Equal(TransferStatus.Paused, transfer.Status);
+
+        // Progreso congelado: dos muestras separadas por 1s son idénticas.
+        var sample1 = _serviceA.GetTransfers()
+            .First(t => t.TransferId == transfer.TransferId).TransferredBytes;
+        await Task.Delay(1000);
+        var sample2 = _serviceA.GetTransfers()
+            .First(t => t.TransferId == transfer.TransferId).TransferredBytes;
+
+        Assert.True(sample1 > 0, "Debió haber enviado algo antes de la pausa.");
+        Assert.Equal(sample1, sample2);
+
+        // Reanudar: termina con éxito y el archivo llega íntegro.
+        await _serviceA.ResumeTransferAsync(transfer.TransferId);
+        var result = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(TransferStatus.Completed, result.Status);
+        var received = Path.Combine(_dirB, "received", "pausable.bin");
+        Assert.Equal(payload, File.ReadAllBytes(received));
+    }
+
+    [Fact]
+    public async Task CancelOutgoingTransfer_StopsForReal()
+    {
+        // Regresión del bug "cancelación falsa": antes, CancelTransfer solo
+        // cambiaba el estado; el flujo seguía y al terminar el success
+        // sobrescribía Cancelled con Completed.
+        var aSettings = _serviceA.Settings;
+        aSettings.MaxBandwidthBytesPerSecond = 32 * 1024;
+        await _serviceA.UpdateSettingsAsync(aSettings);
+
+        var bSettings = _serviceB.Settings;
+        bSettings.AutoAcceptFromPaired = true;
+        await _serviceB.UpdateSettingsAsync(bSettings);
+
+        await StartAndPairAsync();
+
+        var file = Path.Combine(_dirA, "cancelable.bin");
+        File.WriteAllBytes(file, new byte[256 * 1024]);
+
+        var aFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => aFinished.TrySetResult(t);
+
+        var transfer = await _serviceA.SendAsync("device-b", [file]);
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (transfer.Status != TransferStatus.Transferring && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.True(_serviceA.CancelTransfer(transfer.TransferId));
+
+        var result = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(TransferStatus.Cancelled, result.Status);
+
+        // Un segundo después SIGUE Cancelled (el ghost-Completed no vuelve).
+        await Task.Delay(1000);
+        Assert.Equal(TransferStatus.Cancelled, transfer.Status);
+
+        // Y el archivo nunca se publicó en B.
+        Assert.False(File.Exists(Path.Combine(_dirB, "received", "cancelable.bin")));
+    }
+
+    [Fact]
     public async Task MultiItemTransfer_AllFilesPublishedInOrder()
     {
         // Regresión del bug de la "lectura extra": un ReadFrameAsync de más
