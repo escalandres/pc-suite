@@ -118,9 +118,21 @@ para auto-asignar.
 - Si ya existía un archivo con el mismo nombre, el nuevo se guarda como
   `nombre (1).ext`, `nombre (2).ext`… — **nunca se sobreescribe en
   silencio**.
-- Una transferencia cancelada, rechazada o fallida no deja archivos
-  parciales visibles: los `*.part` huérfanos se limpian en el próximo
-  arranque del servicio.
+
+### Transferencias interrumpidas: ahora se reanudan
+
+- Si una transferencia se corta (caída de red, cancelación, suspensión
+  del equipo), el prefijo ya recibido **se conserva como estado de
+  reanudación** (`.part` + manifiesto interno, nunca visible en tu
+  carpeta).
+- Al reenviar el mismo archivo desde el mismo equipo, la transferencia
+  **continúa desde donde se cortó** en vez de empezar de cero. El
+  SHA-256 se verifica sobre el archivo completo, así que si el archivo
+  cambió entre intentos, el receptor lo detecta y empieza limpio.
+- Los estados de reanudación caducan a los **7 días** y se limpian
+  automáticamente al arrancar el servicio.
+- Un envío también se puede **pausar** (botón Pausar) y reanudar luego
+  sin perder el progreso.
 
 ---
 
