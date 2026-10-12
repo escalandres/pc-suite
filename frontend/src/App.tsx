@@ -11,6 +11,7 @@ import { Cleaner } from './pages/Cleaner';
 import { Security } from './pages/Security';
 import { Settings } from './pages/Settings';
 import { Plugins } from './pages/Plugins';
+import { LocalShare } from './pages/LocalShare';
 import { ActivityPage } from './pages/Activity';
 import { Toasts } from './components/Toasts';
 import { bridge } from './services/pcsuiteBridge';
@@ -35,7 +36,7 @@ function parseHash(): { page: PageId; toolId?: string } {
   const toolId = parts[1];
   // Validar que la página existe
   const validPages: PageId[] = [
-    'home', 'tools', 'cleaner', 'security',
+    'home', 'tools', 'localshare', 'cleaner', 'security',
     'devtools', 'plugins', 'winget', 'wsl', 'clamav', 'activity', 'settings'
   ];
   if (!validPages.includes(page)) return { page: 'home' };
@@ -192,6 +193,8 @@ function renderPage(
   switch (page) {
     case 'tools':
       return <Tools focus={focus} />;
+    case 'localshare':
+      return <LocalShare />;
     case 'devtools':
       return <DevTools />;
     case 'winget':

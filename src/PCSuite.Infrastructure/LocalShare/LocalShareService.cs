@@ -231,9 +231,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             throw new InvalidOperationException("El servicio Local Share no está activo.");
         }
 
+        SharedDevice device;
         lock (_lock)
         {
-            if (!_devices.TryGetValue(deviceId, out var device) || !device.IsPaired)
+            if (!_devices.TryGetValue(deviceId, out device!) || !device.IsPaired)
             {
                 throw new InvalidOperationException($"El dispositivo {deviceId} no está emparejado.");
             }
@@ -248,13 +249,12 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         {
             if (File.Exists(localPath))
             {
-                var relativePath = Path.GetFileName(localPath);
                 var size = new FileInfo(localPath).Length;
                 items.Add(new ShareTransferItem
                 {
                     ItemId = Guid.NewGuid().ToString("D"),
                     TransferId = transferId,
-                    RelativePath = relativePath,
+                    RelativePath = Path.GetFileName(localPath),
                     ExpectedSize = size,
                     LocalSourcePath = localPath,
                 });
@@ -265,7 +265,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 var rootName = Path.GetFileName(localPath.TrimEnd(Path.DirectorySeparatorChar));
                 foreach (var file in Directory.EnumerateFiles(localPath, "*", SearchOption.AllDirectories))
                 {
-                    var relativePath = Path.Combine(rootName, file[(localPath.Length + 1)..]);
+                    var relativePath = Path.Combine(rootName, file[(localPath.Length + 1)..].Replace('\\', '/'));
                     var size = new FileInfo(file).Length;
                     items.Add(new ShareTransferItem
                     {
@@ -280,12 +280,17 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             }
         }
 
+        if (items.Count == 0)
+        {
+            throw new InvalidOperationException("No se encontraron archivos válidos para enviar.");
+        }
+
         var transfer = new ShareTransfer
         {
             TransferId = transferId,
             Direction = TransferDirection.Sending,
             PeerDeviceId = deviceId,
-            PeerDisplayName = GetDeviceName(deviceId),
+            PeerDisplayName = device.DisplayName,
             TotalBytes = totalBytes,
             ItemCount = items.Count,
             Status = TransferStatus.PendingApproval,
@@ -296,7 +301,57 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             _transfers[transferId] = (transfer, items);
         }
 
-        // TODO 16.2: conectar al receptor y enviar la solicitud
+        // Ejecutar la transferencia en background (fire-and-forget con
+        // desenlace controlado: actualiza el estado de la transferencia).
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var client = new TransferClient(_certificateStore.Certificate, _logger);
+                await client.SendFilesAsync(
+                    device,
+                    transfer,
+                    items,
+                    _settings.DeviceId,
+                    _settings.DisplayName,
+                    _settings.CertificateThumbprint ?? _certificateStore.Thumbprint,
+                    bytes =>
+                    {
+                        ProgressChanged?.Invoke(new TransferProgress
+                        {
+                            TransferId = transferId,
+                            TransferredBytes = bytes,
+                            TotalBytes = totalBytes,
+                            ItemsCompleted = items.Count(i => i.Status == TransferStatus.Verifying),
+                            ItemsTotal = items.Count,
+                            BytesPerSecond = 0,
+                            CurrentFile = items.FirstOrDefault(i => i.Status == TransferStatus.Transferring)?.RelativePath,
+                        });
+                    },
+                    ct).ConfigureAwait(false);
+
+                foreach (var item in items)
+                {
+                    item.Status = TransferStatus.Completed;
+                }
+
+                TransferFinished?.Invoke(transfer);
+            }
+            catch (OperationCanceledException)
+            {
+                transfer.Status = TransferStatus.Cancelled;
+                transfer.CompletedAt = DateTimeOffset.UtcNow;
+                TransferFinished?.Invoke(transfer);
+            }
+            catch (Exception ex)
+            {
+                transfer.Status = TransferStatus.Failed;
+                transfer.ErrorMessage = ex.Message;
+                transfer.CompletedAt = DateTimeOffset.UtcNow;
+                _logger?.LogWarning(ex, "Transferencia {Id} falló: {Message}", transferId, ex.Message);
+                TransferFinished?.Invoke(transfer);
+            }
+        }, ct);
 
         return Task.FromResult(transfer);
     }
@@ -309,10 +364,14 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     {
         lock (_lock)
         {
+            if (_pendingDecisions.TryGetValue(transferId, out var tcs))
+            {
+                tcs.TrySetResult(true);
+            }
+
             if (_transfers.TryGetValue(transferId, out var entry))
             {
                 entry.Transfer.Status = TransferStatus.Approved;
-                // TODO 16.2: iniciar recepción en el TlsTransferServer
             }
         }
 
@@ -323,11 +382,15 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     {
         lock (_lock)
         {
+            if (_pendingDecisions.TryGetValue(transferId, out var tcs))
+            {
+                tcs.TrySetResult(false);
+            }
+
             if (_transfers.TryGetValue(transferId, out var entry))
             {
                 entry.Transfer.Status = TransferStatus.Rejected;
                 entry.Transfer.CompletedAt = DateTimeOffset.UtcNow;
-                TransferFinished?.Invoke(entry.Transfer);
             }
         }
 
@@ -406,11 +469,243 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     // Handlers internos
     // ------------------------------------------------------------------
 
-    private void OnPeerConnected(SslStream stream, string remoteIp)
+    /// <summary>
+    /// Transferencias entrantes esperando decisión del usuario.
+    /// Key = transferId, Value = TaskCompletionSource (true = aceptar).
+    /// </summary>
+    private readonly Dictionary<string, TaskCompletionSource<bool>> _pendingDecisions = new(StringComparer.Ordinal);
+
+    private async void OnPeerConnected(SslStream stream, string remoteIp)
     {
-        // TODO 16.2: leer el protocolo del stream, crear transferencia
-        // entrante, disparar IncomingRequest, y procesar el contenido.
-        _logger?.LogInformation("Peer conectado desde {Ip}", remoteIp);
+        try
+        {
+            await HandleIncomingConnectionAsync(stream, remoteIp).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Error procesando conexión entrante de {Ip}", remoteIp);
+        }
+    }
+
+    private async Task HandleIncomingConnectionAsync(SslStream stream, string remoteIp)
+    {
+        // 1. HELLO del emisor
+        var (helloType, helloPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
+        if (helloType != ShareProtocol.MsgHello)
+        {
+            _logger?.LogWarning("Se esperaba HELLO, llegó {Type}", helloType);
+            return;
+        }
+
+        var hello = ShareProtocol.Deserialize<ShareProtocol.HelloPayload>(helloPayload);
+        if (hello is null)
+        {
+            return;
+        }
+
+        // 2. HELLO_ACK con nuestra identidad
+        await ShareProtocol.WriteControlAsync(
+            stream,
+            ShareProtocol.MsgHelloAck,
+            new ShareProtocol.HelloPayload(
+                _settings.DeviceId,
+                _settings.DisplayName,
+                _settings.CertificateThumbprint ?? _certificateStore.Thumbprint))
+            .ConfigureAwait(false);
+
+        // 3. TRANSFER_REQUEST con metadatos
+        var (reqType, reqPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
+        if (reqType != ShareProtocol.MsgTransferRequest)
+        {
+            _logger?.LogWarning("Se esperaba TRANSFER_REQUEST, llegó {Type}", reqType);
+            return;
+        }
+
+        var request = ShareProtocol.Deserialize<ShareProtocol.TransferRequestPayload>(reqPayload);
+        if (request is null)
+        {
+            return;
+        }
+
+        // 4. Crear la transferencia entrante en estado PendingApproval
+        var transfer = new ShareTransfer
+        {
+            TransferId = request.TransferId,
+            Direction = TransferDirection.Receiving,
+            PeerDeviceId = hello.DeviceId,
+            PeerDisplayName = hello.DisplayName,
+            TotalBytes = request.Items.Sum(i => i.Size),
+            ItemCount = request.Items.Count,
+            Status = TransferStatus.PendingApproval,
+            DestinationSummary = _settings.DownloadDirectory,
+        };
+
+        var items = request.Items.Select(i => new ShareTransferItem
+        {
+            ItemId = i.ItemId,
+            TransferId = transfer.TransferId,
+            RelativePath = i.RelativePath,
+            ExpectedSize = i.Size,
+            ExpectedHash = i.Sha256,
+        }).ToList();
+
+        lock (_lock)
+        {
+            _transfers[transfer.TransferId] = (transfer, items);
+        }
+
+        // 5. Notificar a la UI que hay una solicitud entrante
+        IncomingRequest?.Invoke(transfer, items);
+
+        // 6. Esperar decisión del usuario (AcceptAsync/RejectAsync resuelven el TCS)
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lock)
+        {
+            _pendingDecisions[transfer.TransferId] = tcs;
+        }
+
+        var accepted = await tcs.Task.ConfigureAwait(false);
+        _pendingDecisions.Remove(transfer.TransferId, out _);
+
+        if (!accepted)
+        {
+            await ShareProtocol.WriteControlAsync(
+                stream,
+                ShareProtocol.MsgTransferReject,
+                new { transferId = transfer.TransferId })
+                .ConfigureAwait(false);
+            transfer.Status = TransferStatus.Rejected;
+            transfer.CompletedAt = DateTimeOffset.UtcNow;
+            TransferFinished?.Invoke(transfer);
+            return;
+        }
+
+        // 7. Enviar ACCEPT
+        await ShareProtocol.WriteControlAsync(
+            stream,
+            ShareProtocol.MsgTransferAccept,
+            new { transferId = transfer.TransferId })
+            .ConfigureAwait(false);
+
+        transfer.Status = TransferStatus.Transferring;
+        transfer.StartedAt = DateTimeOffset.UtcNow;
+
+        // 8. Recibir cada archivo en streaming
+        var receivedBytes = 0L;
+        foreach (var item in items)
+        {
+            var (startType, startPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
+            if (startType == ShareProtocol.MsgTransferComplete)
+            {
+                break; // El emisor terminó
+            }
+
+            if (startType == ShareProtocol.MsgTransferCancel)
+            {
+                transfer.Status = TransferStatus.Cancelled;
+                transfer.CompletedAt = DateTimeOffset.UtcNow;
+                TransferFinished?.Invoke(transfer);
+                return;
+            }
+
+            if (startType != ShareProtocol.MsgFileStart)
+            {
+                _logger?.LogWarning("Se esperaba FILE_START, llegó {Type}", startType);
+                transfer.Status = TransferStatus.Failed;
+                transfer.ErrorMessage = "Protocolo inválido durante la recepción.";
+                TransferFinished?.Invoke(transfer);
+                return;
+            }
+
+            var fileStart = ShareProtocol.Deserialize<ShareProtocol.FileStartPayload>(startPayload);
+            if (fileStart is null)
+            {
+                continue;
+            }
+
+            // Crear archivo temporal
+            var tempPath = _fileWriter!.CreateTempFile();
+            item.TempPath = tempPath;
+            item.Status = TransferStatus.Transferring;
+
+            // Recibir chunks de FILE_DATA
+            using (var fileStream = File.OpenWrite(tempPath))
+            {
+                var itemBytes = 0L;
+                while (true)
+                {
+                    var (dataType, dataPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
+
+                    if (dataType == ShareProtocol.MsgFileEnd)
+                    {
+                        break;
+                    }
+
+                    if (dataType == ShareProtocol.MsgTransferCancel)
+                    {
+                        _fileWriter.DiscardTemp(tempPath);
+                        transfer.Status = TransferStatus.Cancelled;
+                        transfer.CompletedAt = DateTimeOffset.UtcNow;
+                        TransferFinished?.Invoke(transfer);
+                        return;
+                    }
+
+                    if (dataType != ShareProtocol.MsgFileData)
+                    {
+                        _fileWriter.DiscardTemp(tempPath);
+                        transfer.Status = TransferStatus.Failed;
+                        transfer.ErrorMessage = "Protocolo inválido durante datos de archivo.";
+                        TransferFinished?.Invoke(transfer);
+                        return;
+                    }
+
+                    await fileStream.WriteAsync(dataPayload).ConfigureAwait(false);
+                    itemBytes += dataPayload.Length;
+                    receivedBytes += dataPayload.Length;
+                    item.TransferredBytes = itemBytes;
+                    transfer.TransferredBytes = receivedBytes;
+
+                    ProgressChanged?.Invoke(new TransferProgress
+                    {
+                        TransferId = transfer.TransferId,
+                        TransferredBytes = receivedBytes,
+                        TotalBytes = transfer.TotalBytes,
+                        ItemsCompleted = items.Count(i => i.Status == TransferStatus.Verifying),
+                        ItemsTotal = items.Count,
+                        BytesPerSecond = 0,
+                        CurrentFile = item.RelativePath,
+                    });
+                }
+            }
+
+            // Verificar y publicar
+            var fileEnd = ShareProtocol.Deserialize<ShareProtocol.FileEndPayload>(
+                (await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false)).Payload);
+            _ = fileEnd; // hash ya viene en item.ExpectedHash
+
+            try
+            {
+                item.FinalPath = _fileWriter.Publish(
+                    tempPath,
+                    item.RelativePath,
+                    item.ExpectedSize,
+                    item.ExpectedHash);
+                item.Status = TransferStatus.Completed;
+            }
+            catch (Exception ex)
+            {
+                _fileWriter.DiscardTemp(tempPath);
+                item.Status = TransferStatus.Failed;
+                _logger?.LogWarning(ex, "Fallo al publicar {File}: {Message}", item.RelativePath, ex.Message);
+            }
+        }
+
+        transfer.Status = TransferStatus.Completed;
+        transfer.CompletedAt = DateTimeOffset.UtcNow;
+        TransferFinished?.Invoke(transfer);
+        _logger?.LogInformation(
+            "Transferencia entrante {Id} completada: {Bytes} bytes",
+            transfer.TransferId, receivedBytes);
     }
 
     private string GetDeviceName(string deviceId)

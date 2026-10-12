@@ -181,6 +181,11 @@ public partial class MainForm : Form
         // y sin ninguna acción de modificación.
         var securityService = new SecurityService();
 
+        // Local Share (Task 016): servicio de transferencia de archivos en LAN.
+        var localShareService = new PCSuite.Infrastructure.LocalShare.LocalShareService(
+            PCSuitePaths.DataDirectory,
+            _loggerFactory.CreateLogger<PCSuite.Infrastructure.LocalShare.LocalShareService>());
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
@@ -233,6 +238,19 @@ public partial class MainForm : Form
                 new ExplorerOpenPathOperation(),
                 new ExplorerOpenUrlOperation(),
                 new BlazorToggleOperation(ToggleBlazor),
+                new LocalShareStatusOperation(localShareService),
+                new LocalShareStartOperation(localShareService),
+                new LocalShareStopOperation(localShareService),
+                new LocalShareDevicesOperation(localShareService),
+                new LocalSharePairOperation(localShareService),
+                new LocalShareSendOperation(localShareService),
+                new LocalShareAcceptOperation(localShareService),
+                new LocalShareRejectOperation(localShareService),
+                new LocalShareTransfersOperation(localShareService),
+                new LocalShareCancelTransferOperation(localShareService),
+                new LocalShareConfigOperation(localShareService),
+                new LocalShareClearHistoryOperation(localShareService),
+                new LocalShareRevokeOperation(localShareService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

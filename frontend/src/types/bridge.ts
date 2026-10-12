@@ -87,6 +87,19 @@ export const OperationIds = {
   jobGet: 'job.get',
   jobCancel: 'job.cancel',
   blazorToggle: 'blazor.toggle',
+  localShareStatus: 'localshare.status',
+  localShareStart: 'localshare.start',
+  localShareStop: 'localshare.stop',
+  localShareDevices: 'localshare.devices',
+  localSharePair: 'localshare.pair',
+  localShareSend: 'localshare.send',
+  localShareAccept: 'localshare.accept',
+  localShareReject: 'localshare.reject',
+  localShareTransfers: 'localshare.transfers',
+  localShareCancelTransfer: 'localshare.cancelTransfer',
+  localShareConfig: 'localshare.config',
+  localShareClearHistory: 'localshare.clearHistory',
+  localShareRevoke: 'localshare.revoke',
 } as const;
 
 export const EventIds = {
@@ -94,6 +107,10 @@ export const EventIds = {
   clamavFreshclamProgress: 'clamav.freshclam.progress',
   clamavScanProgress: 'clamav.scan.progress',
   jobEvent: 'job.event',
+  localShareDeviceChanged: 'localshare.device-changed',
+  localShareIncomingRequest: 'localshare.incoming-request',
+  localShareTransferProgress: 'localshare.transfer-progress',
+  localShareTransferFinished: 'localshare.transfer-finished',
 } as const;
 
 /* =====================================================================
@@ -343,6 +360,115 @@ export interface JobSnapshot {
 /** Resultado de job.cancel. */
 export interface JobCancelResult {
   cancelled: boolean;
+}
+
+/* =====================================================================
+   Local Share types (Task 016)
+   ===================================================================== */
+
+export interface LocalShareStatusResult {
+  status: 'stopped' | 'starting' | 'running' | 'error';
+  port: number;
+  displayName?: string | null;
+  discoveryEnabled: boolean;
+  downloadDirectory?: string | null;
+  error?: string | null;
+}
+
+export interface SharedDeviceResult {
+  deviceId: string;
+  displayName: string;
+  trust: 'unknown' | 'paired' | 'revoked';
+  address?: string | null;
+  port: number;
+  lastSeenAt?: string | null;
+}
+
+export interface SharedDeviceCollectionResult {
+  devices: SharedDeviceResult[];
+}
+
+export interface LocalSharePairResult {
+  deviceId: string;
+  displayName: string;
+  pin: string;
+  pendingConfirmation: boolean;
+}
+
+export interface LocalShareSendResult {
+  transferId: string;
+}
+
+export interface ShareTransferItemResult {
+  itemId: string;
+  relativePath: string;
+  expectedSize: number;
+  expectedHash?: string | null;
+  status: string;
+  transferredBytes: number;
+}
+
+export interface ShareTransferResult {
+  transferId: string;
+  direction: 'sending' | 'receiving';
+  peerDisplayName: string;
+  status: string;
+  createdAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  totalBytes: number;
+  transferredBytes: number;
+  itemCount: number;
+  destinationSummary?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  items: ShareTransferItemResult[];
+}
+
+export interface ShareTransferCollectionResult {
+  transfers: ShareTransferResult[];
+}
+
+export interface LocalShareConfigResult {
+  displayName: string;
+  downloadDirectory: string;
+  port: number;
+  discoveryEnabled: boolean;
+  autoAcceptFromPaired: boolean;
+  maxTransferSizeBytes: number;
+}
+
+export interface LocalShareTransferProgressPayload {
+  transferId: string;
+  transferredBytes: number;
+  totalBytes: number;
+  bytesPerSecond: number;
+  itemsCompleted: number;
+  itemsTotal: number;
+  currentFile?: string | null;
+}
+
+export interface LocalShareIncomingRequestPayload {
+  transferId: string;
+  peerDisplayName: string;
+  itemCount: number;
+  totalBytes: number;
+  items: ShareTransferItemResult[];
+}
+
+export interface LocalShareTransferFinishedPayload {
+  transferId: string;
+  status: string;
+  errorMessage?: string | null;
+  totalBytes: number;
+}
+
+export interface LocalShareDeviceChangedPayload {
+  deviceId: string;
+  displayName: string;
+  trust: string;
+  address?: string | null;
+  port: number;
 }
 
 /** Resultado de clamav.quickScan / clamav.fullScan / clamav.customScan. */
