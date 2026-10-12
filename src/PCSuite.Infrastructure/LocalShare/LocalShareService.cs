@@ -6,9 +6,13 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using PCSuite.Contracts;
+using PCSuite.Core.Elevation;
 using PCSuite.Core.Jobs;
 using PCSuite.Core.LocalShare;
+using PCSuite.Core.Processes;
 using PCSuite.Infrastructure;
+using PCSuite.Infrastructure.Processes;
 
 namespace PCSuite.Infrastructure.LocalShare;
 
@@ -31,6 +35,8 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     private readonly Dictionary<string, (ShareTransfer Transfer, List<ShareTransferItem> Items)> _transfers = new(StringComparer.Ordinal);
     private DiscoveryService? _discovery;
     private readonly Dictionary<string, TaskCompletionSource<bool>> _pendingDecisions = new(StringComparer.Ordinal);
+    private readonly IElevationManager? _elevation;
+    private readonly IProcessRunner _processRunner;
 
     // ------------------------------------------------------------------
     // Estado
@@ -55,9 +61,15 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     // Constructor
     // ------------------------------------------------------------------
 
-    public LocalShareService(string dataDirectory, ILogger? logger = null)
+    public LocalShareService(
+        string dataDirectory,
+        ILogger? logger = null,
+        IElevationManager? elevation = null,
+        IProcessRunner? processRunner = null)
     {
         _logger = logger;
+        _elevation = elevation;
+        _processRunner = processRunner ?? new ProcessRunner();
         var localShareDir = Path.Combine(dataDirectory, "LocalShare");
         Directory.CreateDirectory(localShareDir);
         _certificateStore = new CertificateStore(localShareDir);
@@ -334,6 +346,44 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             _server?.TrustedThumbprints = GetTrustedThumbprints();
             DeviceChanged?.Invoke(device);
             return device;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Firewall
+    // ------------------------------------------------------------------
+
+    public Task<LocalShareFirewallDiagnostic> GetFirewallDiagnosticAsync(CancellationToken ct = default)
+    {
+        // Solo lectura: netsh show rule no requiere elevación.
+        return LocalShareFirewall.DiagnoseAsync(_processRunner, EffectivePort, ct);
+    }
+
+    public async Task AddFirewallRuleAsync(CancellationToken ct = default)
+    {
+        if (_elevation is null)
+        {
+            throw new InvalidOperationException(
+                "La gestión de firewall no está disponible en este contexto.");
+        }
+
+        // El puerto es lo único del payload; el proceso elevado lo revalida.
+        var payload = JsonSerializer.SerializeToElement(
+            new LocalShareFirewall.FirewallRulePayload { Port = EffectivePort },
+            LocalShareJson.Options);
+
+        var elevated = await _elevation.RunElevatedAsync(
+            new ElevatedOperation
+            {
+                OperationId = ElevatedOperationIds.LocalShareFirewallRule,
+                Payload = payload,
+            },
+            ct).ConfigureAwait(false);
+
+        if (!elevated.Success)
+        {
+            throw new InvalidOperationException(
+                elevated.ErrorMessage ?? "No se pudo crear la regla de firewall.");
         }
     }
 

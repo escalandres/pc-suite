@@ -34,6 +34,12 @@ public static class ElevatedOperationIds
     // elevan. Nunca un shell.
     public const string ClamavUpdateDefinitions = "elevated.clamav.updateDefinitions";
 
+    // Regla de firewall de Local Share (Task 016.6): la ÚNICA mutación de
+    // firewall. El payload solo aporta el puerto, que se REVALIDA (entero
+    // 1-65535); el nombre de regla y la ruta del programa son fijos y se
+    // derivan del propio helper (jamás del payload). Nunca un shell.
+    public const string LocalShareFirewallRule = "elevated.localshare.firewallRule";
+
     /// <summary>
     /// IDs permitidos. Añadir un ID aquí solo habilita poder registrarlo;
     /// no registra nada por sí mismo.
@@ -47,5 +53,6 @@ public static class ElevatedOperationIds
         WingetUninstall,
         WslUpdate,
         ClamavUpdateDefinitions,
+        LocalShareFirewallRule,
     };
 }

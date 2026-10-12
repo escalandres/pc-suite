@@ -100,6 +100,8 @@ export const OperationIds = {
   localShareConfig: 'localshare.config',
   localShareClearHistory: 'localshare.clearHistory',
   localShareRevoke: 'localshare.revoke',
+  localShareFirewallStatus: 'localshare.firewallStatus',
+  localShareFirewallRule: 'localshare.firewallRule',
 } as const;
 
 export const EventIds = {
@@ -469,6 +471,19 @@ export interface LocalShareDeviceChangedPayload {
   trust: string;
   address?: string | null;
   port: number;
+}
+
+/** Resultado de localshare.firewallStatus (solo lectura). */
+export interface LocalShareFirewallStatusResult {
+  ruleExists: boolean | null;
+  portMatches: boolean;
+  port: number;
+}
+
+/** Resultado de localshare.firewallRule (tras UAC puntual). */
+export interface LocalShareFirewallRuleResult {
+  created: boolean;
+  detail: string;
 }
 
 /** Resultado de clamav.quickScan / clamav.fullScan / clamav.customScan. */

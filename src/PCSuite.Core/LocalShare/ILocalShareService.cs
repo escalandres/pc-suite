@@ -70,6 +70,22 @@ public interface ILocalShareService
         string certificateThumbprint);
 
     // ------------------------------------------------------------------
+    // Firewall (diagnóstico sin elevación; regla con UAC puntual)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Diagnóstico de solo lectura: ¿existe la regla de firewall entrante
+    /// de Local Share y cubre el puerto actual? No eleva.
+    /// </summary>
+    Task<LocalShareFirewallDiagnostic> GetFirewallDiagnosticAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Crea la regla de firewall entrante (TCP, solo el puerto del servicio,
+    /// solo PCSuite.exe) pidiendo UAC puntual vía ElevationManager.
+    /// </summary>
+    Task AddFirewallRuleAsync(CancellationToken cancellationToken = default);
+
+    // ------------------------------------------------------------------
     // Transferencias (salientes)
     // ------------------------------------------------------------------
 

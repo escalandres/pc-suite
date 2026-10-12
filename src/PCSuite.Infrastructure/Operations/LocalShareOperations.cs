@@ -310,3 +310,55 @@ public sealed class LocalShareRevokeOperation(ILocalShareService service) : IOpe
         return OperationResult.Ok(BridgeJson.ToJson(new { revoked = true }));
     }
 }
+
+/// <summary>localshare.firewallStatus — diagnóstico de firewall (solo lectura, sin elevación).</summary>
+public sealed class LocalShareFirewallStatusOperation(ILocalShareService service) : IOperation
+{
+    public string Id => OperationIds.LocalShareFirewallStatus;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        var diagnostic = await service.GetFirewallDiagnosticAsync(ct).ConfigureAwait(false);
+        var dto = new LocalShareFirewallStatusResult
+        {
+            RuleExists = diagnostic.RuleExists,
+            PortMatches = diagnostic.PortMatches,
+            Port = service.EffectivePort,
+        };
+        return OperationResult.Ok(BridgeJson.ToJson(dto));
+    }
+}
+
+/// <summary>
+/// localshare.firewallRule — crea la regla de firewall entrante. La elevación
+/// es puntual (UAC por operación) dentro del servicio vía ElevationManager:
+/// este puente nunca pide elevación de todo el proceso.
+/// </summary>
+public sealed class LocalShareFirewallRuleOperation(ILocalShareService service) : IOperation
+{
+    public string Id => OperationIds.LocalShareFirewallRule;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        try
+        {
+            await service.AddFirewallRuleAsync(ct).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // p. ej. UAC rechazado o ELEVATION_CANCELLED ya mapeado por el servicio.
+            return OperationResult.Fail("firewall_failed", ex.Message);
+        }
+
+        var diagnostic = await service.GetFirewallDiagnosticAsync(ct).ConfigureAwait(false);
+        return OperationResult.Ok(BridgeJson.ToJson(new LocalShareFirewallRuleResult
+        {
+            Created = diagnostic is { RuleExists: true, PortMatches: true },
+            Detail = diagnostic is { RuleExists: true, PortMatches: true }
+                ? "Regla creada."
+                : "La regla no se pudo verificar tras crearla.",
+        }));
+    }
+}

@@ -10,6 +10,7 @@
 
 using PCSuite.Infrastructure.ClamAV;
 using PCSuite.Infrastructure.Elevation;
+using PCSuite.Infrastructure.LocalShare;
 using PCSuite.Infrastructure.WinGet;
 using PCSuite.Infrastructure.Wsl;
 
@@ -49,6 +50,10 @@ internal static class Program
         // freshclam (Task 008): payload ignorado, argv vacío fijo y carpeta de
         // trabajo = instalación de ClamAV. Nunca un shell.
         registry.Register(new ClamAvElevatedOperation());
+
+        // Regla de firewall de Local Share (Task 016.6): payload solo porta
+        // el puerto (revalidado), regla y programa derivados del helper.
+        registry.Register(new LocalShareFirewallElevatedOperation());
 
         try
         {

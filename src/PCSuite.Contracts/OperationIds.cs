@@ -251,4 +251,10 @@ public static class OperationIds
 
     /// <summary>Limpia el historial de transferencias terminadas (payload cero).</summary>
     public const string LocalShareClearHistory = "localshare.clearHistory";
+
+    /// <summary>Diagnóstico de firewall de Local Share (solo lectura, sin elevación).</summary>
+    public const string LocalShareFirewallStatus = "localshare.firewallStatus";
+
+    /// <summary>Crea la regla de firewall entrante (UAC puntual vía ElevationManager).</summary>
+    public const string LocalShareFirewallRule = "localshare.firewallRule";
 }

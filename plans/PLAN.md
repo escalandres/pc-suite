@@ -94,7 +94,7 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 16.3 — Descubrimiento mDNS y emparejamiento: detección automática, emparejamiento explícito con código de verificación, revocación de confianza, conexión manual como fallback | ⏳ Pendiente | — |
 | ├ 16.4 — Integridad y escritura segura: SHA-256 en streaming (computar durante transferencia, no como paso separado), archivos temporales con nombres aleatorios, validación de rutas (anti-traversal), política de colisiones, publicación solo al completar | ✅ Completado | 2026-10-11 | — |
 | ├ 16.5 — UI React: vistas de dispositivos, envío (drag-and-drop), solicitud entrante (aceptar/rechazar), transferencias (progreso/velocidad/ETA), configuración. Usar el patrón Job existente para eventos de progreso | ✅ Completado | 2026-10-11 | — |
-| ├ 16.6 — Robustez y empaquetado: tests manuales dos equipos, firewall (diagnóstico + regla con UAC puntual), arranque en frío, documentación de troubleshooting | 🚧 En progreso | — |
+| ├ 16.6 — Robustez y empaquetado: tests manuales dos equipos, firewall (diagnóstico + regla con UAC puntual), arranque en frío, documentación de troubleshooting | 🚧 En progreso | E2E en localhost 4/4 (transferencia completa, rechazo, traversal, ciclo) — 2026-10-11 |
 | └ 16.7 — Mejoras post-MVP: reanudación por bloques, transferencias simultáneas, límites de ancho de banda, cliente temporal por navegador/QR, soporte Linux/macOS | ⏳ Pendiente | — |
 
 ## Notas de arquitectura (Task 016 — Local Share)

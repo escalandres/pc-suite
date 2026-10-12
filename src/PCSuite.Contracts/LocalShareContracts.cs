@@ -228,3 +228,23 @@ public sealed class LocalShareTransferFinishedPayload
     public string? ErrorMessage { get; init; }
     public long TotalBytes { get; init; }
 }
+
+/// <summary>Resultado de localshare.firewallStatus (solo lectura).</summary>
+public sealed class LocalShareFirewallStatusResult
+{
+    /// <summary>null = no se pudo determinar (netsh ausente o error).</summary>
+    public bool? RuleExists { get; init; }
+
+    /// <summary>La regla existente cubre el puerto actual del servicio.</summary>
+    public bool PortMatches { get; init; }
+
+    /// <summary>Puerto TCP del servicio en este momento.</summary>
+    public int Port { get; init; }
+}
+
+/// <summary>Resultado de localshare.firewallRule (tras UAC puntual).</summary>
+public sealed class LocalShareFirewallRuleResult
+{
+    public bool Created { get; init; }
+    public string Detail { get; init; } = "";
+}

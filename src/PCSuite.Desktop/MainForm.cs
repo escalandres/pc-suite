@@ -182,9 +182,12 @@ public partial class MainForm : Form
         var securityService = new SecurityService();
 
         // Local Share (Task 016): servicio de transferencia de archivos en LAN.
+        // elevationManager solo se usa para la regla de firewall (UAC puntual);
+        // las transferencias corren con privilegios normales de usuario.
         var localShareService = new PCSuite.Infrastructure.LocalShare.LocalShareService(
             PCSuitePaths.DataDirectory,
-            _loggerFactory.CreateLogger<PCSuite.Infrastructure.LocalShare.LocalShareService>());
+            _loggerFactory.CreateLogger<PCSuite.Infrastructure.LocalShare.LocalShareService>(),
+            elevation: elevationManager);
 
         _router = new CommandRouter(
             [
@@ -251,6 +254,8 @@ public partial class MainForm : Form
                 new LocalShareConfigOperation(localShareService),
                 new LocalShareClearHistoryOperation(localShareService),
                 new LocalShareRevokeOperation(localShareService),
+                new LocalShareFirewallStatusOperation(localShareService),
+                new LocalShareFirewallRuleOperation(localShareService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

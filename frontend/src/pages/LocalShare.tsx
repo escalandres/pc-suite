@@ -7,6 +7,7 @@ import {
   Play,
   RefreshCw,
   Send,
+  ShieldAlert,
   Square,
   Users,
   XCircle,
@@ -16,6 +17,7 @@ import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds, EventIds } from '../types/bridge';
 import type {
   LocalShareStatusResult,
+  LocalShareFirewallStatusResult,
   SharedDeviceCollectionResult,
   SharedDeviceResult,
   ShareTransferCollectionResult,
@@ -63,6 +65,8 @@ export function LocalShare() {
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [firewall, setFirewall] = useState<LocalShareFirewallStatusResult | null>(null);
+  const [firewallBusy, setFirewallBusy] = useState(false);
 
   // ------------------------------------------------------------------
   // Carga inicial
@@ -167,6 +171,39 @@ export function LocalShare() {
     catch { /* best-effort */ }
   };
 
+  // ------------------------------------------------------------------
+  // Firewall (diagnóstico sin elevación; regla con UAC puntual)
+  // ------------------------------------------------------------------
+
+  const refreshFirewall = useCallback(async () => {
+    try {
+      setFirewall(await bridge.call<LocalShareFirewallStatusResult>(
+        OperationIds.localShareFirewallStatus, undefined, READ_TIMEOUT));
+    } catch {
+      // Best-effort: el diagnóstico nunca rompe la página.
+      setFirewall(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status?.status === 'running') void refreshFirewall();
+    else setFirewall(null);
+  }, [status?.status, refreshFirewall]);
+
+  const allowFirewall = async () => {
+    setFirewallBusy(true);
+    setNotice(null);
+    try {
+      await bridge.call(OperationIds.localShareFirewallRule, undefined, 120_000);
+      await refreshFirewall();
+      setNotice({ kind: 'success', text: 'Regla de firewall creada. Ya puedes recibir archivos.' });
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo crear la regla.' });
+    } finally {
+      setFirewallBusy(false);
+    }
+  };
+
   const onDrop = async (event: React.DragEvent) => {
     event.preventDefault();
     const paths: string[] = [];
@@ -226,6 +263,31 @@ export function LocalShare() {
           role={notice.kind === 'error' ? 'alert' : 'status'}
         >
           {notice.text}
+        </div>
+      )}
+
+      {/* Firewall: sin la regla entrante, otros equipos no pueden conectar. */}
+      {isRunning && firewall && (firewall.ruleExists === false || (firewall.ruleExists === true && !firewall.portMatches)) && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3 text-sm"
+          style={{ borderColor: 'var(--pcs-warning)', color: 'var(--pcs-warning)' }}
+          role="status"
+        >
+          <span>
+            {firewall.ruleExists === false
+              ? 'El firewall de Windows podría bloquear conexiones entrantes de otros equipos.'
+              : 'La regla del firewall existe pero no cubre el puerto actual del servicio.'}
+          </span>
+          <button
+            type="button"
+            onClick={() => void allowFirewall()}
+            disabled={firewallBusy}
+            className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ background: 'var(--pcs-warning)', color: '#1a1a1a' }}
+          >
+            <ShieldAlert size={14} aria-hidden />
+            {firewallBusy ? 'Pidiendo permiso…' : 'Permitir en el firewall'}
+          </button>
         </div>
       )}
 

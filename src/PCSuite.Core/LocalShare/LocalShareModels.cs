@@ -231,6 +231,15 @@ public sealed class LocalShareSettings
     public string? CertificateThumbprint { get; set; }
 }
 
+/// <summary>
+/// Diagnóstico de firewall de Local Share (solo lectura, sin elevación).
+/// RuleExists null = no se pudo determinar (netsh ausente o error).
+/// </summary>
+public sealed record LocalShareFirewallDiagnostic(bool? RuleExists, bool PortMatches)
+{
+    public static LocalShareFirewallDiagnostic Unknown { get; } = new(null, false);
+}
+
 // ---------------------------------------------------------------------------
 // Progreso
 // ---------------------------------------------------------------------------
