@@ -22,15 +22,17 @@
 ;      (el usuario lo confirma en modo interactivo; en instalación
 ;      silenciosa se cierra directamente). Sin esto, los archivos
 ;      bloqueados romperían la desinstalación previa.
-;   2. PrepareToInstall: busca la clave de desinstalación del AppId en
-;      HKLM y HKCU ("todos los usuarios" o "solo yo": el asistente
-;      permite ambas, y la elección puede cambiar entre versiones).
-;      Si existe, ejecuta el desinstalador anterior en modo silencioso
-;      con el parámetro _?= — imprescindible: sin él, unins000.exe se
-;      copia a %TEMP% y se relanza, y Exec solo esperaría a la copia,
-;      no a la desinstalación real (carrera con la instalación nueva).
-;      Con _?= el desinstalador NO se borra solo ni elimina su clave:
-;      este script limpia ambos tras un resultado correcto.
+;   2. PrepareToInstall: busca la clave ARP del AppId en HKLM y HKCU
+;      ("todos los usuarios" o "solo yo": el asistente permite ambas).
+;      - Si hay desinstalador en el directorio (escaneo unins000-unins010,
+;        que el registro puede estar desactualizado), se ejecuta en modo
+;        silencioso SIN _?=: así se auto-limpia (exe+dat+msg+clave) vía su
+;        copia en %TEMP%. El Exec espera el trabajo principal y un sondeo
+;        determinista espera a que la auto-limpieza termine (el exe
+;        desaparece del directorio) — nada de Sleep a ciegas.
+;      - Estado huérfano (clave existe, desinstalador no: actualización
+;        rota previa): limpiar la clave fantasma y los restos, y seguir
+;        instalando. Este paso EXISTE para reparar ese estado.
 ;   3. La instalación nueva continúa como si fuese la primera (directorio
 ;      previo reutilizado: se resuelve antes de PrepareToInstall).
 ;      Los datos de usuario viven en %LOCALAPPDATA%\PCSuite, fuera de
@@ -88,6 +90,10 @@ MinVersion=10.0
 WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
+
+; Log de instalación en %TEMP% (Setup Log *.zip): imprescindible para
+; diagnosticar actualizaciones (p. ej. por qué falló la desinstalación previa).
+SetupLogging=yes
 
 OutputDir=dist\instalador
 OutputBaseFilename={#AppName}-Setup-{#AppVersion}-win64
@@ -222,23 +228,44 @@ end;
 // Desinstalación de la versión anterior
 // ---------------------------------------------------------------------
 
-// Busca la cadena de desinstalación del AppId en HKLM ("todos los
-// usuarios") y luego en HKCU ("solo yo"). Devuelve la raíz usada para
-// poder borrar la clave correcta tras desinstalar.
-function GetOldUninstallString(
-  out UninstallString: String; out RootKey: Integer): Boolean;
-begin
-  UninstallString := '';
+// ---------------------------------------------------------------------
+// Desinstalación de la versión anterior
+// ---------------------------------------------------------------------
 
+// Inno numera los desinstaladores unins000, unins001, ... cuando quedan
+// restos de intentos previos. Escanear 0..10 en el DIRECTORIO (no el
+// registro: la clave ARP puede apuntar a un exe que ya no existe).
+function FindUninstaller(const InstallPath: String): String;
+var
+  I: Integer;
+  Candidate: String;
+begin
+  Result := '';
+
+  for I := 0 to 10 do
+  begin
+    Candidate := AddBackslash(InstallPath) + 'unins' + Format('%.3d', [I]) + '.exe';
+    if FileExists(Candidate) then
+    begin
+      Result := Candidate;
+      Exit;
+    end;
+  end;
+end;
+
+// Busca la clave ARP del AppId en HKLM ("todos los usuarios") y luego en
+// HKCU ("solo yo"). Devuelve la raíz para poder borrar la clave correcta.
+function GetOldUninstallEntry(out RootKey: Integer): Boolean;
+begin
   RootKey := HKLM;
-  if RegQueryStringValue(HKLM, UninstallKey, 'UninstallString', UninstallString) then
+  if RegKeyExists(HKLM, UninstallKey) then
   begin
     Result := True;
     Exit;
   end;
 
   RootKey := HKCU;
-  if RegQueryStringValue(HKCU, UninstallKey, 'UninstallString', UninstallString) then
+  if RegKeyExists(HKCU, UninstallKey) then
   begin
     Result := True;
     Exit;
@@ -247,22 +274,68 @@ begin
   Result := False;
 end;
 
-// _?= deja sin borrar el desinstalador y sus datos (unins000.*): limpiarlos.
+// Directorio de la instalación previa: de la clave ARP (InstallLocation,
+// siempre lo escribe Inno) y si falta, el valor por defecto.
+function GetOldInstallPath(): String;
+var
+  Location: String;
+begin
+  if RegQueryStringValue(HKLM, UninstallKey, 'InstallLocation', Location) or
+     RegQueryStringValue(HKCU, UninstallKey, 'InstallLocation', Location) then
+  begin
+    Result := Location;
+  end
+  else
+  begin
+    Result := ExpandConstant('{autopf}\{#AppName}');
+  end;
+
+  // Sin contrabarra final.
+  if (Length(Result) > 3) and (Copy(Result, Length(Result), 1) = '\') then
+    Delete(Result, Length(Result), 1);
+end;
+
+// Borra restos del desinstalador (exe/dat/msg) con CUALQUIER numeración
+// unins000-unins010. Sin _?= el desinstalador ya se limpia solo: esto es
+// cinturón y tirantes para el caso de timeout del sondeo.
 procedure DeleteUninstallFiles(const OldDir: String);
 var
+  I: Integer;
   FindRec: TFindRec;
   DirWithSlash: String;
 begin
   DirWithSlash := AddBackslash(OldDir);
 
-  if FindFirst(DirWithSlash + 'unins000.*', FindRec) then
-  try
-    repeat
-      DeleteFile(DirWithSlash + FindRec.Name);
-    until not FindNext(FindRec);
-  finally
-    FindClose(FindRec);
+  for I := 0 to 10 do
+  begin
+    if FindFirst(DirWithSlash + 'unins' + Format('%.3d', [I]) + '.*', FindRec) then
+    try
+      repeat
+        DeleteFile(DirWithSlash + FindRec.Name);
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
   end;
+end;
+
+// Sin _?=, el desinstalador copia SU FINAL a %TEMP% para auto-borrarse y
+// el proceso original termina ANTES. La señal de finalización TOTAL es que
+// el exe desaparece del directorio (la auto-limpieza es su último acto).
+// Sondeo determinista — nada de Sleep a ciegas.
+function WaitForUninstallCompletion(const OldDir: String): Boolean;
+var
+  Attempts: Integer;
+begin
+  Result := True;
+
+  for Attempts := 1 to 30 do
+  begin
+    if FindUninstaller(OldDir) = '' then Exit;
+    Sleep(500);
+  end;
+
+  Result := False;
 end;
 
 // Tras el asistente, justo antes de copiar archivos. Devolver un texto
@@ -273,38 +346,50 @@ end;
 // aún existía), así que borrarla aquí no afecta a la reutilización.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
-  UninstallString: String;
   RootKey: Integer;
   OldDir: String;
+  Uninstaller: String;
   ResultCode: Integer;
 begin
   Result := '';
 
-  // Primera instalación: no hay nada que desinstalar.
-  if not GetOldUninstallString(UninstallString, RootKey) then Exit;
+  // Primera instalación: no hay clave ARP, no hay nada que hacer.
+  if not GetOldUninstallEntry(RootKey) then Exit;
 
-  OldDir := ExtractFilePath(RemoveQuotes(UninstallString));
+  OldDir := GetOldInstallPath();
+  Uninstaller := FindUninstaller(OldDir);
 
-  // _?= sin contrabarra final: evita que '"' escape la comilla de
-  // cierre al tokenizar la línea de comandos.
-  if (Length(OldDir) > 3) and (Copy(OldDir, Length(OldDir), 1) = '\') then
-    Delete(OldDir, Length(OldDir), 1);
+  if Uninstaller = '' then
+  begin
+    // Estado huérfano: la clave ARP existe pero su desinstalador NO
+    // (desinstalación rota de una actualización anterior). Sin exe no hay
+    // nada que ejecutar: limpiar la clave fantasma y los restos dat/msg, y
+    // dejar que la instalación nueva sobreescriba los archivos. NO abortar
+    // — este estado es justamente el que este paso existe para reparar.
+    DeleteUninstallFiles(OldDir);
+    RegDeleteKeyIncludingSubkeys(RootKey, UninstallKey);
+    Exit;
+  end;
 
+  // Sin _?=: el desinstalador se auto-limpia (exe+dat+msg+clave ARP) vía su
+  // copia en %TEMP%. Esperamos el proceso principal y sondeamos hasta que
+  // la auto-limpieza termina (exe desaparece). WorkingDir = %TEMP% (no el
+  // directorio que se va a borrar: Windows no elimina el CWD de un proceso).
   ResultCode := -1;
-
-  // _?= con el directorio real: el desinstalador corre in situ (sin copia
-  // a %TEMP%) y Exec espera a que la desinstalación REAL termine. Debe ser
-  // el ÚLTIMO parámetro; entre comillas porque la ruta puede tener espacios.
-  // WorkingDir = %TEMP% (no el directorio que se va a borrar: Windows no
-  // elimina el directorio que es CWD de un proceso).
   if Exec(
-      RemoveQuotes(UninstallString),
-      '/VERYSILENT /NORESTART /SUPPRESSMSGBOXES _?="' + OldDir + '"',
+      Uninstaller,
+      '/VERYSILENT /NORESTART /SUPPRESSMSGBOXES',
       GetEnv('TEMP'), SW_HIDE, ewWaitUntilTerminated, ResultCode)
     and (ResultCode = 0) then
   begin
-    // Éxito: limpiar lo que _?= deja (exe, dat, msg y la clave ARP).
-    DeleteUninstallFiles(OldDir);
+    if not WaitForUninstallCompletion(OldDir) then
+    begin
+      // La desinstalación terminó bien pero la auto-limpieza no llegó a
+      // completar. Borrar restos y la clave manualmente.
+      DeleteUninstallFiles(OldDir);
+    end;
+
+    // La copia en %TEMP% normalmente borra la clave; idempotente por si acaso.
     RegDeleteKeyIncludingSubkeys(RootKey, UninstallKey);
   end
   else
