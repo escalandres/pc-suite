@@ -18,6 +18,17 @@ public sealed class WebViewBridge : IEventPublisher
     private readonly List<string> _allowedOrigins = [];
     private CoreWebView2? _core;
 
+    /// <summary>
+    /// SynchronizationContext del hilo UI, capturado en Attach. CoreWebView2
+    /// SOLO acepta ese hilo: los eventos llegan desde hilos de fondo (handler
+    /// TLS del Local Share, listener UDP del discovery, bombeo de stdout de
+    /// ClamAV) y hay que encolar el post. Sin esto, TODO evento disparado
+    /// desde un hilo que no sea el UI muere en
+    /// "InvalidOperationException: CoreWebView2 members can only be
+    /// accessed from the UI thread".
+    /// </summary>
+    private SynchronizationContext? _uiContext;
+
     public WebViewBridge(CommandRouter router, ILogger<WebViewBridge> logger)
     {
         _router = router;
@@ -27,6 +38,7 @@ public sealed class WebViewBridge : IEventPublisher
     public void Attach(CoreWebView2 core, IReadOnlyList<string> allowedOrigins)
     {
         _core = core;
+        _uiContext = SynchronizationContext.Current;
         _allowedOrigins.Clear();
         _allowedOrigins.AddRange(allowedOrigins);
         core.WebMessageReceived += OnWebMessageReceived;
@@ -34,15 +46,44 @@ public sealed class WebViewBridge : IEventPublisher
 
     public void SendEvent<TPayload>(string eventId, TPayload payload)
     {
-        if (_core is null)
+        var core = _core;
+        if (core is null)
         {
+            return;
+        }
+
+        // Serializar SIEMPRE en el hilo del llamador: el resultado es un
+        // string plano, seguro de cruzar al hilo UI.
+        var json = BridgeJson.SerializeEvent(new BridgeEvent
+        {
+            Event = eventId,
+            Payload = BridgeJson.ToJson(payload),
+        });
+
+        var uiContext = _uiContext;
+        if (uiContext is not null && SynchronizationContext.Current != uiContext)
+        {
+            // Hilo de fondo: encolar el post al hilo UI. Post es fire-and-
+            // forget — el emisor nunca se bloquea esperando a la UI.
+            uiContext.Post(
+                _ =>
+                {
+                    try
+                    {
+                        core.PostWebMessageAsJson(json);
+                    }
+                    catch (Exception exception)
+                    {
+                        _logger.LogError(exception, "Failed to send event {Event}.", eventId);
+                    }
+                },
+                null);
             return;
         }
 
         try
         {
-            var bridgeEvent = new BridgeEvent { Event = eventId, Payload = BridgeJson.ToJson(payload) };
-            _core.PostWebMessageAsJson(BridgeJson.SerializeEvent(bridgeEvent));
+            core.PostWebMessageAsJson(json);
         }
         catch (Exception exception)
         {
