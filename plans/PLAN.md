@@ -111,3 +111,9 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 
 **Prioridades de la propuesta**: seguridad, sin Internet, simplicidad de uso, integridad de archivos, mantenibilidad.
 **Seguridad clave**: emparejamiento explícito (no confiar solo en mDNS), TOFU con huella de certificado, validación anti-traversal de rutas, nombres temporales aleatorios, no auto-ejecutar recibidos, streaming (sin cargar en memoria).
+
+**Historial de versiones** (fuente única: `<Version>` en `Directory.Build.props`):
+
+- **1.0.0** — línea base antes de Local Share.
+- **1.1.0** — Local Share completo (16.0–16.7) + instalador con actualización automática (desinstala la versión previa en silencio). ⚠️ Existieron DOS builds con este número y el mismo nombre de Setup: uno ANTES del emparejamiento real (comparación numérica) y otro después — motivo del salto siguiente.
+- **1.2.0** — subida manualmente el 2026-10-13 para identificar de forma única el build CON emparejamiento real (comparación numérica estilo Bluetooth). Con este número, cada Setup corresponde a un solo contenido.
