@@ -256,9 +256,12 @@ public sealed class LocalShareSettings
 /// Diagnóstico de firewall de Local Share (solo lectura, sin elevación).
 /// RuleExists null = no se pudo determinar (netsh ausente o error).
 /// </summary>
-public sealed record LocalShareFirewallDiagnostic(bool? RuleExists, bool PortMatches)
+public sealed record LocalShareFirewallDiagnostic(
+    bool? RuleExists,
+    bool PortMatches,
+    bool DiscoveryPortMatches)
 {
-    public static LocalShareFirewallDiagnostic Unknown { get; } = new(null, false);
+    public static LocalShareFirewallDiagnostic Unknown { get; } = new(null, false, false);
 }
 
 // ---------------------------------------------------------------------------

@@ -73,20 +73,44 @@ public static class LocalShareFirewall
             if (result.ExitCode != 0)
             {
                 // "No rules match the specified criteria" (o equivalente localizado).
-                return new LocalShareFirewallDiagnostic(RuleExists: false, PortMatches: false);
+                return new LocalShareFirewallDiagnostic(
+                    RuleExists: false, PortMatches: false, DiscoveryPortMatches: false);
             }
 
-            // El número de puerto es language-neutral: si aparece la regla
-            // pero no este puerto, el usuario cambió el puerto después.
-            var portMatches = result.StandardOutput.Contains(
-                currentPort.ToString(), StringComparison.Ordinal);
-            return new LocalShareFirewallDiagnostic(RuleExists: true, PortMatches: portMatches);
+            // Matching por TOKENS, no por substring: los números son
+            // independientes del idioma, pero "15354" no debe contar como
+            // "5354". Cada puerto cubierto aparece como token en la línea
+            // "LocalPort:" (o su traducción) de su regla.
+            var transferOk = OutputMentionsPort(result.StandardOutput, currentPort);
+            var discoveryOk = OutputMentionsPort(
+                result.StandardOutput, DiscoveryService.MulticastPort);
+            return new LocalShareFirewallDiagnostic(
+                RuleExists: true, PortMatches: transferOk, DiscoveryPortMatches: discoveryOk);
         }
         catch
         {
             // Diagnóstico best-effort: nunca rompe la UI.
             return LocalShareFirewallDiagnostic.Unknown;
         }
+    }
+
+    /// <summary>¿El output de netsh menciona el puerto como token exacto?</summary>
+    private static bool OutputMentionsPort(string output, int port)
+    {
+        var token = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var line in output.Split('\r', '\n'))
+        {
+            foreach (var part in line.Split(
+                (char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (part == token)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }
 
@@ -167,8 +191,9 @@ public sealed class LocalShareFirewallElevatedOperation : IElevatedOperation
 
         try
         {
-            // 1) Idempotencia: borrar la regla previa (si existía) para que
-            //    un cambio de puerto no deje reglas huérfanas.
+            // 1) Idempotencia: borrar TODAS las reglas previas con este
+            //    nombre (TCP y UDP) para que un cambio de puerto no deje
+            //    reglas huérfanas.
             await _processRunner.ExecuteAsync(
                 new ProcessRequest
                 {
@@ -182,8 +207,9 @@ public sealed class LocalShareFirewallElevatedOperation : IElevatedOperation
                 },
                 ct).ConfigureAwait(false);
 
-            // 2) Crear la regla: entrante, TCP, solo el puerto, solo PCSuite.exe.
-            var addResult = await _processRunner.ExecuteAsync(
+            // 2) Regla de TRANSFERENCIA: entrante, TCP, solo el puerto,
+            //    solo PCSuite.exe.
+            var addTcp = await _processRunner.ExecuteAsync(
                 new ProcessRequest
                 {
                     FileName = netsh,
@@ -202,12 +228,34 @@ public sealed class LocalShareFirewallElevatedOperation : IElevatedOperation
                 },
                 ct).ConfigureAwait(false);
 
+            // 3) Regla de DISCOVERY: entrante, UDP multicast 5354, mismo
+            //    nombre. Sin esta, el discovery por multicast no ve NINGÚN
+            //    equipo aunque la transferencia funcione.
+            var addUdp = await _processRunner.ExecuteAsync(
+                new ProcessRequest
+                {
+                    FileName = netsh,
+                    Arguments =
+                    [
+                        "advfirewall", "firewall", "add", "rule",
+                        $"name={LocalShareFirewall.RuleName}",
+                        "dir=in",
+                        "action=allow",
+                        $"program={program}",
+                        "protocol=UDP",
+                        $"localport={DiscoveryService.MulticastPort}",
+                        "enable=yes",
+                    ],
+                    Timeout = MutationTimeout,
+                },
+                ct).ConfigureAwait(false);
+
             var dto = new LocalShareFirewall.FirewallRuleResult
             {
-                Succeeded = addResult.ExitCode == 0,
-                Detail = addResult.ExitCode == 0
-                    ? "Regla creada."
-                    : "El firewall rechazó la regla (¿directiva de grupo?).",
+                Succeeded = addTcp.ExitCode == 0 && addUdp.ExitCode == 0,
+                Detail = addTcp.ExitCode == 0 && addUdp.ExitCode == 0
+                    ? "Reglas creadas (transferencia + detección)."
+                    : "El firewall rechazó una regla (¿directiva de grupo?).",
             };
             return OperationResult.Ok(BridgeJson.ToJson(dto));
         }

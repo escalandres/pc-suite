@@ -265,8 +265,11 @@ public sealed class LocalShareFirewallStatusResult
     /// <summary>null = no se pudo determinar (netsh ausente o error).</summary>
     public bool? RuleExists { get; init; }
 
-    /// <summary>La regla existente cubre el puerto actual del servicio.</summary>
+    /// <summary>La regla TCP existente cubre el puerto actual del servicio.</summary>
     public bool PortMatches { get; init; }
+
+    /// <summary>La regla UDP de detección (multicast 5354) existe.</summary>
+    public bool DiscoveryPortMatches { get; init; }
 
     /// <summary>Puerto TCP del servicio en este momento.</summary>
     public int Port { get; init; }

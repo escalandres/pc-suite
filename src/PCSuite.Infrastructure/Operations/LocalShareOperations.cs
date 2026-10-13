@@ -378,6 +378,7 @@ public sealed class LocalShareFirewallStatusOperation(ILocalShareService service
         {
             RuleExists = diagnostic.RuleExists,
             PortMatches = diagnostic.PortMatches,
+            DiscoveryPortMatches = diagnostic.DiscoveryPortMatches,
             Port = service.EffectivePort,
         };
         return OperationResult.Ok(BridgeJson.ToJson(dto));
@@ -407,12 +408,18 @@ public sealed class LocalShareFirewallRuleOperation(ILocalShareService service) 
         }
 
         var diagnostic = await service.GetFirewallDiagnosticAsync(ct).ConfigureAwait(false);
+        var allGreen = diagnostic is
+        {
+            RuleExists: true,
+            PortMatches: true,
+            DiscoveryPortMatches: true,
+        };
         return OperationResult.Ok(BridgeJson.ToJson(new LocalShareFirewallRuleResult
         {
-            Created = diagnostic is { RuleExists: true, PortMatches: true },
-            Detail = diagnostic is { RuleExists: true, PortMatches: true }
-                ? "Regla creada."
-                : "La regla no se pudo verificar tras crearla.",
+            Created = allGreen,
+            Detail = allGreen
+                ? "Reglas creadas (transferencia + detección)."
+                : "Las reglas no se pudieron verificar tras crearlas.",
         }));
     }
 }

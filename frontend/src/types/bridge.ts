@@ -505,6 +505,7 @@ export interface LocalSharePairFinishedPayload {
 export interface LocalShareFirewallStatusResult {
   ruleExists: boolean | null;
   portMatches: boolean;
+  discoveryPortMatches: boolean;
   port: number;
 }
 

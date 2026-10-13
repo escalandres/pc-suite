@@ -71,6 +71,7 @@ export function LocalShare() {
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [firewall, setFirewall] = useState<LocalShareFirewallStatusResult | null>(null);
   const [firewallBusy, setFirewallBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   /** Emparejamiento iniciado por ESTE equipo: código visible mientras espera. */
   const [pairing, setPairing] = useState<LocalSharePairResult | null>(null);
   /** Solicitud de emparejamiento entrante (banner de decisión). */
@@ -81,6 +82,7 @@ export function LocalShare() {
   // ------------------------------------------------------------------
 
   const refresh = useCallback(async () => {
+    setRefreshing(true);
     try {
       const [statusResult, devicesResult, transfersResult] = await Promise.all([
         bridge.call<LocalShareStatusResult>(OperationIds.localShareStatus, undefined, READ_TIMEOUT),
@@ -92,7 +94,7 @@ export function LocalShare() {
       setTransfers(transfersResult.transfers ?? []);
     } catch (error) {      setNotice({ kind: 'error', text: error instanceof BridgeError ? error.message : 'No se pudo consultar Local Share.' });
     } finally {
-      // no-op: estado siempre actualizado via setStatus/setDevices/setTransfers
+      setRefreshing(false);
     }
   }, []);
 
@@ -329,11 +331,12 @@ export function LocalShare() {
           <button
             type="button"
             onClick={() => void refresh()}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer"
+            disabled={refreshing}
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text)' }}
           >
-            <RefreshCw size={14} aria-hidden />
-            Actualizar
+            <RefreshCw size={14} aria-hidden className={refreshing ? 'animate-spin' : undefined} />
+            {refreshing ? 'Actualizando…' : 'Actualizar'}
           </button>
           <button
             type="button"
@@ -360,8 +363,10 @@ export function LocalShare() {
         </div>
       )}
 
-      {/* Firewall: sin la regla entrante, otros equipos no pueden conectar. */}
-      {isRunning && firewall && (firewall.ruleExists === false || (firewall.ruleExists === true && !firewall.portMatches)) && (
+      {/* Firewall: sin las reglas entrantes, otros equipos no pueden conectar
+          (TCP: transferencia) ni verse (UDP multicast: detección). */}
+      {isRunning && firewall &&
+        (firewall.ruleExists === false || firewall.portMatches === false || firewall.discoveryPortMatches === false) && (
         <div
           className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3 text-sm"
           style={{ borderColor: 'var(--pcs-warning)', color: 'var(--pcs-warning)' }}
@@ -370,7 +375,9 @@ export function LocalShare() {
           <span>
             {firewall.ruleExists === false
               ? 'El firewall de Windows podría bloquear conexiones entrantes de otros equipos.'
-              : 'La regla del firewall existe pero no cubre el puerto actual del servicio.'}
+              : firewall.portMatches === false
+                ? 'La regla del firewall existe pero no cubre el puerto de transferencia actual.'
+                : 'La regla del firewall no permite la detección automática de equipos (UDP 5354).'}
           </span>
           <button
             type="button"

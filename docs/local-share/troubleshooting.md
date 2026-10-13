@@ -25,16 +25,20 @@ que el firewall bloquea por defecto.
    entrantes de otros equipos."*
 2. Pulsa **Permitir en el firewall**. Windows muestra un UAC puntual
    (solo para esta acción; la app nunca se ejecuta como administrador).
-3. La regla creada es mínima: entrante, TCP, solo el puerto del
-   servicio y solo para `PCSuite.exe`.
+3. Se crean **dos** reglas mínimas (ambas solo para `PCSuite.exe`):
+   - **TCP** entrante, solo el puerto del servicio (transferencias)
+   - **UDP** entrante, solo el puerto 5354 (detección automática por
+     multicast — sin esta, los equipos no se ven entre sí)
 
-También puedes crear la regla manualmente (PowerShell como
-administrador):
+También puedes crearlas manualmente (PowerShell como administrador):
 
 ```powershell
 netsh advfirewall firewall add rule name="PCSuite Local Share" `
   dir=in action=allow program="C:\...\RutaA\PCSuite.exe" `
   protocol=TCP localport=45180 enable=yes
+netsh advfirewall firewall add rule name="PCSuite Local Share" `
+  dir=in action=allow program="C:\...\RutaA\PCSuite.exe" `
+  protocol=UDP localport=5354 enable=yes
 ```
 
 > Si cambias el puerto en Configuración, la regla se actualiza al
