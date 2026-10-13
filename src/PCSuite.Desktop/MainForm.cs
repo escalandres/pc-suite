@@ -195,6 +195,7 @@ public partial class MainForm : Form
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
+                new SystemPickFilesOperation(this),
                 new ToolsListOperation(toolRegistry),
                 new ToolsSearchOperation(toolSearch),
                 new ToolExecuteOperation(toolRegistry),

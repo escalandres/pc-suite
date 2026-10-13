@@ -8,6 +8,13 @@ public static class OperationIds
 {
     public const string GetSystemInfo = "system.info";
 
+    /// <summary>
+    /// Selector de archivos NATIVO de Windows (multiselección). Lo usan las
+    /// herramientas que necesitan rutas absolutas — el <input type=file>
+    /// del WebView no las expone: solo da nombres sueltos.
+    /// </summary>
+    public const string SystemPickFiles = "system.pickFiles";
+
     /// <summary>Devuelve los metadatos de todas las tools registradas.</summary>
     public const string ToolsList = "tools.list";
 

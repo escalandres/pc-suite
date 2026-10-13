@@ -21,6 +21,7 @@ import type {
   LocalSharePairResult,
   LocalSharePairRequestedPayload,
   LocalSharePairFinishedPayload,
+  SystemPickFilesResult,
   SharedDeviceCollectionResult,
   SharedDeviceResult,
   ShareTransferCollectionResult,
@@ -197,6 +198,24 @@ export function LocalShare() {
     } finally { setSending(false); }
   };
 
+  /**
+   * Selector NATIVO de Windows (system.pickFiles): el WebView2 no expone
+   * rutas en <input type=file> — solo nombres sueltos que no resuelven a
+   * nada en el backend. El diálogo puede estar abierto minutos: timeout
+   * generoso (el temporizador frontend por defecto son 15 s).
+   */
+  const pickAndSend = async () => {
+    setNotice(null);
+    try {
+      const result = await bridge.call<SystemPickFilesResult>(
+        OperationIds.systemPickFiles, undefined, 10 * 60_000);
+      if (result.cancelled || result.paths.length === 0) return;
+      await sendFiles(result.paths);
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo abrir el selector de archivos.' });
+    }
+  };
+
   const acceptIncoming = async () => {
     if (!incomingRequest) return;
     try {
@@ -300,16 +319,40 @@ export function LocalShare() {
     }
   };
 
+  /**
+   * ¿Parece una ruta absoluta de Windows? El WebView2 no expone "File.path"
+   * (extensión de Electron): arrastrar desde el Explorador solo entrega
+   * NOMBRES sueltos. Si llega algo sin formato de ruta real, no lo
+   * mandamos al backend (fallaría con "no se encontraron archivos").
+   */
+  const esRutaAbsoluta = (p: string) =>
+    /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\');
+
   const onDrop = async (event: React.DragEvent) => {
     event.preventDefault();
     const paths: string[] = [];
     for (const item of event.dataTransfer.items) {
       if (item.kind === 'file') {
         const file = item.getAsFile();
-        if (file) paths.push((file as unknown as { path?: string }).path ?? file.name);
+        const path = (file as unknown as { path?: string }).path;
+        if (file && path) paths.push(path);
       }
     }
-    if (paths.length > 0) await sendFiles(paths);
+    if (paths.length === 0) {
+      setNotice({
+        kind: 'error',
+        text: 'El navegador embebido no entrega rutas al arrastrar. Usa «Seleccionar archivos».',
+      });
+      return;
+    }
+    if (paths.some((p) => !esRutaAbsoluta(p))) {
+      setNotice({
+        kind: 'error',
+        text: 'El navegador embebido no entrega rutas al arrastrar. Usa «Seleccionar archivos».',
+      });
+      return;
+    }
+    await sendFiles(paths);
   };
 
   // ------------------------------------------------------------------
@@ -611,25 +654,17 @@ export function LocalShare() {
             <FolderOpen size={48} aria-hidden className="mb-4 opacity-30" style={{ color: 'var(--pcs-accent)' }} />
             <h3 className="text-lg font-medium mb-1">
               {selectedDevice
-                ? 'Arrastra archivos para enviar'
+                ? 'Elige archivos para enviar'
                 : 'Selecciona un dispositivo emparejado y en línea'}
             </h3>
             <p className="text-sm mb-4" style={{ color: 'var(--pcs-text-muted)' }}>
-              Arrastra y suelta archivos aquí para transferirlos por la red local.
+              Selector nativo de Windows con multiselección. Las transferencias
+              van directas entre equipos por la red local.
             </p>
             <button
               type="button"
               disabled={!selectedDevice || sending}
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.multiple = true;
-                input.onchange = () => {
-                  const paths = Array.from(input.files ?? []).map((f) => (f as unknown as { path?: string }).path ?? f.name);
-                  if (paths.length > 0) void sendFiles(paths);
-                };
-                input.click();
-              }}
+              onClick={() => void pickAndSend()}
               className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium cursor-pointer transition-colors disabled:opacity-40"
               style={{ background: 'var(--pcs-accent)', color: '#fff' }}
             >

@@ -48,6 +48,7 @@ export interface AppReadyEvent {
 
 export const OperationIds = {
   systemInfo: 'system.info',
+  systemPickFiles: 'system.pickFiles',
   toolsList: 'tools.list',
   toolsSearch: 'tools.search',
   toolExecute: 'tool.execute',
@@ -120,6 +121,12 @@ export const EventIds = {
   localSharePairRequested: 'localshare.pair-request',
   localSharePairFinished: 'localshare.pair-finished',
 } as const;
+
+/** Resultado de system.pickFiles: rutas absolutas del diálogo nativo de Windows. */
+export interface SystemPickFilesResult {
+  paths: string[];
+  cancelled: boolean;
+}
 
 /* =====================================================================
    Tool metadata
