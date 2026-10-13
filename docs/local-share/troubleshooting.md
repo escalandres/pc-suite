@@ -30,6 +30,11 @@ que el firewall bloquea por defecto.
    - **UDP** entrante, solo el puerto 5354 (detección automática por
      multicast — sin esta, los equipos no se ven entre sí)
 
+> **¿Y al cerrar/detener la app?** Las reglas de firewall son permanentes
+> (como las de cualquier juego multiplayer) pero **inertes sin PCSuite**:
+> solo aplican a `PCSuite.exe` y al detener el servicio no queda ningún
+> puerto escuchando. La desinstalación sí las elimina automáticamente.
+
 También puedes crearlas manualmente (PowerShell como administrador):
 
 ```powershell

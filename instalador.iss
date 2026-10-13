@@ -136,6 +136,15 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; \
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; \
   Flags: nowait postinstall skipifsilent
 
+[UninstallRun]
+; Higiene de firewall: PCSuite crea en ejecución (con UAC puntual) dos reglas
+; entrantes program-scoped — TCP <puerto del servicio> y UDP 5354 (discovery),
+; ambas con el nombre fijo de abajo. Sin la app son inertes, pero un equipo SIN
+; PCSuite no debe dejar restos en el firewall: eliminarlas al desinstalar.
+; Best-effort (sin fallo si no existen, sin elevar si el modo no lo permite).
+Filename: "{cmd}"; Parameters: "/C netsh advfirewall firewall delete rule name=""PCSuite Local Share"" >NUL 2>&1"; \
+  Flags: runhidden; RunOnceId: "DelFirewallRules"
+
 [Code]
 const
   // Clave ARP que genera el propio Inno para este AppId (raíz aparte:
