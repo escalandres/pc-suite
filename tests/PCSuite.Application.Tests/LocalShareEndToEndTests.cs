@@ -649,6 +649,55 @@ public class LocalShareEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task StopClearsDiscoveredDevices_KeepsPaired()
+    {
+        await _serviceA.StartAsync();
+        await _serviceB.StartAsync();
+
+        // Un dispositivo descubierto (Unknown) y uno emparejado.
+        _serviceA.NoteDiscoveredDevice(
+            "device-b", "Equipo B", "127.0.0.1", PortB,
+            _serviceB.Settings.CertificateThumbprint!);
+        var paired = _serviceA.RegisterPairedDevice(
+            "device-legacy", "Equipo Viejo", "192.168.0.99", 45100, "huella-vieja");
+
+        // El parámetro trust del descubierto es Unknown por construcción.
+        Assert.Equal(2, _serviceA.GetDevices().Count);
+
+        await _serviceA.StopAsync();
+
+        // Al detener: los DESCUBIERTOS desaparecen; los emparejados quedan.
+        var restantes = _serviceA.GetDevices();
+        Assert.Single(restantes);
+        Assert.Equal("device-legacy", restantes[0].DeviceId);
+
+        // Reinicio: los emparejados siguen, los descubiertos no vuelven.
+        await _serviceA.StartAsync();
+        var trasArranque = _serviceA.GetDevices();
+        Assert.Single(trasArranque);
+        Assert.Equal("device-legacy", trasArranque[0].DeviceId);
+    }
+
+    [Fact]
+    public async Task StartPrunesStaleDiscoveredDevices()
+    {
+        // Descubrir, envejecer la marca LastSeenAt y arrancar: poda.
+        await _serviceA.StartAsync();
+        await _serviceA.StopAsync();
+
+        _serviceA.NoteDiscoveredDevice("device-b", "Equipo B", "127.0.0.1", PortB, "huella-b");
+
+        // Envejecer artificialmente el registro (GetDevices devuelve los
+        // objetos vivos, no copias).
+        var device = _serviceA.GetDevices().Single(d => d.DeviceId == "device-b");
+        device.LastSeenAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+
+        await _serviceA.StartAsync();
+
+        Assert.DoesNotContain(_serviceA.GetDevices(), d => d.DeviceId == "device-b");
+    }
+
+    [Fact]
     public async Task MultiItemTransfer_AllFilesPublishedInOrder()
     {
         // Regresión del bug de la "lectura extra": un ReadFrameAsync de más

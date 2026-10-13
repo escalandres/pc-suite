@@ -127,6 +127,29 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         {
             _fileWriter = new SafeFileWriter(_settings.DownloadDirectory);
 
+            // Descubiertos rancios (app muerta sin pasar por Stop): los
+            // Unknown que llevan >5 min sin anunciarse ya no están en la
+            // red (los anuncios van cada 15 s). Los emparejados/revocados
+            // son decisiones del usuario: NUNCA se tocan aquí.
+            lock (_lock)
+            {
+                var stale = _devices
+                    .Where(kvp => kvp.Value.Trust == DeviceTrust.Unknown
+                        && DateTimeOffset.UtcNow - kvp.Value.LastSeenAt > StaleDiscoveryAge)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var id in stale)
+                {
+                    _devices.Remove(id);
+                }
+
+                if (stale.Count > 0)
+                {
+                    SaveDevices();
+                    _logger?.LogInformation("{Count} dispositivos descubiertos rancios retirados", stale.Count);
+                }
+            }
+
             // Reanudación (16.7.3): podar entradas caducadas (>7 días o temp
             // desaparecido) y conservar los temporales vivos del manifiesto.
             foreach (var staleTemp in _partials.Prune(PartialsMaxAge))
@@ -199,6 +222,8 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
     public Task StopAsync(CancellationToken ct = default)
     {
+        List<SharedDevice> discovered;
+
         // Resolver decisiones pendientes como rechazadas: los handlers que
         // esperaban la confirmación del usuario terminan limpiamente en vez
         // de quedar esperando un TCS que ya nadie resolverá.
@@ -227,6 +252,35 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             {
                 try { cts.Cancel(); } catch (ObjectDisposedException) { /* carrera con finally */ }
             }
+
+            // Los dispositivos DESCUBIERTOS son perecederos: al detener el
+            // servicio dejan de verse (nadie está anunciando ya). Los
+            // emparejados y los revocados son decisiones del usuario y
+            // sobreviven a las sesiones — su punto de existir.
+            discovered = _devices
+                .Where(kvp => kvp.Value.Trust == DeviceTrust.Unknown)
+                .Select(kvp => kvp.Value)
+                .ToList();
+            foreach (var device in discovered)
+            {
+                _devices.Remove(device.DeviceId);
+            }
+
+            SaveDevices();
+
+            // Notificar la limpieza: la UI refresca la lista con lo que queda.
+            foreach (var device in discovered)
+            {
+                DeviceChanged?.Invoke(device);
+                _events?.SendEvent(EventIds.LocalShareDeviceChanged, new LocalShareDeviceChangedPayload
+                {
+                    DeviceId = device.DeviceId,
+                    DisplayName = device.DisplayName,
+                    Trust = "removed",
+                    Address = null,
+                    Port = 0,
+                });
+            }
         }
 
         _discovery?.Dispose();
@@ -236,7 +290,9 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         _fileWriter?.Dispose();
         _fileWriter = null;
         Status = LocalShareServiceStatus.Stopped;
-        _logger?.LogInformation("Local Share detenido");
+        _logger?.LogInformation(
+            "Local Share detenido ({Removed} dispositivos descubiertos retirados)",
+            discovered.Count);
         return Task.CompletedTask;
     }
 
@@ -998,6 +1054,13 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
     /// <summary>Cada cuántos chunks se persiste el manifiesto de parciales.</summary>
     private const int PartialsSaveEveryChunks = 64; // 4 MB a chunks de 64KB
+
+    /// <summary>
+    /// Antigüedad a partir de la cual un dispositivo DESCUBIERTO (Unknown)
+    /// se considera ausente de la red en el arranque. Los anuncios van cada
+    /// 15 s: 5 min sin señal es inequívoco.
+    /// </summary>
+    private static readonly TimeSpan StaleDiscoveryAge = TimeSpan.FromMinutes(5);
 
     /// <summary>¿El deviceId remoto está emparejado (confianza activa)?</summary>
     private bool IsDevicePaired(string deviceId)
