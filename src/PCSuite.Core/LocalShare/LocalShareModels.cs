@@ -262,6 +262,57 @@ public sealed record LocalShareFirewallDiagnostic(bool? RuleExists, bool PortMat
 }
 
 // ---------------------------------------------------------------------------
+// Emparejamiento (modelo Bluetooth: comparación numérica)
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Solicitud de emparejamiento entrante (lado receptor): el otro equipo
+/// quiere emparejarse. La UI muestra el código para comparación visual.
+/// </summary>
+public sealed record LocalSharePairRequest(
+    string RequestId,
+    string PeerDeviceId,
+    string PeerDisplayName,
+    string Code,
+    string Address,
+    int Port);
+
+/// <summary>
+/// Desenlace de un emparejamiento iniciado por ESTE equipo (lado iniciador).
+/// </summary>
+public enum LocalSharePairOutcome
+{
+    /// <summary>El receptor aceptó: ambos equipos quedan emparejados.</summary>
+    Accepted,
+
+    /// <summary>El receptor rechazó o la solicitud expiró.</summary>
+    Rejected,
+
+    /// <summary>Fallo técnico (conexión, TLS, identidad no verificable).</summary>
+    Failed,
+}
+
+/// <summary>
+/// Respuesta inmediata al iniciar un emparejamiento: el código que AMBOS
+/// equipos deben mostrar (comparación numérica estilo Bluetooth). El
+/// desenlace llega después vía el evento PairFinished.
+/// </summary>
+public sealed record LocalSharePairInitiation(
+    string RequestId,
+    string Code,
+    string PeerDisplayName);
+
+/// <summary>
+/// Notificación de desenlace de emparejamiento para el iniciador.
+/// </summary>
+public sealed record LocalSharePairFinished(
+    string RequestId,
+    LocalSharePairOutcome Outcome,
+    string? PeerDeviceId = null,
+    string? PeerDisplayName = null,
+    string? ErrorMessage = null);
+
+// ---------------------------------------------------------------------------
 // Progreso
 // ---------------------------------------------------------------------------
 

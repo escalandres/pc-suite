@@ -8,6 +8,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using PCSuite.Contracts;
 using PCSuite.Core.Elevation;
+using PCSuite.Core.Events;
 using PCSuite.Core.Jobs;
 using PCSuite.Core.LocalShare;
 using PCSuite.Core.Processes;
@@ -52,6 +53,18 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     /// <summary>Transferencias salientes pausadas por el usuario (16.7.4).</summary>
     private readonly HashSet<string> _pausedTransfers = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Decisiones de emparejamiento entrantes esperando al usuario (receptor).
+    /// Key = requestId, value = TCS (true = aceptar).
+    /// </summary>
+    private readonly Dictionary<string, TaskCompletionSource<bool>> _pendingPairDecisions = new(StringComparer.Ordinal);
+
+    /// <summary>Tiempo que el receptor tiene para decidir un emparejamiento.</summary>
+    private static readonly TimeSpan PairDecisionTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>Publisher de eventos hacia la UI (DeferredEventPublisher en la app).</summary>
+    private readonly IEventPublisher? _events;
+
     // ------------------------------------------------------------------
     // Estado
     // ------------------------------------------------------------------
@@ -70,6 +83,8 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     public event Action<ShareTransfer, IReadOnlyList<ShareTransferItem>>? IncomingRequest;
     public event Action<TransferProgress>? ProgressChanged;
     public event Action<ShareTransfer>? TransferFinished;
+    public event Action<LocalSharePairRequest>? PairRequested;
+    public event Action<LocalSharePairFinished>? PairFinished;
 
     // ------------------------------------------------------------------
     // Constructor
@@ -79,10 +94,12 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         string dataDirectory,
         ILogger? logger = null,
         IElevationManager? elevation = null,
-        IProcessRunner? processRunner = null)
+        IProcessRunner? processRunner = null,
+        IEventPublisher? events = null)
     {
         _logger = logger;
         _elevation = elevation;
+        _events = events;
         _processRunner = processRunner ?? new ProcessRunner();
         var localShareDir = Path.Combine(dataDirectory, "LocalShare");
         Directory.CreateDirectory(localShareDir);
@@ -123,7 +140,6 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 _certificateStore.Certificate,
                 _logger,
                 Math.Clamp(_settings.MaxSimultaneousTransfers, 1, 10));
-            _server.TrustedThumbprints = GetTrustedThumbprints();
 
             // Adaptador (16.7.3): al terminar el diálogo por CUALQUIER camino
             // (éxito, rechazo, cancelación o caída de conexión) se persiste el
@@ -194,6 +210,13 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             }
 
             _pendingDecisions.Clear();
+
+            foreach (var tcs in _pendingPairDecisions.Values)
+            {
+                tcs.TrySetResult(false);
+            }
+
+            _pendingPairDecisions.Clear();
             _claimedPartials.Clear();
             _pausedTransfers.Clear();
 
@@ -266,6 +289,15 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     /// actualiza su última dirección y LastSeenAt.
     /// </summary>
     private void OnDeviceAnnounced(
+        string deviceId, string displayName, string address, int port, string thumbprint) =>
+        NoteDiscoveredDevice(deviceId, displayName, address, port, thumbprint);
+
+    /// <summary>
+    /// Registra o actualiza un dispositivo descubierto por multicast (trust
+    /// Unknown: el usuario debe emparejar antes de transferir). Internal para
+    /// los tests E2E, que simulan el discovery sin sockets UDP.
+    /// </summary>
+    internal void NoteDiscoveredDevice(
         string deviceId, string displayName, string address, int port, string thumbprint)
     {
         lock (_lock)
@@ -304,7 +336,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             }
 
             SaveDevices();
-            DeviceChanged?.Invoke(_devices[deviceId]);
+            RaiseDeviceChanged(_devices[deviceId]);
         }
     }
 
@@ -313,73 +345,119 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     /// leer el certificado del par, obtiene su deviceId y registra la
     /// confianza mutua mediante verificación de PIN.
     /// </summary>
-    public async Task<SharedDevice> PairAsync(string address, int port, CancellationToken ct = default)
+    public async Task<LocalSharePairInitiation> PairWithDeviceAsync(string deviceId, CancellationToken ct = default)
     {
         if (Status != LocalShareServiceStatus.Running)
         {
             throw new InvalidOperationException("El servicio Local Share no está activo. Inítialo primero.");
         }
 
-        // Generar PIN de 6 dígitos
-        var pin = Random.Shared.Next(100000, 999999).ToString();
-
-        // Si ya hay un dispositivo anunciado en esa IP:puerto, emparejarlo
-        SharedDevice? device = null;
+        SharedDevice device;
         lock (_lock)
         {
-            device = _devices.Values.FirstOrDefault(d =>
-                d.Port == port && d.KnownAddresses.Contains(address, StringComparer.OrdinalIgnoreCase));
-        }
+            if (!_devices.TryGetValue(deviceId, out device!))
+            {
+                throw new InvalidOperationException($"Dispositivo {deviceId} desconocido.");
+            }
 
-        if (device is null)
-        {
-            // No descubierto: crear entrada manual
-            device = new SharedDevice
+            if (device.KnownAddresses.Count == 0 || device.Port <= 0)
             {
-                DeviceId = $"manual-{address}:{port}",
-                DisplayName = $"Equipo en {address}:{port}",
-                KnownAddresses = [address],
-                Port = port,
-                Trust = DeviceTrust.Unknown,
-                LastSeenAt = DateTimeOffset.UtcNow,
-            };
-            lock (_lock)
-            {
-                _devices[device.DeviceId] = device;
+                throw new InvalidOperationException(
+                    "El dispositivo no tiene dirección conocida (aún no se ha descubierto por la red).");
             }
         }
 
-        // Marcar como pending pairing: el usuario debe confirmar el PIN
-        // que se muestra en el otro equipo
-        _logger?.LogInformation(
-            "Emparejamiento con {Address}:{Port} — PIN: {Pin}",
-            address, port, pin);
-        SaveDevices();
-        DeviceChanged?.Invoke(device);
+        var requestId = Guid.NewGuid().ToString("D");
+        var initiation = new TaskCompletionSource<LocalSharePairInitiation>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
 
-        return device;
+        // El diálogo completo corre en background: la op vuelve en cuanto el
+        // código está disponible (tras HELLO) y el desenlace llega por evento.
+        _ = Task.Run(async () =>
+        {
+            LocalSharePairFinished? finished = null;
+            try
+            {
+                var client = new TransferClient(_certificateStore.Certificate, _logger);
+                var outcome = await client.PairAsync(
+                    device,
+                    _settings.DeviceId,
+                    _settings.DisplayName,
+                    _settings.CertificateThumbprint ?? _certificateStore.Thumbprint,
+                    EffectivePort,
+                    code => initiation.TrySetResult(new LocalSharePairInitiation(
+                        requestId, code, device.DisplayName)),
+                    ct).ConfigureAwait(false);
+
+                if (outcome.Accepted)
+                {
+                    // Registrar al par con su huella VIVA del handshake (no la
+                    // anunciada: tras aceptar, la conexión es de confianza).
+                    RegisterPairedDevice(
+                        outcome.PeerDeviceId,
+                        outcome.PeerDisplayName,
+                        device.KnownAddresses[0],
+                        device.Port,
+                        outcome.PeerThumbprint);
+                    finished = new LocalSharePairFinished(
+                        requestId, LocalSharePairOutcome.Accepted,
+                        outcome.PeerDeviceId, outcome.PeerDisplayName);
+                }
+                else
+                {
+                    finished = new LocalSharePairFinished(
+                        requestId, LocalSharePairOutcome.Rejected,
+                        outcome.PeerDeviceId, outcome.PeerDisplayName,
+                        "El otro equipo rechazó el emparejamiento.");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                initiation.TrySetCanceled(ct);
+                finished = new LocalSharePairFinished(
+                    requestId, LocalSharePairOutcome.Failed, ErrorMessage: "Emparejamiento cancelado.");
+            }
+            catch (Exception ex)
+            {
+                initiation.TrySetException(ex);
+                finished = new LocalSharePairFinished(
+                    requestId, LocalSharePairOutcome.Failed, ErrorMessage: ex.Message);
+            }
+
+            RaisePairFinished(finished);
+        }, ct);
+
+        // Espera rápida: TLS + HELLO. Si el par no está accesible, falla aquí.
+        return await initiation.Task.WaitAsync(TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
     }
 
-    public Task<SharedDevice> ConfirmPairingAsync(string deviceId, string pin, CancellationToken ct = default)
+    public Task AcceptPairingAsync(string requestId, CancellationToken ct = default)
     {
         lock (_lock)
         {
-            if (!_devices.TryGetValue(deviceId, out var device))
+            if (!_pendingPairDecisions.TryGetValue(requestId, out var tcs))
             {
-                throw new InvalidOperationException($"Dispositivo {deviceId} no encontrado.");
+                throw new InvalidOperationException(
+                    "La solicitud de emparejamiento ya no existe (¿expiró o ya fue respondida?).");
             }
 
-            // TODO 16.3: verificar el PIN contra el par via protocolo TCP
-            // Por ahora: aceptar directamente (el PIN ya se mostró en ambos lados)
-            device.Trust = DeviceTrust.Paired;
-            SaveDevices();
-            DeviceChanged?.Invoke(device);
-            _server!.TrustedThumbprints = GetTrustedThumbprints();
-            _logger?.LogInformation(
-                "Dispositivo {Name} ({Id}) emparejado correctamente",
-                device.DisplayName, deviceId[..8] + "...");
-            return Task.FromResult(device);
+            tcs.TrySetResult(true);
         }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RejectPairingAsync(string requestId, CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            if (_pendingPairDecisions.TryGetValue(requestId, out var tcs))
+            {
+                tcs.TrySetResult(false);
+            }
+        }
+
+        return Task.CompletedTask;
     }
 
     public Task RevokeTrustAsync(string deviceId, CancellationToken ct = default)
@@ -390,8 +468,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             {
                 device.Trust = DeviceTrust.Revoked;
                 SaveDevices();
-                DeviceChanged?.Invoke(device);
-                _server!.TrustedThumbprints = GetTrustedThumbprints();
+                RaiseDeviceChanged(device);
             }
         }
 
@@ -415,8 +492,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             };
             _devices[deviceId] = device;
             SaveDevices();
-            _server?.TrustedThumbprints = GetTrustedThumbprints();
-            DeviceChanged?.Invoke(device);
+            RaiseDeviceChanged(device);
             return device;
         }
     }
@@ -578,7 +654,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     () => IsTransferPaused(transferId),
                     bytes =>
                     {
-                        ProgressChanged?.Invoke(new TransferProgress
+                        RaiseProgress(new TransferProgress
                         {
                             TransferId = transferId,
                             TransferredBytes = bytes,
@@ -596,13 +672,13 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     item.Status = TransferStatus.Completed;
                 }
 
-                TransferFinished?.Invoke(transfer);
+                RaiseTransferFinished(transfer);
             }
             catch (OperationCanceledException)
             {
                 transfer.Status = TransferStatus.Cancelled;
                 transfer.CompletedAt = DateTimeOffset.UtcNow;
-                TransferFinished?.Invoke(transfer);
+                RaiseTransferFinished(transfer);
             }
             catch (Exception ex)
             {
@@ -610,7 +686,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 transfer.ErrorMessage = ex.Message;
                 transfer.CompletedAt = DateTimeOffset.UtcNow;
                 _logger?.LogWarning(ex, "Transferencia {Id} falló: {Message}", transferId, ex.Message);
-                TransferFinished?.Invoke(transfer);
+                RaiseTransferFinished(transfer);
             }
             finally
             {
@@ -727,7 +803,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 entry.Transfer.Status = TransferStatus.Cancelled;
                 entry.Transfer.CompletedAt = DateTimeOffset.UtcNow;
                 _pausedTransfers.Remove(transferId);
-                TransferFinished?.Invoke(entry.Transfer);
+                RaiseTransferFinished(entry.Transfer);
             }
         }
 
@@ -809,6 +885,111 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     }
 
     // ------------------------------------------------------------------
+    // Notificaciones: evento de dominio + bridge (DeferredEventPublisher)
+    // ------------------------------------------------------------------
+
+    /// <summary>Dispara DeviceChanged y lo publica al bridge para la UI.</summary>
+    private void RaiseDeviceChanged(SharedDevice device)
+    {
+        DeviceChanged?.Invoke(device);
+        _events?.SendEvent(EventIds.LocalShareDeviceChanged, new LocalShareDeviceChangedPayload
+        {
+            DeviceId = device.DeviceId,
+            DisplayName = device.DisplayName,
+            Trust = device.Trust.ToString().ToLowerInvariant(),
+            Address = device.KnownAddresses.FirstOrDefault(),
+            Port = device.Port,
+        });
+    }
+
+    /// <summary>Solicitud entrante de emparejamiento hacia la UI (receptor).</summary>
+    private void RaisePairRequested(LocalSharePairRequest request)
+    {
+        PairRequested?.Invoke(request);
+        _events?.SendEvent(EventIds.LocalSharePairRequested, new LocalSharePairRequestedPayload
+        {
+            RequestId = request.RequestId,
+            PeerDeviceId = request.PeerDeviceId,
+            PeerDisplayName = request.PeerDisplayName,
+            Code = request.Code,
+        });
+    }
+
+    /// <summary>Desenlace de un emparejamiento iniciado por este equipo.</summary>
+    private void RaisePairFinished(LocalSharePairFinished finished)
+    {
+        PairFinished?.Invoke(finished);
+        _events?.SendEvent(EventIds.LocalSharePairFinished, new LocalSharePairFinishedPayload
+        {
+            RequestId = finished.RequestId,
+            Outcome = finished.Outcome.ToString().ToLowerInvariant(),
+            DeviceId = finished.PeerDeviceId,
+            DisplayName = finished.PeerDisplayName,
+            ErrorMessage = finished.ErrorMessage,
+        });
+    }
+
+    /// <summary>Publica una solicitud de transferencia entrante al bridge.</summary>
+    private void RaiseIncomingRequest(ShareTransfer transfer, IReadOnlyList<ShareTransferItem> items)
+    {
+        IncomingRequest?.Invoke(transfer, items);
+        _events?.SendEvent(EventIds.LocalShareIncomingRequest, new LocalShareIncomingRequestPayload
+        {
+            TransferId = transfer.TransferId,
+            PeerDisplayName = transfer.PeerDisplayName,
+            ItemCount = transfer.ItemCount,
+            TotalBytes = transfer.TotalBytes,
+            Items = [.. items.Select(i => new ShareTransferItemResult
+            {
+                ItemId = i.ItemId,
+                RelativePath = i.RelativePath,
+                ExpectedSize = i.ExpectedSize,
+                ExpectedHash = i.ExpectedHash,
+                Status = i.Status.ToString().ToLowerInvariant(),
+                TransferredBytes = i.TransferredBytes,
+            })],
+        });
+    }
+
+    /// <summary>Publica el fin de una transferencia al bridge.</summary>
+    private void RaiseTransferFinished(ShareTransfer transfer)
+    {
+        TransferFinished?.Invoke(transfer);
+        _events?.SendEvent(EventIds.LocalShareTransferFinished, new LocalShareTransferFinishedPayload
+        {
+            TransferId = transfer.TransferId,
+            Status = transfer.Status.ToString().ToLowerInvariant(),
+            ErrorMessage = transfer.ErrorMessage,
+            TotalBytes = transfer.TotalBytes,
+        });
+    }
+
+    /// <summary>Publica el progreso de una transferencia al bridge.</summary>
+    private void RaiseProgress(TransferProgress progress)
+    {
+        ProgressChanged?.Invoke(progress);
+        _events?.SendEvent(EventIds.LocalShareTransferProgress, new LocalShareTransferProgressPayload
+        {
+            TransferId = progress.TransferId,
+            TransferredBytes = progress.TransferredBytes,
+            TotalBytes = progress.TotalBytes,
+            BytesPerSecond = progress.BytesPerSecond,
+            ItemsCompleted = progress.ItemsCompleted,
+            ItemsTotal = progress.ItemsTotal,
+            CurrentFile = progress.CurrentFile,
+        });
+    }
+
+    /// <summary>¿La huella TLS pertenece a un dispositivo emparejado?</summary>
+    private bool IsThumbprintTrusted(string thumbprint)
+    {
+        lock (_lock)
+        {
+            return GetTrustedThumbprints().Contains(thumbprint);
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Handlers internos
     // ------------------------------------------------------------------
 
@@ -874,11 +1055,41 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 _settings.CertificateThumbprint ?? _certificateStore.Thumbprint))
             .ConfigureAwait(false);
 
-        // 3. TRANSFER_REQUEST con metadatos
+        // 3. Siguiente frame: TRANSFER_REQUEST (transferir) o PAIR_REQUEST
+        //    (emparejar). Cualquier otra cosa cierra el diálogo.
         var (reqType, reqPayload) = await ShareProtocol.ReadFrameAsync(stream).ConfigureAwait(false);
+
+        // Huella VIVA del cliente según el handshake TLS: material de
+        // decisión para emparejar y de verificación para transferir.
+        var clientThumbprint = TlsTransferServer.GetThumbprint(stream.RemoteCertificate);
+
+        if (reqType == ShareProtocol.MsgPairRequest)
+        {
+            await HandlePairRequestAsync(stream, clientThumbprint, remoteIp, reqPayload)
+                .ConfigureAwait(false);
+            return;
+        }
+
         if (reqType != ShareProtocol.MsgTransferRequest)
         {
             _logger?.LogWarning("Se esperaba TRANSFER_REQUEST, llegó {Type}", reqType);
+            return;
+        }
+
+        // Seguridad (antes la imponía el handshake TLS, ahora relajado para
+        // permitir emparejar): transferir exige una huella emparejada. El
+        // rechazo llega limpio como ERROR not_paired, sin EOF críptico.
+        if (clientThumbprint is null || !IsThumbprintTrusted(clientThumbprint))
+        {
+            _logger?.LogInformation(
+                "TRANSFER_REQUEST de {Ip} con huella no emparejada: rechazado", remoteIp);
+            await ShareProtocol.WriteControlAsync(
+                stream,
+                ShareProtocol.MsgError,
+                new ShareProtocol.ErrorPayload(
+                    "not_paired",
+                    "Este equipo no está emparejado con el receptor. Pide al receptor que acepte el emparejamiento desde la página Local Share."))
+                .ConfigureAwait(false);
             return;
         }
 
@@ -951,7 +1162,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         else
         {
             // 6. Notificar a la UI que hay una solicitud entrante
-            IncomingRequest?.Invoke(transfer, items);
+            RaiseIncomingRequest(transfer, items);
         }
 
         // 7. Esperar decisión del usuario (AcceptAsync/RejectAsync resuelven el TCS)
@@ -967,7 +1178,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 .ConfigureAwait(false);
             transfer.Status = TransferStatus.Rejected;
             transfer.CompletedAt = DateTimeOffset.UtcNow;
-            TransferFinished?.Invoke(transfer);
+            RaiseTransferFinished(transfer);
             return;
         }
 
@@ -996,7 +1207,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             {
                 transfer.Status = TransferStatus.Cancelled;
                 transfer.CompletedAt = DateTimeOffset.UtcNow;
-                TransferFinished?.Invoke(transfer);
+                RaiseTransferFinished(transfer);
                 return;
             }
 
@@ -1009,7 +1220,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     stream,
                     ShareProtocol.MsgError,
                     new ShareProtocol.ErrorPayload("protocol", "Se esperaba FILE_START.")).ConfigureAwait(false);
-                TransferFinished?.Invoke(transfer);
+                RaiseTransferFinished(transfer);
                 return;
             }
 
@@ -1139,7 +1350,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                         }
                         transfer.Status = TransferStatus.Cancelled;
                         transfer.CompletedAt = DateTimeOffset.UtcNow;
-                        TransferFinished?.Invoke(transfer);
+                        RaiseTransferFinished(transfer);
                         return;
                     }
 
@@ -1158,7 +1369,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                             stream,
                             ShareProtocol.MsgError,
                             new ShareProtocol.ErrorPayload("protocol", "Se esperaba FILE_DATA.")).ConfigureAwait(false);
-                        TransferFinished?.Invoke(transfer);
+                        RaiseTransferFinished(transfer);
                         return;
                     }
 
@@ -1180,7 +1391,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                         }
                     }
 
-                    ProgressChanged?.Invoke(new TransferProgress
+                    RaiseProgress(new TransferProgress
                     {
                         TransferId = transfer.TransferId,
                         TransferredBytes = receivedBytes,
@@ -1234,7 +1445,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         {
             transfer.Status = TransferStatus.Cancelled;
             transfer.CompletedAt = DateTimeOffset.UtcNow;
-            TransferFinished?.Invoke(transfer);
+            RaiseTransferFinished(transfer);
             return;
         }
 
@@ -1252,7 +1463,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 stream,
                 ShareProtocol.MsgError,
                 new ShareProtocol.ErrorPayload("publish_failed", transfer.ErrorMessage)).ConfigureAwait(false);
-            TransferFinished?.Invoke(transfer);
+            RaiseTransferFinished(transfer);
             return;
         }
 
@@ -1263,14 +1474,85 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
         transfer.Status = TransferStatus.Completed;
         transfer.CompletedAt = DateTimeOffset.UtcNow;
-        TransferFinished?.Invoke(transfer);
+        RaiseTransferFinished(transfer);
         _logger?.LogInformation(
             "Transferencia entrante {Id} completada: {Bytes} bytes",
             transfer.TransferId, receivedBytes);
     }
 
-    private string GetDeviceName(string deviceId)
+    /// <summary>
+    /// Diálogo de emparejamiento entrante (lado receptor). Deriva el código
+    /// de comparación de las dos huellas VIVAS del handshake, pide decisión
+    /// al usuario vía evento (la UI muestra el código) y responde ACCEPT o
+    /// REJECT. Al aceptar, registra al par con su huella viva y el puerto de
+    /// servicio que anunció en el payload (el de la conexión es efímero).
+    /// </summary>
+    private async Task HandlePairRequestAsync(
+        SslStream stream,
+        string? clientThumbprint,
+        string remoteIp,
+        byte[] payload)
     {
+        var pair = ShareProtocol.Deserialize<ShareProtocol.PairRequestPayload>(payload);
+        if (pair is null || string.IsNullOrEmpty(pair.DeviceId) || clientThumbprint is null)
+        {
+            await ShareProtocol.WriteControlAsync(
+                stream, ShareProtocol.MsgPairReject, new { }).ConfigureAwait(false);
+            return;
+        }
+
+        var requestId = Guid.NewGuid().ToString("D");
+        var code = PairingCode.Derive(
+            _settings.CertificateThumbprint ?? _certificateStore.Thumbprint,
+            clientThumbprint);
+
+        var decision = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lock)
+        {
+            _pendingPairDecisions[requestId] = decision;
+        }
+
+        RaisePairRequested(new LocalSharePairRequest(
+            requestId, pair.DeviceId, pair.DisplayName, code, remoteIp, pair.Port));
+
+        _logger?.LogInformation(
+            "Solicitud de emparejamiento de {Name} ({Ip}) — código {Code}",
+            pair.DisplayName, remoteIp, code);
+
+        var accepted = false;
+        try
+        {
+            // El usuario tiene un margen limitado; la expiración cuenta como
+            // rechazo limpio (el iniciador no se queda colgado esperando).
+            accepted = await decision.Task.WaitAsync(PairDecisionTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            accepted = false;
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                _pendingPairDecisions.Remove(requestId);
+            }
+        }
+
+        if (!accepted)
+        {
+            await ShareProtocol.WriteControlAsync(
+                stream, ShareProtocol.MsgPairReject, new { }).ConfigureAwait(false);
+            return;
+        }
+
+        // Registrar al iniciador: confianza mutua con su huella VIVA.
+        RegisterPairedDevice(pair.DeviceId, pair.DisplayName, remoteIp, pair.Port, clientThumbprint);
+
+        await ShareProtocol.WriteControlAsync(
+            stream, ShareProtocol.MsgPairAccept, new { }).ConfigureAwait(false);
+    }
+
+    private string GetDeviceName(string deviceId)    {
         lock (_lock)
         {
             return _devices.TryGetValue(deviceId, out var d) ? d.DisplayName : deviceId;

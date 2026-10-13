@@ -39,9 +39,6 @@ public sealed class TlsTransferServer : IDisposable
     /// </remarks>
     public event Func<SslStream, string, Task>? PeerConnected;
 
-    /// <summary>Huellas SHA-256 de certificados emparejados (hex minúscula). Se actualiza externamente.</summary>
-    public IReadOnlySet<string> TrustedThumbprints { get; set; } = new HashSet<string>();
-
     public TlsTransferServer(X509Certificate2 serverCertificate, ILogger? logger = null, int maxConnections = 3)
     {
         if (maxConnections < 1)
@@ -216,23 +213,28 @@ public sealed class TlsTransferServer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Validación del certificado del cliente durante el handshake TLS.
+    ///
+    /// Desde el emparejamiento por comparación numérica, el handshake acepta
+    /// CUALQUIER certificado (un dispositivo sin emparejar debe poder conectar
+    /// para emparejarse). La decisión de confianza es del SERVICIO, según el
+    /// tipo de mensaje: transferir exige huella emparejada (ERROR not_paired
+    /// en caso contrario) y PAIR_REQUEST abre el diálogo de emparejamiento.
+    /// El límite de conexiones y el desenlace del emparejamiento mitigan el
+    /// abuso de conexiones desconocidas.
+    /// </summary>
     private bool ValidatePeerCertificate(
         object sender,
         X509Certificate? certificate,
         X509Chain? chain,
         SslPolicyErrors sslPolicyErrors)
     {
-        if (certificate is null)
-        {
-            return false;
-        }
-
-        var thumbprint = GetThumbprint(certificate);
-        return thumbprint is not null
-            && TrustedThumbprints.Contains(thumbprint);
+        // Sin certificado no hay diálogo posible (el cliente debe presentar el suyo).
+        return certificate is not null;
     }
 
-    private static string? GetThumbprint(X509Certificate? certificate)
+    internal static string? GetThumbprint(X509Certificate? certificate)
     {
         if (certificate is null)
         {

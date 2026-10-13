@@ -56,6 +56,19 @@ public static class ShareProtocol
     /// </summary>
     public const byte MsgResume = 0x0D;
 
+    /// <summary>
+    /// Emparejamiento (comparación numérica): el iniciador lo envía tras
+    /// HELLO_ACK en lugar de TRANSFER_REQUEST. El receptor muestra el código
+    /// derivado de ambas huellas y responde ACCEPT o REJECT.
+    /// </summary>
+    public const byte MsgPairRequest = 0x0E;
+
+    /// <summary>El receptor aceptó el emparejamiento.</summary>
+    public const byte MsgPairAccept = 0x0F;
+
+    /// <summary>El receptor rechazó el emparejamiento (o expiró la solicitud).</summary>
+    public const byte MsgPairReject = 0x10;
+
     // ------------------------------------------------------------------
     // Payloads de control (JSON)
     // ------------------------------------------------------------------
@@ -76,6 +89,19 @@ public static class ShareProtocol
 
     /// <summary>Offset (en bytes) que el receptor ya tiene del archivo.</summary>
     public sealed record ResumePayload(string ItemId, long Offset);
+
+    /// <summary>
+    /// Identidad del iniciador del emparejamiento. La huella es informativa:
+    /// la validación real es la del certificado TLS de la conexión, y el
+    /// código se deriva de esas huellas vivas, no de este payload.
+    /// Port = puerto del SERVICIO del iniciador (para que el receptor pueda
+    /// enviarle archivos después; el puerto de la conexión es efímero).
+    /// </summary>
+    public sealed record PairRequestPayload(
+        string DeviceId,
+        string DisplayName,
+        int Port,
+        string Thumbprint);
 
     public sealed record ErrorPayload(string Code, string Message);
 

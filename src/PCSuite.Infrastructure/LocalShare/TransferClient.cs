@@ -31,8 +31,8 @@ public sealed class TransferClient
     /// 2. HELLO / HELLO_ACK (intercambio de identidad)
     /// 3. TRANSFER_REQUEST (metadatos de todos los archivos)
     /// 4. Esperar TRANSFER_ACCEPT o TRANSFER_REJECT
-    /// 5. Por cada archivo: FILE_START → FILE_DATA chunks → FILE_END
-    /// 6. TRANSFER_COMPLETE
+    /// 5. Por cada archivo: FILE_START → RESUME → FILE_DATA chunks → FILE_END
+    /// 6. TRANSFER_COMPLETE + ACK de fin-a-fin
     /// </summary>
     public async Task SendFilesAsync(
         SharedDevice peer,
@@ -245,6 +245,122 @@ public sealed class TransferClient
         _logger?.LogInformation(
             "Transferencia {Id} completada: {Bytes} bytes en {Count} archivos",
             transfer.TransferId, totalTransferred, items.Count);
+    }
+
+    /// <summary>Resultado del diálogo de emparejamiento desde el iniciador.</summary>
+    public sealed record PairClientOutcome(
+        bool Accepted,
+        string PeerDeviceId,
+        string PeerDisplayName,
+        string PeerThumbprint);
+
+    /// <summary>
+    /// Emparejamiento (comparación numérica, lado iniciador):
+    /// 1. Conectar TCP → TLS validando al receptor contra la huella ANUNCIADA
+    ///    (TOFU por multicast: falsificable, pero el código de comparación
+    ///    detecta un MITM porque las huellas vivas diferirían).
+    /// 2. HELLO / HELLO_ACK.
+    /// 3. Derivar el código de las dos huellas VIVAS del handshake y
+    ///    notificarlo via onCodeReady (la UI lo muestra mientras espera).
+    /// 4. PAIR_REQUEST y espera de la decisión del usuario REMOTO (el read
+    ///    bloquea hasta que el receptor responde o su timeout expira).
+    /// </summary>
+    public async Task<PairClientOutcome> PairAsync(
+        SharedDevice peer,
+        string selfDeviceId,
+        string selfDisplayName,
+        string selfThumbprint,
+        int selfServicePort,
+        Action<string>? onCodeReady,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(peer.CertificateThumbprint))
+        {
+            throw new InvalidOperationException(
+                "El dispositivo no tiene huella anunciada: no se puede verificar su identidad.");
+        }
+
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync(peer.KnownAddresses[0], peer.Port, ct).ConfigureAwait(false);
+
+        // La huella del servidor tal y como se presentó en el handshake:
+        // material vivo para derivar el código (no el anuncio).
+        string? liveServerThumbprint = null;
+        using var sslStream = new SslStream(
+            tcp.GetStream(),
+            leaveInnerStreamOpen: false,
+            (_, cert, _, _) =>
+            {
+                var thumb = TlsTransferServer.GetThumbprint(cert);
+                if (thumb is not null)
+                {
+                    liveServerThumbprint = thumb;
+                }
+
+                return ValidateServerCertificate(cert, peer.CertificateThumbprint);
+            });
+
+        var sslOptions = new SslClientAuthenticationOptions
+        {
+            ClientCertificates = [_clientCertificate],
+            TargetHost = "PCSuite Local Share",
+            EnabledSslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12,
+            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+        };
+
+        await sslStream.AuthenticateAsClientAsync(sslOptions, ct).ConfigureAwait(false);
+
+        if (liveServerThumbprint is null)
+        {
+            throw new InvalidOperationException("El receptor no presentó certificado.");
+        }
+
+        // 1. HELLO / HELLO_ACK
+        await ShareProtocol.WriteControlAsync(
+            sslStream,
+            ShareProtocol.MsgHello,
+            new ShareProtocol.HelloPayload(selfDeviceId, selfDisplayName, selfThumbprint),
+            ct).ConfigureAwait(false);
+
+        var (ackType, ackPayload) = await ShareProtocol.ReadFrameAsync(sslStream, ct).ConfigureAwait(false);
+        if (ackType != ShareProtocol.MsgHelloAck)
+        {
+            var error = ShareProtocol.Deserialize<ShareProtocol.ErrorPayload>(ackPayload);
+            throw new InvalidOperationException(
+                $"Handshake rechazado: {error?.Message ?? ackType.ToString()}");
+        }
+
+        var ack = ShareProtocol.Deserialize<ShareProtocol.HelloPayload>(ackPayload);
+        if (ack is null || string.IsNullOrEmpty(ack.DeviceId))
+        {
+            throw new InvalidOperationException("El receptor no identificó su dispositivo.");
+        }
+
+        // 2. Código de comparación de las huellas VIVAS: idéntico al que
+        //    muestra el receptor (que deriva del MISMO par de huellas).
+        var code = PairingCode.Derive(selfThumbprint, liveServerThumbprint);
+        onCodeReady?.Invoke(code);
+
+        // 3. PAIR_REQUEST: el receptor mostrará el código a su usuario.
+        await ShareProtocol.WriteControlAsync(
+            sslStream,
+            ShareProtocol.MsgPairRequest,
+            new ShareProtocol.PairRequestPayload(selfDeviceId, selfDisplayName, selfServicePort, selfThumbprint),
+            ct).ConfigureAwait(false);
+
+        // 4. Decisión del usuario remoto (bloquea hasta que responda).
+        var (decisionType, _) = await ShareProtocol.ReadFrameAsync(sslStream, ct).ConfigureAwait(false);
+        var accepted = decisionType == ShareProtocol.MsgPairAccept;
+        if (decisionType is not (ShareProtocol.MsgPairAccept or ShareProtocol.MsgPairReject))
+        {
+            throw new InvalidOperationException(
+                $"Respuesta inesperada al emparejar: {decisionType}");
+        }
+
+        _logger?.LogInformation(
+            "Emparejamiento con {Name}: {Result}", ack.DisplayName, accepted ? "aceptado" : "rechazado");
+
+        return new PairClientOutcome(accepted, ack.DeviceId, ack.DisplayName, liveServerThumbprint);
     }
 
     private static async Task SendCancelAsync(Stream stream, string transferId, CancellationToken ct)

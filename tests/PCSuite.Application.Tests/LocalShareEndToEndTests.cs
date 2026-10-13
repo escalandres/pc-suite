@@ -523,6 +523,132 @@ public class LocalShareEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task PairingFlow_CompletesAndEnablesTransfers()
+    {
+        // El flujo REAL de usuario: discovery (simulado vía NoteDiscoveredDevice)
+        // → emparejar con código de comparación → aceptar en el receptor →
+        // ambos emparejados → transferir SIN registro manual previo.
+        await _serviceA.StartAsync();
+        await _serviceB.StartAsync();
+
+        var thumbB = _serviceB.Settings.CertificateThumbprint!;
+
+        // Lo que el anuncio multicast le habría dicho a A sobre B.
+        _serviceA.NoteDiscoveredDevice("device-b", "Equipo B", "127.0.0.1", PortB, thumbB);
+
+        // Receptor: capturar la solicitud entrante de emparejamiento.
+        var bRequested = new TaskCompletionSource<LocalSharePairRequest>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceB.PairRequested += r => bRequested.TrySetResult(r);
+
+        // Iniciador: desenlace vía evento.
+        var aFinished = new TaskCompletionSource<LocalSharePairFinished>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.PairFinished += f => aFinished.TrySetResult(f);
+
+        var initiation = await _serviceA.PairWithDeviceAsync("device-b");
+
+        // El código de comparación ya está disponible para la UI del iniciador.
+        Assert.Matches("^[0-9]{6}$", initiation.Code);
+
+        // El receptor recibe la solicitud con EL MISMO código (propiedad clave
+        // de la comparación numérica: deriva del mismo par de huellas vivas).
+        var request = await bRequested.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal("device-a", request.PeerDeviceId);
+        Assert.Equal("Equipo A", request.PeerDisplayName);
+        Assert.Equal(initiation.Code, request.Code);
+        Assert.Equal(PortA, request.Port);
+
+        // Aceptar en el receptor tras "comparar las pantallas".
+        await _serviceB.AcceptPairingAsync(request.RequestId);
+
+        var outcome = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(LocalSharePairOutcome.Accepted, outcome.Outcome);
+        Assert.Equal("device-b", outcome.PeerDeviceId);
+
+        // Ambos lados registran la confianza mutua.
+        Assert.Contains(_serviceA.GetPairedDevices(), d => d.DeviceId == "device-b");
+        Assert.Contains(_serviceB.GetPairedDevices(), d => d.DeviceId == "device-a");
+
+        // La prueba de fuego: transferir A → B sin ningún registro manual.
+        var file = Path.Combine(_dirA, "post-emparejamiento.txt");
+        File.WriteAllText(file, "contenido tras emparejar");
+
+        var bIncoming = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceB.IncomingRequest += (t, _) => bIncoming.TrySetResult(t);
+
+        var transferDone = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => transferDone.TrySetResult(t);
+
+        await _serviceA.SendAsync("device-b", [file]);
+        var incoming = await bIncoming.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await _serviceB.AcceptAsync(incoming.TransferId);
+
+        var transfer = await transferDone.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(TransferStatus.Completed, transfer.Status);
+        Assert.Equal(
+            "contenido tras emparejar",
+            File.ReadAllText(Path.Combine(_dirB, "received", "post-emparejamiento.txt")));
+    }
+
+    [Fact]
+    public async Task PairingFlow_RejectedByPeer_NothingPaired()
+    {
+        await _serviceA.StartAsync();
+        await _serviceB.StartAsync();
+
+        _serviceA.NoteDiscoveredDevice(
+            "device-b", "Equipo B", "127.0.0.1", PortB,
+            _serviceB.Settings.CertificateThumbprint!);
+
+        var bRequested = new TaskCompletionSource<LocalSharePairRequest>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceB.PairRequested += r => bRequested.TrySetResult(r);
+
+        var aFinished = new TaskCompletionSource<LocalSharePairFinished>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.PairFinished += f => aFinished.TrySetResult(f);
+
+        await _serviceA.PairWithDeviceAsync("device-b");
+
+        var request = await bRequested.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await _serviceB.RejectPairingAsync(request.RequestId);
+
+        var outcome = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(LocalSharePairOutcome.Rejected, outcome.Outcome);
+
+        // Nadie queda emparejado.
+        Assert.Empty(_serviceA.GetPairedDevices());
+        Assert.Empty(_serviceB.GetPairedDevices());
+    }
+
+    [Fact]
+    public async Task PairingFlow_WrongAnnouncedThumbprint_Fails()
+    {
+        // Simulación de anuncio falsificado (MITM): la huella anunciada NO
+        // coincide con la del servidor real → el TLS del iniciador rechaza y
+        // el emparejamiento falla con desenlace limpio, nunca se registra.
+        await _serviceA.StartAsync();
+        await _serviceB.StartAsync();
+
+        _serviceA.NoteDiscoveredDevice(
+            "device-b", "Equipo B", "127.0.0.1", PortB, new string('a', 64));
+
+        var aFinished = new TaskCompletionSource<LocalSharePairFinished>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.PairFinished += f => aFinished.TrySetResult(f);
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => _serviceA.PairWithDeviceAsync("device-b"));
+
+        var outcome = await aFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(LocalSharePairOutcome.Failed, outcome.Outcome);
+        Assert.Empty(_serviceA.GetPairedDevices());
+    }
+
+    [Fact]
     public async Task MultiItemTransfer_AllFilesPublishedInOrder()
     {
         // Regresión del bug de la "lectura extra": un ReadFrameAsync de más

@@ -225,8 +225,11 @@ public static class OperationIds
     /// <summary>Empareja un dispositivo por IP:puerto (payload: { address, port }).</summary>
     public const string LocalSharePair = "localshare.pair";
 
-    /// <summary>Confirma el PIN del emparejamiento (payload: { deviceId, pin }).</summary>
-    public const string LocalShareConfirmPairing = "localshare.confirmPairing";
+    /// <summary>Acepta una solicitud de emparejamiento entrante (payload: { requestId }).</summary>
+    public const string LocalSharePairAccept = "localshare.pairAccept";
+
+    /// <summary>Rechaza una solicitud de emparejamiento entrante (payload: { requestId }).</summary>
+    public const string LocalSharePairReject = "localshare.pairReject";
 
     /// <summary>Revoca la confianza de un dispositivo (payload: { deviceId }).</summary>
     public const string LocalShareRevoke = "localshare.revoke";

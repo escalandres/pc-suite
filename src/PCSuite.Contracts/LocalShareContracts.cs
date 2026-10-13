@@ -45,20 +45,6 @@ public sealed class SharedDeviceCollectionResult
     public IReadOnlyList<SharedDeviceResult> Devices { get; init; } = [];
 }
 
-/// <summary>Resultado de localshare.pair (payload: { address, port }).</summary>
-public sealed class LocalSharePairResult
-{
-    public string DeviceId { get; init; } = "";
-
-    public string DisplayName { get; init; } = "";
-
-    /// <summary>PIN de 6 dígitos para verificar en el otro equipo.</summary>
-    public string Pin { get; init; } = "";
-
-    /// <summary>La otra parte debe confirmar este PIN en su pantalla.</summary>
-    public bool PendingConfirmation { get; init; } = true;
-}
-
 /// <summary>Resultado de localshare.send (payload: { deviceId, paths }).</summary>
 public sealed class LocalShareSendResult
 {
@@ -168,20 +154,56 @@ public sealed class LocalShareSendPayload
     public IReadOnlyList<string> Paths { get; init; } = [];
 }
 
-/// <summary>Payload de localshare.pair.</summary>
+/// <summary>Payload de localshare.pair: iniciar emparejamiento con un dispositivo descubierto.</summary>
 public sealed class LocalSharePairPayload
 {
-    public string Address { get; init; } = "";
-
-    public int Port { get; init; }
+    public string DeviceId { get; init; } = "";
 }
 
-/// <summary>Payload de localshare.confirm-pairing.</summary>
-public sealed class LocalShareConfirmPayload
+/// <summary>Payload de localshare.pairAccept / localshare.pairReject.</summary>
+public sealed class LocalSharePairDecisionPayload
 {
-    public string DeviceId { get; init; } = "";
+    public string RequestId { get; init; } = "";
+}
 
-    public string Pin { get; init; } = "";
+/// <summary>Resultado de localshare.pair: el código ya está disponible.</summary>
+public sealed class LocalSharePairInitiationResult
+{
+    /// <summary>Identificador de este intento (correlaciona con el evento pair-finished).</summary>
+    public string RequestId { get; init; } = "";
+
+    /// <summary>Código de comparación: DEBE coincidir con el del otro equipo.</summary>
+    public string Code { get; init; } = "";
+
+    public string PeerDisplayName { get; init; } = "";
+}
+
+/// <summary>Payload del evento localshare.pair-request (lado receptor).</summary>
+public sealed class LocalSharePairRequestedPayload
+{
+    public string RequestId { get; init; } = "";
+
+    public string PeerDeviceId { get; init; } = "";
+
+    public string PeerDisplayName { get; init; } = "";
+
+    /// <summary>Código derivado de las dos huellas TLS vivas: el usuario lo compara con la pantalla del otro equipo.</summary>
+    public string Code { get; init; } = "";
+}
+
+/// <summary>Payload del evento localshare.pair-finished (lado iniciador).</summary>
+public sealed class LocalSharePairFinishedPayload
+{
+    public string RequestId { get; init; } = "";
+
+    /// <summary>accepted | rejected | failed.</summary>
+    public string Outcome { get; init; } = "";
+
+    public string? DeviceId { get; init; }
+
+    public string? DisplayName { get; init; }
+
+    public string? ErrorMessage { get; init; }
 }
 
 /// <summary>Payload genérico de localshare.accept / localshare.reject / localshare.cancel.</summary>

@@ -46,13 +46,23 @@ public interface ILocalShareService
     IReadOnlyList<SharedDevice> GetPairedDevices();
 
     /// <summary>
-    /// Inicia el emparejamiento con un dispositivo por IP:puerto.
-    /// Muestra un código PIN en ambos lados para verificación manual.
+    /// Inicia el emparejamiento con un dispositivo DESCUBIERTO (modelo
+    /// Bluetooth de comparación numérica). Conecta por TLS, deriva un
+    /// código de 6 dígitos de las dos huellas de la conexión viva y lo
+    /// muestra en ambos equipos; el desenlace llega vía PairFinished.
     /// </summary>
-    Task<SharedDevice> PairAsync(string address, int port, CancellationToken cancellationToken = default);
+    Task<LocalSharePairInitiation> PairWithDeviceAsync(
+        string deviceId,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>Confirma el PIN mostrado en el otro equipo y establece la confianza.</summary>
-    Task<SharedDevice> ConfirmPairingAsync(string deviceId, string pin, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Acepta una solicitud de emparejamiento entrante (lado receptor):
+    /// el usuario comparó el código y coincide.
+    /// </summary>
+    Task AcceptPairingAsync(string requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>Rechaza una solicitud de emparejamiento entrante.</summary>
+    Task RejectPairingAsync(string requestId, CancellationToken cancellationToken = default);
 
     /// <summary>Revoca la confianza de un dispositivo emparejado.</summary>
     Task RevokeTrustAsync(string deviceId, CancellationToken cancellationToken = default);
@@ -149,4 +159,13 @@ public interface ILocalShareService
 
     /// <summary>Una transferencia llegó a estado terminal.</summary>
     event Action<ShareTransfer>? TransferFinished;
+
+    /// <summary>
+    /// Solicitud de emparejamiento entrante (lado receptor): mostrar el
+    /// código de comparación y pedir decisión (Accept/RejectPairingAsync).
+    /// </summary>
+    event Action<LocalSharePairRequest>? PairRequested;
+
+    /// <summary>Desenlace de un emparejamiento iniciado por este equipo.</summary>
+    event Action<LocalSharePairFinished>? PairFinished;
 }

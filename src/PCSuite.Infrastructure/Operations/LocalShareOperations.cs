@@ -81,7 +81,11 @@ public sealed class LocalShareDevicesOperation(ILocalShareService service) : IOp
     };
 }
 
-/// <summary>localshare.pair — emparejar por IP:puerto (payload: { address, port }).</summary>
+/// <summary>
+/// localshare.pair — iniciar emparejamiento con un dispositivo descubierto
+/// (payload: { deviceId }). Devuelve YA el código de comparación; el
+/// desenlace llega después vía el evento localshare.pair-finished.
+/// </summary>
 public sealed class LocalSharePairOperation(ILocalShareService service) : IOperation
 {
     public string Id => OperationIds.LocalSharePair;
@@ -91,25 +95,71 @@ public sealed class LocalSharePairOperation(ILocalShareService service) : IOpera
     {
         if (!ToolMapper.TryParsePayload(context.Payload, out LocalSharePairPayload payload) || payload is null)
         {
-            return OperationResult.Fail("error", "El payload debe ser { address, port }.");
+            return OperationResult.Fail("error", "El payload debe ser { deviceId }.");
         }
 
         try
         {
-            var device = await service.PairAsync(payload.Address, payload.Port, ct).ConfigureAwait(false);
-            var dto = new LocalSharePairResult
+            var initiation = await service.PairWithDeviceAsync(payload.DeviceId, ct).ConfigureAwait(false);
+            var dto = new LocalSharePairInitiationResult
             {
-                DeviceId = device.DeviceId,
-                DisplayName = device.DisplayName,
-                Pin = "000000", // TODO: generar PIN real
-                PendingConfirmation = true,
+                RequestId = initiation.RequestId,
+                Code = initiation.Code,
+                PeerDisplayName = initiation.PeerDisplayName,
             };
             return OperationResult.Ok(BridgeJson.ToJson(dto));
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
             return OperationResult.Fail("pair_failed", ex.Message);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+    }
+}
+
+/// <summary>localshare.pairAccept — aceptar emparejamiento entrante tras comparar el código (payload: { requestId }).</summary>
+public sealed class LocalSharePairAcceptOperation(ILocalShareService service) : IOperation
+{
+    public string Id => OperationIds.LocalSharePairAccept;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalSharePairDecisionPayload payload) || payload is null)
+        {
+            return OperationResult.Fail("error", "El payload debe ser { requestId }.");
+        }
+
+        try
+        {
+            await service.AcceptPairingAsync(payload.RequestId, ct).ConfigureAwait(false);
+            return OperationResult.Ok(BridgeJson.ToJson(new { accepted = true }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return OperationResult.Fail("pair_failed", ex.Message);
+        }
+    }
+}
+
+/// <summary>localshare.pairReject — rechazar emparejamiento entrante (payload: { requestId }).</summary>
+public sealed class LocalSharePairRejectOperation(ILocalShareService service) : IOperation
+{
+    public string Id => OperationIds.LocalSharePairReject;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalSharePairDecisionPayload payload) || payload is null)
+        {
+            return OperationResult.Fail("error", "El payload debe ser { requestId }.");
+        }
+
+        await service.RejectPairingAsync(payload.RequestId, ct).ConfigureAwait(false);
+        return OperationResult.Ok(BridgeJson.ToJson(new { rejected = true }));
     }
 }
 

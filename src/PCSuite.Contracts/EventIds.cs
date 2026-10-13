@@ -26,4 +26,13 @@ public static class EventIds
 
     /// <summary>Una transferencia llegó a estado terminal (completed/cancelled/failed).</summary>
     public const string LocalShareTransferFinished = "localshare.transfer-finished";
+
+    /// <summary>
+    /// Llega una solicitud de emparejamiento (lado receptor): mostrar el código
+    /// de comparación y decidir (localshare.pairAccept / pairReject).
+    /// </summary>
+    public const string LocalSharePairRequested = "localshare.pair-request";
+
+    /// <summary>Desenlace de un emparejamiento iniciado por este equipo (accepted/rejected/failed).</summary>
+    public const string LocalSharePairFinished = "localshare.pair-finished";
 }

@@ -18,6 +18,9 @@ import { OperationIds, EventIds } from '../types/bridge';
 import type {
   LocalShareStatusResult,
   LocalShareFirewallStatusResult,
+  LocalSharePairResult,
+  LocalSharePairRequestedPayload,
+  LocalSharePairFinishedPayload,
   SharedDeviceCollectionResult,
   SharedDeviceResult,
   ShareTransferCollectionResult,
@@ -68,6 +71,10 @@ export function LocalShare() {
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [firewall, setFirewall] = useState<LocalShareFirewallStatusResult | null>(null);
   const [firewallBusy, setFirewallBusy] = useState(false);
+  /** Emparejamiento iniciado por ESTE equipo: código visible mientras espera. */
+  const [pairing, setPairing] = useState<LocalSharePairResult | null>(null);
+  /** Solicitud de emparejamiento entrante (banner de decisión). */
+  const [pairRequest, setPairRequest] = useState<LocalSharePairRequestedPayload | null>(null);
 
   // ------------------------------------------------------------------
   // Carga inicial
@@ -90,6 +97,16 @@ export function LocalShare() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // Refresco ligero de solo-dispositivos (para eventos device-changed, que
+  // llegan cada pocos segundos con los anuncios multicast).
+  const refreshDevices = useCallback(async () => {
+    try {
+      const devicesResult = await bridge.call<SharedDeviceCollectionResult>(
+        OperationIds.localShareDevices, undefined, READ_TIMEOUT);
+      setDevices(devicesResult.devices ?? []);
+    } catch { /* best-effort */ }
+  }, []);
 
   // ------------------------------------------------------------------
   // Eventos
@@ -117,8 +134,39 @@ export function LocalShare() {
       }
       setIncomingRequest(null);
     });
-    return () => { unsubIncoming(); unsubProgress(); unsubFinished(); };
-  }, []);
+
+    // Emparejamiento entrante (lado receptor): banner con el código.
+    const unsubPairRequested = bridge.on<LocalSharePairRequestedPayload>(
+      EventIds.localSharePairRequested, (payload) => setPairRequest(payload));
+
+    // Desenlace del emparejamiento que ESTE equipo inició.
+    const unsubPairFinished = bridge.on<LocalSharePairFinishedPayload>(
+      EventIds.localSharePairFinished, (payload) => {
+        setPairing((current) =>
+          current && current.requestId === payload.requestId ? null : current);
+        if (payload.outcome === 'accepted') {
+          setNotice({ kind: 'success', text: `Emparejado con ${payload.displayName ?? 'el otro equipo'}.` });
+        } else if (payload.outcome === 'rejected') {
+          setNotice({ kind: 'error', text: 'El otro equipo rechazó el emparejamiento.' });
+        } else {
+          setNotice({ kind: 'error', text: payload.errorMessage ?? 'El emparejamiento falló.' });
+        }
+        void refreshDevices();
+      });
+
+    // Dispositivos: descubrimientos, emparejamientos y revocaciones.
+    const unsubDeviceChanged = bridge.on<LocalSharePairRequestedPayload & { deviceId: string }>(
+      EventIds.localShareDeviceChanged, () => { void refreshDevices(); });
+
+    return () => {
+      unsubIncoming();
+      unsubProgress();
+      unsubFinished();
+      unsubPairRequested();
+      unsubPairFinished();
+      unsubDeviceChanged();
+    };
+  }, [refreshDevices]);
 
   // ------------------------------------------------------------------
   // Acciones
@@ -180,6 +228,41 @@ export function LocalShare() {
   const resumeTransfer = async (transferId: string) => {
     try { await bridge.call(OperationIds.localShareResumeTransfer, { transferId }, READ_TIMEOUT); await refresh(); }
     catch (e) { setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo reanudar.' }); }
+  };
+
+  // ------------------------------------------------------------------
+  // Emparejamiento (comparación numérica estilo Bluetooth)
+  // ------------------------------------------------------------------
+
+  const pairDevice = async (deviceId: string) => {
+    setNotice(null);
+    try {
+      const initiation = await bridge.call<LocalSharePairResult>(
+        OperationIds.localSharePair, { deviceId }, READ_TIMEOUT);
+      setPairing(initiation);
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo iniciar el emparejamiento.' });
+    }
+  };
+
+  const acceptPair = async () => {
+    if (!pairRequest) return;
+    try {
+      await bridge.call(OperationIds.localSharePairAccept, { requestId: pairRequest.requestId }, READ_TIMEOUT);
+      setPairRequest(null);
+      setNotice({ kind: 'success', text: 'Emparejamiento completado.' });
+      await refreshDevices();
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo aceptar.' });
+      setPairRequest(null);
+    }
+  };
+
+  const rejectPair = async () => {
+    if (!pairRequest) return;
+    try { await bridge.call(OperationIds.localSharePairReject, { requestId: pairRequest.requestId }, READ_TIMEOUT); }
+    catch { /* best-effort */ }
+    setPairRequest(null);
   };
 
   // ------------------------------------------------------------------
@@ -302,6 +385,69 @@ export function LocalShare() {
         </div>
       )}
 
+      {/* Solicitud entrante de emparejamiento (lado receptor): comparar y decidir. */}
+      {pairRequest && (
+        <section
+          className="rounded-lg border p-4"
+          style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-accent)' }}
+        >
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+            <Users size={16} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+            «{pairRequest.peerDisplayName}» quiere emparejarse con este equipo
+          </h2>
+          <p className="mb-3 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+            Compara este código con el que muestra la pantalla del otro equipo.
+            Si coinciden, acepta:
+          </p>
+          <p
+            className="mb-3 text-3xl font-bold font-mono tracking-[0.3em]"
+            style={{ color: 'var(--pcs-accent)' }}
+          >
+            {pairRequest.code}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void acceptPair()}
+              className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium cursor-pointer"
+              style={{ background: 'var(--pcs-success)', color: '#fff' }}
+            >
+              <CheckCircle2 size={14} aria-hidden /> Aceptar
+            </button>
+            <button
+              type="button"
+              onClick={() => void rejectPair()}
+              className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium cursor-pointer"
+              style={{ background: 'var(--pcs-danger)', color: '#fff' }}
+            >
+              <XCircle size={14} aria-hidden /> Rechazar
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Emparejamiento iniciado por este equipo: código mientras espera. */}
+      {pairing && (
+        <section
+          className="rounded-lg border p-4"
+          style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+        >
+          <h2 className="mb-2 text-sm font-semibold">
+            Emparejando con «{pairing.peerDisplayName}»…
+          </h2>
+          <p className="mb-3 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+            Compara este código con el de la pantalla del otro equipo y acepta allí.
+            Esperando confirmación…
+          </p>
+          <p
+            className="text-3xl font-bold font-mono tracking-[0.3em]"
+            style={{ color: 'var(--pcs-accent)' }}
+          >
+            {pairing.code}
+          </p>
+        </section>
+      )}
+
       {/* Estado del servicio */}
       <section className="rounded-lg border p-4" style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}>
         <div className="flex items-center gap-4">
@@ -377,7 +523,8 @@ export function LocalShare() {
           </h2>
           {devices.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-              No hay dispositivos emparejados. Conecta manualmente con la IP del otro equipo.
+              Ningún equipo cercano por ahora. Ambos equipos deben tener Local
+              Share activo: se detectan solos en la red y aparecerán aquí para emparejar.
             </p>
           ) : (
             <ul className="space-y-2">
@@ -407,6 +554,16 @@ export function LocalShare() {
                   >
                     {device.trust === 'paired' ? 'Emparejado' : 'Desconocido'}
                   </span>
+                  {device.trust !== 'paired' && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); void pairDevice(device.deviceId); }}
+                      className="rounded-md px-3 py-1 text-xs font-medium cursor-pointer transition-colors"
+                      style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+                    >
+                      Emparejar
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

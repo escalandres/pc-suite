@@ -87,7 +87,10 @@ de cada instalación (guardada con DPAPI del usuario). Si:
 
 **Solución:** en el equipo que recibe, abre **Local Share →
 Dispositivos**, revoca la confianza del equipo antiguo y empareja de
-nuevo con el PIN que se muestra en pantalla.
+nuevo: pulsa «Emparejar» en el equipo iniciador y, cuando aparezca el
+**código de comparación de 6 dígitos**, comprueba que coincide en ambas
+pantallas antes de aceptar (igual que al emparejar dos móviles por
+Bluetooth).
 
 ---
 

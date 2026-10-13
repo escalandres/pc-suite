@@ -102,6 +102,8 @@ export const OperationIds = {
   localShareRevoke: 'localshare.revoke',
   localShareFirewallStatus: 'localshare.firewallStatus',
   localShareFirewallRule: 'localshare.firewallRule',
+  localSharePairAccept: 'localshare.pairAccept',
+  localSharePairReject: 'localshare.pairReject',
   localSharePauseTransfer: 'localshare.pauseTransfer',
   localShareResumeTransfer: 'localshare.resumeTransfer',
 } as const;
@@ -115,6 +117,8 @@ export const EventIds = {
   localShareIncomingRequest: 'localshare.incoming-request',
   localShareTransferProgress: 'localshare.transfer-progress',
   localShareTransferFinished: 'localshare.transfer-finished',
+  localSharePairRequested: 'localshare.pair-request',
+  localSharePairFinished: 'localshare.pair-finished',
 } as const;
 
 /* =====================================================================
@@ -393,10 +397,11 @@ export interface SharedDeviceCollectionResult {
 }
 
 export interface LocalSharePairResult {
-  deviceId: string;
-  displayName: string;
-  pin: string;
-  pendingConfirmation: boolean;
+  /** Identificador del intento (correlaciona con el evento pair-finished). */
+  requestId: string;
+  /** Código de comparación: DEBE coincidir con el del otro equipo. */
+  code: string;
+  peerDisplayName: string;
 }
 
 export interface LocalShareSendResult {
@@ -475,6 +480,25 @@ export interface LocalShareDeviceChangedPayload {
   trust: string;
   address?: string | null;
   port: number;
+}
+
+/** Evento localshare.pair-request (lado receptor): otro equipo quiere emparejarse. */
+export interface LocalSharePairRequestedPayload {
+  requestId: string;
+  peerDeviceId: string;
+  peerDisplayName: string;
+  /** Código derivado de las dos huellas TLS: comparar con la otra pantalla. */
+  code: string;
+}
+
+/** Evento localshare.pair-finished (lado iniciador). */
+export interface LocalSharePairFinishedPayload {
+  requestId: string;
+  /** accepted | rejected | failed */
+  outcome: string;
+  deviceId?: string | null;
+  displayName?: string | null;
+  errorMessage?: string | null;
 }
 
 /** Resultado de localshare.firewallStatus (solo lectura). */
