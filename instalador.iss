@@ -24,12 +24,19 @@
 ;      bloqueados romperían la desinstalación previa.
 ;   2. PrepareToInstall: busca la clave ARP del AppId en HKLM y HKCU
 ;      ("todos los usuarios" o "solo yo": el asistente permite ambas).
+;      - BLINDAJE DE ELEVACIÓN (InitializeSetup): si la instalación previa
+;        es "todos los usuarios" (HKLM) y este Setup NO va elevado, se
+;        aborta YA con instrucciones — elegir "solo para mí" contra una
+;        instalación en Program Files acaba en MoveFile code 5.
 ;      - Si hay desinstalador en el directorio (escaneo unins000-unins010,
 ;        que el registro puede estar desactualizado), se ejecuta en modo
 ;        silencioso SIN _?=: así se auto-limpia (exe+dat+msg+clave) vía su
 ;        copia en %TEMP%. El Exec espera el trabajo principal y un sondeo
 ;        determinista espera a que la auto-limpieza termine (el exe
 ;        desaparece del directorio) — nada de Sleep a ciegas.
+;      - VERIFICACIÓN REAL: el exit 0 del desinstalador miente en silencio
+;        cuando no puede borrar archivos (sin permisos); si el exe de la
+;        app sigue en el directorio, se aborta con la pista de elevación.
 ;      - Estado huérfano (clave existe, desinstalador no: actualización
 ;        rota previa): limpiar la clave fantasma y los restos, y seguir
 ;        instalando. Este paso EXISTE para reparar ese estado.
@@ -188,6 +195,26 @@ end;
 function InitializeSetup(): Boolean;
 begin
   Result := True;
+
+  // Blindaje de elevación: actualizar una instalación "todos los usuarios"
+  // (Program Files + HKLM) exige que ESTE Setup vaya elevado. Con
+  // PrivilegesRequiredOverridesAllowed=dialog es fácil elegir "solo para
+  // mí" y acabar en un estado a mitad: el desinstalador previo salta sus
+  // fallos en silencio (exit 0 sin haber borrado nada) y la copia muere
+  // con "MoveFile failed, code 5" en PCSuite.exe. Mejor abortar YA con
+  // instrucciones claras que romper la instalación a mitad.
+  if RegKeyExists(HKLM, UninstallKey) and not IsAdminLoggedOn() then
+  begin
+    MsgBox(
+      'La versión instalada de PCSuite es "para todos los usuarios"' + #13#10 +
+      '(carpeta Program Files) y solo puede actualizarse con permisos' + #13#10 +
+      'de administrador.' + #13#10#13#10 +
+      'Vuelve a ejecutar este instalador y elige "Instalar para todos ' +
+      'los usuarios" (o ejecútalo como administrador).',
+      mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
 
   if not IsAppRunning() then Exit;
 
@@ -382,6 +409,22 @@ begin
       GetEnv('TEMP'), SW_HIDE, ewWaitUntilTerminated, ResultCode)
     and (ResultCode = 0) then
   begin
+    // El exit 0 del desinstalador NO es garantía: en modo silencioso
+    // salta los archivos que no puede borrar (p. ej. sin permisos en
+    // Program Files) y aún así devuelve 0. Verificar el resultado REAL:
+    // si el exe de la app sigue en el directorio, la desinstalación
+    // no se completó y la copia fallaría igual ("MoveFile, code 5").
+    if FileExists(AddBackslash(OldDir) + '{#AppExeName}') then
+    begin
+      Result :=
+        'La versión anterior no se llegó a desinstalar por completo' + #13#10 +
+        '(su ejecutable sigue en el disco: archivos bloqueados o sin ' +
+        'permisos suficientes).' + #13#10#13#10 +
+        'Ejecuta este instalador con permisos de administrador' + #13#10 +
+        'y elige "Instalar para todos los usuarios".';
+      Exit;
+    end;
+
     if not WaitForUninstallCompletion(OldDir) then
     begin
       // La desinstalación terminó bien pero la auto-limpieza no llegó a
