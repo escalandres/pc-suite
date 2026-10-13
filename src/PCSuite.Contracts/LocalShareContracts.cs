@@ -36,6 +36,13 @@ public sealed class SharedDeviceResult
 
     public int Port { get; init; }
 
+    /// <summary>
+    /// ¿Se anunció en los últimos 45 s? (Los anuncios van cada 15 s: dos
+    /// perdidos seguidos pueden ser ruido; tres, apagado.) Señal heurística
+    /// para la UI — la verdad para transferir es la conexión TCP.
+    /// </summary>
+    public bool Online { get; init; }
+
     public DateTimeOffset? LastSeenAt { get; init; }
 }
 

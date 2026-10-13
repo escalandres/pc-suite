@@ -535,17 +535,28 @@ export function LocalShare() {
             </p>
           ) : (
             <ul className="space-y-2">
-              {devices.map((device) => (
+              {devices.map((device) => {
+                const selectable = device.trust === 'paired' && device.online;
+                return (
                 <li
                   key={device.deviceId}
-                  className="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors"
-                  onClick={() => setSelectedDevice(device.deviceId === selectedDevice ? null : device.deviceId)}
+                  className={
+                    'flex items-center gap-2 rounded-md border px-3 py-2 transition-colors '
+                    + (selectable ? 'cursor-pointer ' : 'cursor-default ')
+                    + (device.online ? '' : 'opacity-50')
+                  }
+                  onClick={() =>
+                    selectable && setSelectedDevice(device.deviceId === selectedDevice ? null : device.deviceId)}
                   style={{
                     background: selectedDevice === device.deviceId ? 'var(--pcs-surface-2)' : 'transparent',
                     borderColor: selectedDevice === device.deviceId ? 'var(--pcs-accent)' : 'var(--pcs-border)',
                   }}
                 >
-                  <Globe size={14} aria-hidden style={{ color: device.trust === 'paired' ? 'var(--pcs-success)' : 'var(--pcs-text-muted)' }} />
+                  <Globe
+                    size={14}
+                    aria-hidden
+                    style={{ color: !device.online ? 'var(--pcs-warning)' : device.trust === 'paired' ? 'var(--pcs-success)' : 'var(--pcs-text-muted)' }}
+                  />
                   <span className="text-sm font-medium">{device.displayName}</span>
                   {device.address && (
                     <span className="text-xs font-mono" style={{ color: 'var(--pcs-text-muted)' }}>
@@ -561,7 +572,18 @@ export function LocalShare() {
                   >
                     {device.trust === 'paired' ? 'Emparejado' : 'Desconocido'}
                   </span>
-                  {device.trust !== 'paired' && (
+                  {!device.online && (
+                    <span
+                      className="rounded-full px-2 py-0.5 text-xs"
+                      style={{
+                        background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
+                        color: 'var(--pcs-warning)',
+                      }}
+                    >
+                      Sin señal
+                    </span>
+                  )}
+                  {device.trust !== 'paired' && device.online && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); void pairDevice(device.deviceId); }}
@@ -572,7 +594,8 @@ export function LocalShare() {
                     </button>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </section>
@@ -587,7 +610,9 @@ export function LocalShare() {
           <div className="flex flex-col items-center justify-center text-center">
             <FolderOpen size={48} aria-hidden className="mb-4 opacity-30" style={{ color: 'var(--pcs-accent)' }} />
             <h3 className="text-lg font-medium mb-1">
-              {selectedDevice ? 'Arrastra archivos para enviar' : 'Selecciona un dispositivo primero'}
+              {selectedDevice
+                ? 'Arrastra archivos para enviar'
+                : 'Selecciona un dispositivo emparejado y en línea'}
             </h3>
             <p className="text-sm mb-4" style={{ color: 'var(--pcs-text-muted)' }}>
               Arrastra y suelta archivos aquí para transferirlos por la red local.

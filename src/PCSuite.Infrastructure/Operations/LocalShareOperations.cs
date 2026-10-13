@@ -78,7 +78,14 @@ public sealed class LocalShareDevicesOperation(ILocalShareService service) : IOp
         Address = device.KnownAddresses.FirstOrDefault(),
         Port = device.Port,
         LastSeenAt = device.LastSeenAt,
+        Online = DateTimeOffset.UtcNow - device.LastSeenAt < DeviceOnlineWindow,
     };
+
+    /// <summary>
+    /// Ventana de "en línea": los anuncios van cada 15 s; sin señal durante
+    /// 45 s (tres perdidos) es apagado con seguridad razonable.
+    /// </summary>
+    internal static readonly TimeSpan DeviceOnlineWindow = TimeSpan.FromSeconds(45);
 }
 
 /// <summary>

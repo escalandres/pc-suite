@@ -390,6 +390,8 @@ export interface SharedDeviceResult {
   address?: string | null;
   port: number;
   lastSeenAt?: string | null;
+  /** ¿Se anunció en los últimos 45 s? Heurística de la UI. */
+  online: boolean;
 }
 
 export interface SharedDeviceCollectionResult {
