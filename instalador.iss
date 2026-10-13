@@ -203,7 +203,7 @@ begin
   // fallos en silencio (exit 0 sin haber borrado nada) y la copia muere
   // con "MoveFile failed, code 5" en PCSuite.exe. Mejor abortar YA con
   // instrucciones claras que romper la instalación a mitad.
-  if RegKeyExists(HKLM, UninstallKey) and not IsAdminLoggedOn() then
+  if RegKeyExists(HKLM, UninstallKey) and not IsAdminInstallMode() then
   begin
     MsgBox(
       'La versión instalada de PCSuite es "para todos los usuarios"' + #13#10 +
