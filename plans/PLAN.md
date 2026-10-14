@@ -97,6 +97,18 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 16.6 — Robustez y empaquetado: tests manuales dos equipos, firewall (diagnóstico + regla con UAC puntual), arranque en frío, documentación de troubleshooting | ✅ Completado | 2026-10-11: E2E localhost 4/4; firewall con UAC puntual + 14 tests; troubleshooting.md; puerto por defecto fuera del rango efímero. 762/762 tests |
 | └ 16.7 — Mejoras post-MVP: reanudación por bloques, transferencias simultáneas, límites de ancho de banda, cliente temporal por navegador/QR, soporte Linux/macOS | ✅ Completado | 2026-10-12: 16.7.1 simultáneas (busy limpio) + 16.7.2 límites banda/tamaño/espacio + AutoAccept + ack fin-a-fin + 16.7.3 reanudación por offset (protocolo v2, manifiesto persistente) + 16.7.4 pausa/reanudar + cancelación real. Cliente navegador/QR DIFERIDO (requiere revisión de seguridad específica, §4.2); Linux/macOS fuera de alcance. 793/793 tests |
 
+### Task 017 — Landing page + gestión de actualizaciones
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 017 - Landing page (descarga de la app), sistema de actualizaciones desde la app (manifiesto latest.json + SHA-256 en streaming + ejecución del Setup existente), publicación con publicar.bat — ver `docs/landing/PCSuite_Landing_Propuesta.md` | ⏳ Propuesta | Diseño completo pendiente de aprobación del autor. Decisiones abiertas: hosting/dominio, auto-check ON/OFF, changelog, fase PGP |
+| ├ 17.1 - publicar.bat: SHA-256 de artefactos + manifiestos latest.json/archive por versión + validaciones (no re-publicar misma versión) | ⏳ Pendiente | — |
+| ├ 17.2 - Landing estática: hero, descargas con checksums visibles, features, cómo actualizar | ⏳ Pendiente | — |
+| ├ 17.3 - Updater: update.check + badge discreto + panel "Acerca de" | ⏳ Pendiente | — |
+| ├ 17.4 - Updater: update.download (Job + SHA-256 streaming) + update.install + cierre de la app | ⏳ Pendiente | — |
+| ├ 17.5 - Changelog por versión en la página | ⏳ Pendiente | — |
+| └ 17.6 - (opcional) Firma PGP del manifiesto validada por el updater (reusa infra Task 009) | ⏳ Pendiente | Autenticidad del canal; SHA-256 solo da integridad |
+
 ## Notas de arquitectura (Task 016 — Local Share)
 
 **Ajustes a la propuesta original** (basado en el análisis del repositorio):
