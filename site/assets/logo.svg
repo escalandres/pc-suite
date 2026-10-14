@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254">
+  <title>PCSuite</title>
+  <defs>
+    <linearGradient id="azul" gradientUnits="userSpaceOnUse" x1="262" y1="1020" x2="1094" y2="688">
+      <stop offset="0" stop-color="#0846fd"/>
+      <stop offset="0.6" stop-color="#037cfc"/>
+      <stop offset="1" stop-color="#12aafe"/>
+    </linearGradient>
+    <linearGradient id="blanco" gradientUnits="userSpaceOnUse" x1="0" y1="470" x2="0" y2="1020">
+      <stop offset="0" stop-color="#fefefe"/>
+      <stop offset="1" stop-color="#eeeff3"/>
+    </linearGradient>
+    <linearGradient id="sombra" gradientUnits="userSpaceOnUse" x1="383" y1="0" x2="452" y2="0">
+      <stop offset="0" stop-color="#0759f8"/>
+      <stop offset="1" stop-color="#022a74"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="2" width="1246" height="1249" rx="240" fill="#01112c"/>
+  <path fill="url(#azul)" d="M262 1020 V419.5 A194 194 0 0 1 456 225.5 H665
+    C790 225 892 310 892 450
+    C887.3 562.7 811 639.8 704 659
+    C688.7 661.4 673.2 661.9 658 664.6
+    C626.4 670.3 595.4 692.3 580.6 721
+    C575.4 733 570.5 749 567 762
+    L548 762 L548 612 L683 540
+    C708.5 529.8 735.3 520.1 752.4 497
+    C763.7 481.6 768.4 461.9 768.5 443
+    C768.9 402.6 744.6 368.4 706 355.7
+    C694.1 351.8 680.5 349.9 669 348
+    H455 A72 72 0 0 0 383 420 V1020 Z"/>
+  <path fill="url(#sombra)" d="M383 748 L470 661 H500 V790 L478 812 L383 904 Z"/>
+  <path fill="url(#blanco)" d="M733 472
+    C720 472 705 474 677 480
+    C604 499 541 545 496 606
+    C488 617 461 657 458.5 669
+    C454 691 453 715 454 737
+    A305 305 0 0 0 981 917
+    C986.4 910.9 992.8 904.8 993.5 896 L992 893
+    L916 828
+    A196 196 0 0 1 572 644
+    C577 640 579 631 581 628
+    C592 607 609 586 629 572
+    C644 561 659 552 675 544
+    C681 541 688 539 694 535
+    C709 527 729 488 733 472 Z"/>
+  <path fill="url(#blanco)" d="M909 499
+    C893 546.5 888.3 556.8 861 598
+    Q 892 614 917 645 L990 581 L992 572
+    C978.5 545.4 950.6 522.5 925 506.4
+    C920.6 503.7 915 499 909 499 Z"/>
+</svg>
