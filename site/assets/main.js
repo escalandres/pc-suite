@@ -6,7 +6,9 @@
 (() => {
   'use strict';
 
-  const MANIFEST_URL = 'pcsuite/latest.json';
+  // Absoluto: la landing vive en /pcsuite/ (p.ej. dentro del repo Astro) y
+  // en la raíz durante pruebas locales — en ambos casos este path resuelve.
+  const MANIFEST_URL = '/pcsuite/latest.json';
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
