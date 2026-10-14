@@ -117,3 +117,13 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 - **1.0.0** — línea base antes de Local Share.
 - **1.1.0** — Local Share completo (16.0–16.7) + instalador con actualización automática (desinstala la versión previa en silencio). ⚠️ Existieron DOS builds con este número y el mismo nombre de Setup: uno ANTES del emparejamiento real (comparación numérica) y otro después — motivo del salto siguiente.
 - **1.2.0** — subida manualmente el 2026-10-13 para identificar de forma única el build CON emparejamiento real (comparación numérica estilo Bluetooth). Con este número, cada Setup corresponde a un solo contenido.
+- **1.2.2–1.2.4** — ciclo de estabilización con PRUEBA REAL en dos laptops (2026-10-13), que destapó una cadena de bugs que los tests E2E en localhost no podían cazar. **1.2.4 = primera build con el ciclo completo validado** (detección → emparejamiento → transferencia con verificación de integridad).
+
+**Lecciones de la prueba real** (bug → por qué el test E2E no lo vio):
+
+1. **Salida multicast por adaptador virtual** (VirtualBox/WSL ganan por métrica de interfaz): el discovery anunciaba a una red aislada. Los tests desactivan el discovery y usan inyección directa.
+2. **Bucle de escucha mortal**: un SocketException transitorio mataba la escucha para siempre → sordera silenciosa indistinguible de "no hay nadie en la red".
+3. **Regla de firewall sin UDP**: el discovery multicast (5354) seguía bloqueado aunque el botón "Permitir" abriera el TCP de transferencia.
+4. **Eventos al WebView2 exigen el hilo UI**: todo evento disparado desde hilos de fondo (handler TLS, listener UDP, stdout de ClamAV) moría en silencio — el banner de emparejamiento era el primero INDISPENSABLE.
+5. **`File.path` no existe en WebView2** (es de Electron): el selector web entregaba nombres sueltos y el backend no encontraba nada. Solución: `system.pickFiles` con diálogo nativo de Windows.
+6. **Privilegios asimétricos al actualizar**: instalar "solo para mí" contra una instalación "todos los usuarios" deja todo a mitad con "MoveFile code 5" — ahora hay guard de elevación con mensaje claro.
