@@ -53,3 +53,8 @@ graphify-out/
 .aider*
 CLAUDE.md
 AGENTS.md
+
+# Task 017 — sitio generado por publicar.bat (landing en site/index.html SI es fuente)
+site/pcsuite/
+site/archive/
+site/notes/

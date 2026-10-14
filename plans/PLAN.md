@@ -101,8 +101,8 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 
 | Tarea | Estado | Notas |
 |---|---|---|
-| Task 017 - Landing page (descarga de la app), sistema de actualizaciones desde la app (manifiesto latest.json + SHA-256 en streaming + ejecución del Setup existente), publicación con publicar.bat — ver `docs/landing/PCSuite_Landing_Propuesta.md` | ⏳ Propuesta | Diseño completo pendiente de aprobación del autor. Decisiones abiertas: hosting/dominio, auto-check ON/OFF, changelog, fase PGP |
-| ├ 17.1 - publicar.bat: SHA-256 de artefactos + manifiestos latest.json/archive por versión + validaciones (no re-publicar misma versión) | ⏳ Pendiente | — |
+| Task 017 - Landing page (descarga de la app), sistema de actualizaciones desde la app (manifiesto latest.json + SHA-256 en streaming + ejecución del Setup existente), publicación con publicar.bat — ver `docs/landing/PCSuite_Landing_Propuesta.md` | 🚧 En progreso | Decisiones cerradas 2026-10-14: dominio del estudio (aes-studio.dev) con URLs por producto (aes-studio.dev/pcsuite/…) — landing 100% PCSuite hoy, nav-ready para apps futuras; auto-check ON reversible; changelog desde 1.2.4; PGP diferido |
+| ├ 17.1 - publicar.bat: SHA-256 de artefactos + manifiestos latest.json/archive por versión + validaciones (no re-publicar misma versión) | ✅ Completado | 2026-10-14: wrapper publicar.bat + scripts/publicar.ps1. JSON validado pre-escritura, re-hash de lo copiado, inmutabilidad verificada (re-publicar aborta). 1.2.4 publicada en site\ con hashes verificados |
 | ├ 17.2 - Landing estática: hero, descargas con checksums visibles, features, cómo actualizar | ⏳ Pendiente | — |
 | ├ 17.3 - Updater: update.check + badge discreto + panel "Acerca de" | ⏳ Pendiente | — |
 | ├ 17.4 - Updater: update.download (Job + SHA-256 streaming) + update.install + cierre de la app | ⏳ Pendiente | — |

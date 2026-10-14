@@ -276,14 +276,32 @@ escribe dos veces para la misma versión.
 - [ ] La landing muestra los checksums sin intervención manual entre
       releases (se pinta de `latest.json`).
 
-## 11. Decisiones abiertas (para el autor)
+## 11. Decisiones (cerradas el 2026-10-13/14 por el autor)
 
-1. **Hosting y dominio**: GitHub Pages (gratis, si el repo se vuelve
-   público) vs Cloudflare Pages (gratis, dominio propio). Se necesita
-   un dominio/URL definitiva para las URLs absolutas del manifiesto.
-2. **Auto-check al arrancar**: propuesta ON por defecto (es un GET de
-   unos KB); ¿se prefiere OFF por privacidad extrema?
-3. **`CHANGELOG.md`**: ¿mantener changelog formal desde 1.2.4 en
-   adelante o escribir retroactivo?
-4. **Fase 17.6 (PGP)**: ¿dentro del primer ciclo o diferida hasta que
-   la base funcione?
+1. **Hosting y dominio**: ✅ **CERRADA** — dominio del estudio
+   (`aes-studio.dev`) con **URLs por producto**:
+   `aes-studio.dev/pcsuite/latest.json` y `/pcsuite/download/…`.
+   La landing de HOY es 100% PCSuite ("AES Studio" solo en el pie);
+   una futura segunda app añade un nav — cero migraciones, cero
+   manifiestos rotos. El porqué: las apps instaladas pinnean la URL
+   del manifiesto; URLs planas quedarían rotas para siempre ante
+   cualquier reestructuración.
+2. **Auto-check al arrancar**: ON por defecto (reversible en settings)
+   — es un GET de unos KB con timeout de 5 s que jamás bloquea.
+3. **`CHANGELOG.md`**: formal desde 1.2.4 hacia adelante (sin
+   retroactivo).
+4. **Fase 17.6 (PGP)**: diferida — primero el ciclo base end-to-end;
+   la firma del manifiesto entra cuando la base esté validada.
+
+### Implementación 17.1 (ajustes menores de la propuesta original)
+
+`publicar.bat` es un wrapper fino de un solo comando; la lógica vive
+en `scripts/publicar.ps1` (PowerShell real — el caret-continuation de
+batch para PS multi-línea resultó frágil). Extras implementados más
+allá de lo propuesto:
+
+- El JSON se valida (`ConvertFrom-Json`) ANTES de escribirse a disco.
+- Re-hash de los artefactos YA copiados a `site\` — lo publicado es
+  exactamente lo del manifiesto o aborta.
+- Verificación práctica de la inmutabilidad: re-publicar 1.2.4 aborta
+  con el mensaje de "sube la versión".
