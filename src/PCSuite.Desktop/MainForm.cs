@@ -252,6 +252,7 @@ public partial class MainForm : Form
                 new LocalSharePairOperation(localShareService),
                 new LocalSharePairAcceptOperation(localShareService),
                 new LocalSharePairRejectOperation(localShareService),
+                new LocalSharePairCancelOperation(localShareService),
                 new LocalShareSendOperation(localShareService),
                 new LocalShareAcceptOperation(localShareService),
                 new LocalShareRejectOperation(localShareService),
@@ -268,6 +269,26 @@ public partial class MainForm : Form
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());
         events.Attach(_bridge);
+
+        // Local Share auto-arranque (16.7+): si el usuario lo activó, el
+        // servicio levanta con la app — detección y recepción activas sin
+        // tocar la UI. Fire-and-forget: el arranque nunca bloquea la ventana
+        // y los errores quedan en el log (no en un diálogo en la cara).
+        if (localShareService.Settings.AutoStartService)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await localShareService.StartAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _loggerFactory.CreateLogger<MainForm>()
+                        .LogError(ex, "Auto-arranque de Local Share falló");
+                }
+            });
+        }
 
         // Piloto Blazor Hybrid (Task 015): servicio de estado observable
         // con suscripción directa a ClamAvService — sin IPC.

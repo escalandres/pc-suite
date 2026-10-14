@@ -237,6 +237,12 @@ public sealed class LocalShareSettings
     public int MaxSimultaneousTransfers { get; set; } = 3;
 
     /// <summary>
+    /// Iniciar Local Share automáticamente al abrir PCSuite. El servicio
+    /// arranca con la app (detección + recepción activas) sin tocar la UI.
+    /// </summary>
+    public bool AutoStartService { get; set; } = false;
+
+    /// <summary>
     /// Límite de velocidad de ENVÍO en bytes/segundo (0 = sin límite). Se aplica
     /// regulando el ritmo de los chunks de 64KB; no afecta la recepción.
     /// </summary>

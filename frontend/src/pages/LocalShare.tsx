@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FolderOpen,
   Globe,
@@ -77,6 +77,8 @@ export function LocalShare() {
   const [pairing, setPairing] = useState<LocalSharePairResult | null>(null);
   /** Solicitud de emparejamiento entrante (banner de decisión). */
   const [pairRequest, setPairRequest] = useState<LocalSharePairRequestedPayload | null>(null);
+  /** Pairings cancelados por este usuario: su evento final no debe mostrarse como error. */
+  const cancelledPairings = useRef<Set<string>>(new Set());
 
   // ------------------------------------------------------------------
   // Carga inicial
@@ -100,6 +102,16 @@ export function LocalShare() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // Notificaciones autodestructivas: los éxitos duran 5 s, los errores 9 s
+  // (dar tiempo a leerlos). Cada notificación nueva reinicia el reloj; la
+  // acción manual (setNotice(null)) también limpia el temporizador.
+  useEffect(() => {
+    if (!notice) return;
+    const ms = notice.kind === 'success' ? 5_000 : 9_000;
+    const timer = setTimeout(() => setNotice(null), ms);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // Refresco ligero de solo-dispositivos (para eventos device-changed, que
   // llegan cada pocos segundos con los anuncios multicast).
@@ -147,6 +159,12 @@ export function LocalShare() {
       EventIds.localSharePairFinished, (payload) => {
         setPairing((current) =>
           current && current.requestId === payload.requestId ? null : current);
+        if (cancelledPairings.current.has(payload.requestId)) {
+          // Cancelado por este usuario: sin aviso (él ya lo sabe).
+          cancelledPairings.current.delete(payload.requestId);
+          void refreshDevices();
+          return;
+        }
         if (payload.outcome === 'accepted') {
           setNotice({ kind: 'success', text: `Emparejado con ${payload.displayName ?? 'el otro equipo'}.` });
         } else if (payload.outcome === 'rejected') {
@@ -284,6 +302,38 @@ export function LocalShare() {
     try { await bridge.call(OperationIds.localSharePairReject, { requestId: pairRequest.requestId }, READ_TIMEOUT); }
     catch { /* best-effort */ }
     setPairRequest(null);
+  };
+
+  /**
+   * Cancelar el emparejamiento que ESTE equipo inició. El desenlace
+   * (Failed/"cancelado") llegará igual por evento, pero lo hemos pedido
+   * nosotros: se anota el requestId para NO mostrar el aviso de error.
+   */
+  const cancelPairing = async () => {
+    if (!pairing) return;
+    cancelledPairings.current.add(pairing.requestId);
+    setPairing(null);
+    try { await bridge.call(OperationIds.localSharePairCancel, { requestId: pairing.requestId }, READ_TIMEOUT); }
+    catch { /* best-effort: expira solo a los 120 s */ }
+  };
+
+  /**
+   * Auto-arranque de Local Share con la app (PATCH de configuración).
+   */
+  const toggleAutoStart = async () => {
+    const next = !(status?.autoStartService ?? false);
+    try {
+      await bridge.call(OperationIds.localShareConfig, { autoStartService: next }, READ_TIMEOUT);
+      await refresh();
+      setNotice({
+        kind: 'success',
+        text: next
+          ? 'Local Share se iniciará solo al abrir PCSuite.'
+          : 'Local Share ya no se iniciará con la app.',
+      });
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo guardar la preferencia.' });
+    }
   };
 
   // ------------------------------------------------------------------
@@ -489,12 +539,22 @@ export function LocalShare() {
             Compara este código con el de la pantalla del otro equipo y acepta allí.
             Esperando confirmación…
           </p>
-          <p
-            className="text-3xl font-bold font-mono tracking-[0.3em]"
-            style={{ color: 'var(--pcs-accent)' }}
-          >
-            {pairing.code}
-          </p>
+          <div className="flex items-center justify-between gap-4">
+            <p
+              className="text-3xl font-bold font-mono tracking-[0.3em]"
+              style={{ color: 'var(--pcs-accent)' }}
+            >
+              {pairing.code}
+            </p>
+            <button
+              type="button"
+              onClick={() => void cancelPairing()}
+              className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium cursor-pointer transition-colors"
+              style={{ color: 'var(--pcs-danger)' }}
+            >
+              <XCircle size={14} aria-hidden /> Cancelar
+            </button>
+          </div>
         </section>
       )}
 
@@ -515,6 +575,20 @@ export function LocalShare() {
               Puerto {status?.port} · {status?.displayName}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => void toggleAutoStart()}
+            className="ml-auto rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors"
+            style={{
+              background: status?.autoStartService
+                ? 'color-mix(in srgb, var(--pcs-accent) 16%, transparent)'
+                : 'var(--pcs-surface-2)',
+              color: status?.autoStartService ? 'var(--pcs-accent)' : 'var(--pcs-text-muted)',
+            }}
+            title="Iniciar Local Share automáticamente al abrir PCSuite"
+          >
+            {status?.autoStartService ? '↻ Auto-inicio ON' : '↻ Auto-inicio OFF'}
+          </button>
         </div>
       </section>
 

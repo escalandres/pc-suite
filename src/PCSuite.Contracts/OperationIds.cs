@@ -238,6 +238,9 @@ public static class OperationIds
     /// <summary>Rechaza una solicitud de emparejamiento entrante (payload: { requestId }).</summary>
     public const string LocalSharePairReject = "localshare.pairReject";
 
+    /// <summary>Cancela un emparejamiento iniciado por este equipo (payload: { requestId }).</summary>
+    public const string LocalSharePairCancel = "localshare.pairCancel";
+
     /// <summary>Revoca la confianza de un dispositivo (payload: { deviceId }).</summary>
     public const string LocalShareRevoke = "localshare.revoke";
 

@@ -30,8 +30,12 @@ public sealed class DiscoveryService : IDisposable
     /// </summary>
     private const int SioUdpConnreset = unchecked((int)0x9800000C);
 
-    /// <summary>Intervalo entre anuncios (RFC 6762 sugiere 30s; usamos 15s para respuesta rápida).</summary>
-    private static readonly TimeSpan AnnounceInterval = TimeSpan.FromSeconds(15);
+    /// <summary>Intervalo de anuncios: 15 s, salvo override de tests (para
+    /// acelerar los E2E de discovery sin esperar ciclos reales).</summary>
+    internal static TimeSpan? AnnounceIntervalOverride { get; set; }
+
+    private static TimeSpan AnnounceInterval =>
+        AnnounceIntervalOverride ?? TimeSpan.FromSeconds(15);
 
     private readonly ILogger? _logger;
     private UdpClient? _client;
@@ -51,6 +55,14 @@ public sealed class DiscoveryService : IDisposable
     /// Args: (deviceId, displayName, address, port, thumbprint)
     /// </summary>
     public event Action<string, string, string, int, string>? DeviceAnnounced;
+
+    /// <summary>
+    /// Se dispara al recibir un GOODBYE (el otro PCSuite se detiene):
+    /// el dispositivo desaparece de la red AHORA, sin esperar a que su
+    /// LastSeenAt caduque. Patrón mDNS (goodbye = anuncio con TTL 0).
+    /// Arg: deviceId del que se va.
+    /// </summary>
+    public event Action<string>? DeviceLeft;
 
     public DiscoveryService(
         string deviceId,
@@ -173,6 +185,26 @@ public sealed class DiscoveryService : IDisposable
 
     public void Stop()
     {
+        // GOODBYE (patrón mDNS): avisar a los demás PCSuite de que esta
+        // instancia desaparece AHORA, para que retiren su entrada al
+        // instante en vez de esperar a que caduque el LastSeenAt (~45 s).
+        // Dos envíos separados 100 ms: un datagrama perdido no debe costar
+        // la limpieza instantánea. Antes de cancelar/disponer el socket.
+        if (_client is not null && _cts is { IsCancellationRequested: false })
+        {
+            try
+            {
+                SendAnnouncementAsync(_cts.Token, goodbye: true).ConfigureAwait(false).GetAwaiter().GetResult();
+                Thread.Sleep(100);
+                SendAnnouncementAsync(_cts.Token, goodbye: true).ConfigureAwait(false).GetAwaiter().GetResult();
+                _logger?.LogInformation("Discovery: goodbye enviado");
+            }
+            catch
+            {
+                // Best-effort: sin goodbye, los demás caducarán solos.
+            }
+        }
+
         _cts?.Cancel();
         try { _client?.DropMulticastGroup(IPAddress.Parse(MulticastGroup)); }
         catch { /* best-effort */ }
@@ -197,7 +229,7 @@ public sealed class DiscoveryService : IDisposable
         }
     }
 
-    private async Task SendAnnouncementAsync(CancellationToken ct)
+    private async Task SendAnnouncementAsync(CancellationToken ct, bool goodbye = false)
     {
         try
         {
@@ -207,6 +239,7 @@ public sealed class DiscoveryService : IDisposable
                 DisplayName = _displayName,
                 Port = _servicePort,
                 Thumbprint = _thumbprint,
+                Goodbye = goodbye,
             };
             var json = JsonSerializer.SerializeToUtf8Bytes(announcement);
             var endpoint = new IPEndPoint(IPAddress.Parse(MulticastGroup), MulticastPort);
@@ -275,19 +308,40 @@ public sealed class DiscoveryService : IDisposable
     {
         try
         {
-            // Ignorar nuestros propios anuncios
             var senderIp = result.RemoteEndPoint.Address.ToString();
-            if (senderIp is "0.0.0.0" or "::" || IsLocalAddress(senderIp))
-            {
-                return;
-            }
 
             var announcement = JsonSerializer.Deserialize<DiscoveryAnnouncement>(
                 result.Buffer,
                 LocalShareJson.Options);
             if (announcement is null
-                || string.IsNullOrEmpty(announcement.DeviceId)
-                || announcement.Port <= 0)
+                || string.IsNullOrEmpty(announcement.DeviceId))
+            {
+                return;
+            }
+
+            // Ignorar nuestros propios anuncios: la comprobación AUTORITATIVA
+            // es el deviceId (GUID por instalación: no puede colisionar). La
+            // de IP se retiró: mataba el caso legítimo de DOS INSTANCIAS en
+            // la misma máquina (tests por loopback, o el usuario con la app
+            // dos veces) — un anuncio con deviceId ajeno es siempre de otro
+            // PCSuite, venga de la IP que venga.
+            if (announcement.DeviceId == _deviceId
+                || senderIp is "0.0.0.0" or "::")
+            {
+                return;
+            }
+
+            // Goodbye (patrón mDNS): el otro PCSuite se detiene. Retirar su
+            // entrada AHORA en vez de esperar a que caduque el LastSeenAt.
+            if (announcement.Goodbye)
+            {
+                _logger?.LogDebug(
+                    "Discovery: {Id} se despide", announcement.DeviceId[..8] + "...");
+                DeviceLeft?.Invoke(announcement.DeviceId);
+                return;
+            }
+
+            if (announcement.Port <= 0)
             {
                 return;
             }
@@ -356,20 +410,6 @@ public sealed class DiscoveryService : IDisposable
         return fallback;
     }
 
-    private static bool IsLocalAddress(string ip)
-    {
-        try
-        {
-            var hostEntry = Dns.GetHostEntry(Dns.GetHostName());
-            return hostEntry.AddressList
-                .Any(a => a.ToString() == ip);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     public void Dispose()
     {
         if (_disposed) return;
@@ -379,11 +419,13 @@ public sealed class DiscoveryService : IDisposable
     }
 
     /// <summary>Payload del anuncio de discovery.</summary>
+    /// <summary>Payload del anuncio de discovery. Goodbye=true → la instancia se detiene.</summary>
     private sealed record DiscoveryAnnouncement
     {
         public string DeviceId { get; init; } = "";
         public string DisplayName { get; init; } = "";
         public int Port { get; init; }
         public string? Thumbprint { get; init; }
+        public bool Goodbye { get; init; }
     }
 }

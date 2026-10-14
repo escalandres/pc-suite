@@ -64,6 +64,13 @@ public interface ILocalShareService
     /// <summary>Rechaza una solicitud de emparejamiento entrante.</summary>
     Task RejectPairingAsync(string requestId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Cancela un emparejamiento iniciado por ESTE equipo (botón Cancelar de
+    /// la tarjeta de código): aborta la conexión y el receptor lo verá como
+    /// una desconexión limpia.
+    /// </summary>
+    Task CancelPairingAsync(string requestId, CancellationToken cancellationToken = default);
+
     /// <summary>Revoca la confianza de un dispositivo emparejado.</summary>
     Task RevokeTrustAsync(string deviceId, CancellationToken cancellationToken = default);
 

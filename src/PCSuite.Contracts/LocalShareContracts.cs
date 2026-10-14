@@ -16,6 +16,9 @@ public sealed class LocalShareStatusResult
 
     public bool DiscoveryEnabled { get; init; }
 
+    /// <summary>Arrancar Local Share automáticamente al abrir PCSuite.</summary>
+    public bool AutoStartService { get; init; }
+
     public string? DownloadDirectory { get; init; }
 
     public string? Error { get; init; }
@@ -127,6 +130,9 @@ public sealed class LocalShareConfigResult
 
     public bool AutoAcceptFromPaired { get; init; }
 
+    /// <summary>Arranque del servicio con la app.</summary>
+    public bool AutoStartService { get; init; }
+
     public int MaxSimultaneousTransfers { get; init; }
 
     public long MaxBandwidthBytesPerSecond { get; init; }
@@ -148,6 +154,9 @@ public sealed class LocalShareConfigPayload
     public bool? AutoAcceptFromPaired { get; init; }
 
     public int? MaxSimultaneousTransfers { get; init; }
+
+    /// <summary>Arrancar Local Share automáticamente al abrir PCSuite.</summary>
+    public bool? AutoStartService { get; init; }
 
     public long? MaxBandwidthBytesPerSecond { get; init; }
 }

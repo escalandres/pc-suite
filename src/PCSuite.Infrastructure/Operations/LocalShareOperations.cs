@@ -23,6 +23,7 @@ public sealed class LocalShareStatusOperation(ILocalShareService service) : IOpe
             Port = s.EffectivePort,
             DisplayName = s.Settings.DisplayName,
             DiscoveryEnabled = s.Settings.DiscoveryEnabled,
+            AutoStartService = s.Settings.AutoStartService,
             DownloadDirectory = s.Settings.DownloadDirectory,
         };
         return Task.FromResult(OperationResult.Ok(BridgeJson.ToJson(dto)));
@@ -167,6 +168,24 @@ public sealed class LocalSharePairRejectOperation(ILocalShareService service) : 
 
         await service.RejectPairingAsync(payload.RequestId, ct).ConfigureAwait(false);
         return OperationResult.Ok(BridgeJson.ToJson(new { rejected = true }));
+    }
+}
+
+/// <summary>localshare.pairCancel — cancelar un emparejamiento que ESTE equipo inició (payload: { requestId }).</summary>
+public sealed class LocalSharePairCancelOperation(ILocalShareService service) : IOperation
+{
+    public string Id => OperationIds.LocalSharePairCancel;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalSharePairDecisionPayload payload) || payload is null)
+        {
+            return OperationResult.Fail("error", "El payload debe ser { requestId }.");
+        }
+
+        await service.CancelPairingAsync(payload.RequestId, ct).ConfigureAwait(false);
+        return OperationResult.Ok(BridgeJson.ToJson(new { cancelled = true }));
     }
 }
 
@@ -315,6 +334,7 @@ public sealed class LocalShareConfigOperation(ILocalShareService service) : IOpe
                 Port = s.Port,
                 DiscoveryEnabled = s.DiscoveryEnabled,
                 AutoAcceptFromPaired = s.AutoAcceptFromPaired,
+                AutoStartService = s.AutoStartService,
                 MaxSimultaneousTransfers = s.MaxSimultaneousTransfers,
                 MaxBandwidthBytesPerSecond = s.MaxBandwidthBytesPerSecond,
                 MaxTransferSizeBytes = s.MaxTransferSizeBytes,
@@ -335,6 +355,7 @@ public sealed class LocalShareConfigOperation(ILocalShareService service) : IOpe
         if (payload.AutoAcceptFromPaired is { } auto) current.AutoAcceptFromPaired = auto;
         if (payload.MaxSimultaneousTransfers is { } maxSim) current.MaxSimultaneousTransfers = Math.Clamp(maxSim, 1, 10);
         if (payload.MaxBandwidthBytesPerSecond is { } maxBw) current.MaxBandwidthBytesPerSecond = Math.Max(0, maxBw);
+        if (payload.AutoStartService is { } autoStart) current.AutoStartService = autoStart;
 
         await service.UpdateSettingsAsync(current, ct).ConfigureAwait(false);
         return OperationResult.Ok(BridgeJson.ToJson(new { updated = true }));

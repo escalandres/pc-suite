@@ -62,6 +62,9 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     /// <summary>Tiempo que el receptor tiene para decidir un emparejamiento.</summary>
     private static readonly TimeSpan PairDecisionTimeout = TimeSpan.FromSeconds(120);
 
+    /// <summary>CTS por intento de emparejamiento saliente (para CancelPairingAsync).</summary>
+    private readonly Dictionary<string, CancellationTokenSource> _pairInitiationCts = new(StringComparer.Ordinal);
+
     /// <summary>Publisher de eventos hacia la UI (DeferredEventPublisher en la app).</summary>
     private readonly IEventPublisher? _events;
 
@@ -202,6 +205,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     _certificateStore.Thumbprint,
                     _logger);
                 _discovery.DeviceAnnounced += OnDeviceAnnounced;
+                _discovery.DeviceLeft += OnDeviceLeft;
                 _discovery.Start();
             }
 
@@ -244,6 +248,12 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             _pendingPairDecisions.Clear();
             _claimedPartials.Clear();
             _pausedTransfers.Clear();
+
+            // Emparejamientos salientes en curso: abortarlos limpio.
+            foreach (var cts in _pairInitiationCts.Values.ToList())
+            {
+                try { cts.Cancel(); } catch (ObjectDisposedException) { /* carrera con finally */ }
+            }
 
             // Cancelar los envíos activos (16.7.4): desenlace único vía OCE.
             // No se vacía el diccionario: la tarea en background hace el
@@ -349,6 +359,40 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         NoteDiscoveredDevice(deviceId, displayName, address, port, thumbprint);
 
     /// <summary>
+    /// GOODBYE recibido (el otro PCSuite se detiene): retirar su entrada de
+    /// discovery AL INSTANTE si es un desconocido (los emparejados conservan
+    /// la confianza; su badge "Sin señal" llegará al caducar el LastSeenAt).
+    /// </summary>
+    private void OnDeviceLeft(string deviceId)
+    {
+        SharedDevice? removed = null;
+        lock (_lock)
+        {
+            if (_devices.TryGetValue(deviceId, out var device)
+                && device.Trust == DeviceTrust.Unknown)
+            {
+                _devices.Remove(deviceId);
+                SaveDevices();
+                removed = device;
+            }
+        }
+
+        if (removed is not null)
+        {
+            DeviceChanged?.Invoke(removed);
+            _events?.SendEvent(EventIds.LocalShareDeviceChanged, new LocalShareDeviceChangedPayload
+            {
+                DeviceId = removed.DeviceId,
+                DisplayName = removed.DisplayName,
+                Trust = "removed",
+                Address = null,
+                Port = 0,
+            });
+            _logger?.LogInformation("Discovery: {Name} se ha ido", removed.DisplayName);
+        }
+    }
+
+    /// <summary>
     /// Registra o actualiza un dispositivo descubierto por multicast (trust
     /// Unknown: el usuario debe emparejar antes de transferir). Internal para
     /// los tests E2E, que simulan el discovery sin sockets UDP.
@@ -427,6 +471,14 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         var initiation = new TaskCompletionSource<LocalSharePairInitiation>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
+        // CTS por intento: CancelPairingAsync aborta la conexión en curso.
+        // La tarea en background es la dueña (lo dispone en su finally).
+        var pairCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        lock (_lock)
+        {
+            _pairInitiationCts[requestId] = pairCts;
+        }
+
         // El diálogo completo corre en background: la op vuelve en cuanto el
         // código está disponible (tras HELLO) y el desenlace llega por evento.
         _ = Task.Run(async () =>
@@ -443,7 +495,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     EffectivePort,
                     code => initiation.TrySetResult(new LocalSharePairInitiation(
                         requestId, code, device.DisplayName)),
-                    ct).ConfigureAwait(false);
+                    pairCts.Token).ConfigureAwait(false);
 
                 if (outcome.Accepted)
                 {
@@ -469,7 +521,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             }
             catch (OperationCanceledException)
             {
-                initiation.TrySetCanceled(ct);
+                initiation.TrySetCanceled(pairCts.Token);
                 finished = new LocalSharePairFinished(
                     requestId, LocalSharePairOutcome.Failed, ErrorMessage: "Emparejamiento cancelado.");
             }
@@ -479,12 +531,34 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 finished = new LocalSharePairFinished(
                     requestId, LocalSharePairOutcome.Failed, ErrorMessage: ex.Message);
             }
+            finally
+            {
+                lock (_lock)
+                {
+                    _pairInitiationCts.Remove(requestId, out var owned);
+                    owned?.Dispose();
+                }
+            }
 
             RaisePairFinished(finished);
-        }, ct);
+        }, pairCts.Token);
 
         // Espera rápida: TLS + HELLO. Si el par no está accesible, falla aquí.
         return await initiation.Task.WaitAsync(TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+    }
+
+    public Task CancelPairingAsync(string requestId, CancellationToken ct = default)
+    {
+        CancellationTokenSource? toCancel;
+        lock (_lock)
+        {
+            _pairInitiationCts.TryGetValue(requestId, out toCancel);
+        }
+
+        // La tarea en background hace el Remove+Dispose en su finally.
+        // No es error cancelar dos veces o llegar tarde (idempotente).
+        try { toCancel?.Cancel(); } catch (ObjectDisposedException) { /* carrera */ }
+        return Task.CompletedTask;
     }
 
     public Task AcceptPairingAsync(string requestId, CancellationToken ct = default)
@@ -1608,11 +1682,25 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             return;
         }
 
-        // Registrar al iniciador: confianza mutua con su huella VIVA.
-        RegisterPairedDevice(pair.DeviceId, pair.DisplayName, remoteIp, pair.Port, clientThumbprint);
+        // Orden CRÍTICO: escribir el ACCEPT ANTES de registrar la confianza.
+        // Si el iniciador ya se fue (canceló, cerró la app), el write falla y
+        // NO registramos confianza unilateral: él nunca sabrá que fue
+        // aceptado, así que ambos lados quedan igual de no-emparejados.
+        try
+        {
+            await ShareProtocol.WriteControlAsync(
+                stream, ShareProtocol.MsgPairAccept, new { }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(
+                ex, "El iniciador desapareció al aceptar: no se registra la confianza");
+            return;
+        }
 
-        await ShareProtocol.WriteControlAsync(
-            stream, ShareProtocol.MsgPairAccept, new { }).ConfigureAwait(false);
+        // ACCEPT entregado: registrar al iniciador con su huella VIVA y su
+        // puerto de servicio (el del payload, no el efímero de la conexión).
+        RegisterPairedDevice(pair.DeviceId, pair.DisplayName, remoteIp, pair.Port, clientThumbprint);
     }
 
     private string GetDeviceName(string deviceId)    {

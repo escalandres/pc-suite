@@ -698,6 +698,63 @@ public class LocalShareEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task DiscoveryOverLoopback_GoodbyeRemovesInstantly()
+    {
+        // Primer test con discovery REAL (UDP multicast por loopback): valida
+        // anuncios, filtro propio por deviceId (dos instancias comparten IP en
+        // localhost y DEBEN verse entre sí pero no a sí mismas) y el goodbye
+        // (patrón mDNS): al detener A, B lo retira al instante.
+        // Anuncios cada 1 s para no esperar ciclos de producción (15 s).
+        DiscoveryService.AnnounceIntervalOverride = TimeSpan.FromSeconds(1);
+        try
+        {
+            var aSettings = _serviceA.Settings;
+            aSettings.DiscoveryEnabled = true;
+            await _serviceA.UpdateSettingsAsync(aSettings);
+
+            var bSettings = _serviceB.Settings;
+            bSettings.DiscoveryEnabled = true;
+            await _serviceB.UpdateSettingsAsync(bSettings);
+
+            await _serviceA.StartAsync();
+            await _serviceB.StartAsync();
+
+            // Detección mutua por multicast real (hasta 12 s).
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(12);
+            while (DateTime.UtcNow < deadline)
+            {
+                var aSeesB = _serviceA.GetDevices().Any(d => d.DeviceId == "device-b");
+                var bSeesA = _serviceB.GetDevices().Any(d => d.DeviceId == "device-a");
+                if (aSeesB && bSeesA) break;
+                await Task.Delay(200);
+            }
+
+            Assert.Contains(_serviceA.GetDevices(), d => d.DeviceId == "device-b");
+            Assert.Contains(_serviceB.GetDevices(), d => d.DeviceId == "device-a");
+
+            // El filtro propio es por deviceId, no solo por IP: nadie se ve a sí mismo.
+            Assert.DoesNotContain(_serviceA.GetDevices(), d => d.DeviceId == "device-a");
+            Assert.DoesNotContain(_serviceB.GetDevices(), d => d.DeviceId == "device-b");
+
+            // GOODBYE: A se detiene → B lo retira en segundos (no en 45).
+            await _serviceA.StopAsync();
+
+            var gone = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (DateTime.UtcNow < gone)
+            {
+                if (!_serviceB.GetDevices().Any(d => d.DeviceId == "device-a")) break;
+                await Task.Delay(200);
+            }
+
+            Assert.DoesNotContain(_serviceB.GetDevices(), d => d.DeviceId == "device-a");
+        }
+        finally
+        {
+            DiscoveryService.AnnounceIntervalOverride = null;
+        }
+    }
+
+    [Fact]
     public async Task MultiItemTransfer_AllFilesPublishedInOrder()
     {
         // Regresión del bug de la "lectura extra": un ReadFrameAsync de más

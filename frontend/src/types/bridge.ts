@@ -105,6 +105,7 @@ export const OperationIds = {
   localShareFirewallRule: 'localshare.firewallRule',
   localSharePairAccept: 'localshare.pairAccept',
   localSharePairReject: 'localshare.pairReject',
+  localSharePairCancel: 'localshare.pairCancel',
   localSharePauseTransfer: 'localshare.pauseTransfer',
   localShareResumeTransfer: 'localshare.resumeTransfer',
 } as const;
@@ -386,6 +387,7 @@ export interface LocalShareStatusResult {
   port: number;
   displayName?: string | null;
   discoveryEnabled: boolean;
+  autoStartService: boolean;
   downloadDirectory?: string | null;
   error?: string | null;
 }
@@ -453,6 +455,7 @@ export interface LocalShareConfigResult {
   port: number;
   discoveryEnabled: boolean;
   autoAcceptFromPaired: boolean;
+  autoStartService: boolean;
   maxSimultaneousTransfers: number;
   maxBandwidthBytesPerSecond: number;
   maxTransferSizeBytes: number;
