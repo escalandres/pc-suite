@@ -130,6 +130,7 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 - **1.1.0** — Local Share completo (16.0–16.7) + instalador con actualización automática (desinstala la versión previa en silencio). ⚠️ Existieron DOS builds con este número y el mismo nombre de Setup: uno ANTES del emparejamiento real (comparación numérica) y otro después — motivo del salto siguiente.
 - **1.2.0** — subida manualmente el 2026-10-13 para identificar de forma única el build CON emparejamiento real (comparación numérica estilo Bluetooth). Con este número, cada Setup corresponde a un solo contenido.
 - **1.2.2–1.2.4** — ciclo de estabilización con PRUEBA REAL en dos laptops (2026-10-13), que destapó una cadena de bugs que los tests E2E en localhost no podían cazar. **1.2.4 = primera build con el ciclo completo validado** (detección → emparejamiento → transferencia con verificación de integridad).
+- **0.5.0** — 2026-10-14: **primera versión PÚBLICA**. Los builds 1.x fueron internos de desarrollo y jamás se publicaron; la numeración pública arranca en 0.5.0 para reflejar honestamente la fase de desarrollo (el autor lo decidió al preparar el primer release en GitHub). Hashes publicados: instalador `89b646f3…`, portable `b55928aa…` (ver `docs/landing/notas/0.5.0.md`).
 
 **Lecciones de la prueba real** (bug → por qué el test E2E no lo vio):
 
