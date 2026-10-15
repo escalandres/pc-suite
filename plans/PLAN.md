@@ -116,9 +116,9 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 
 | Tarea | Estado | Notas |
 |---|---|---|
-| Task 018 - WinGet: permitir seleccionar qué paquetes actualizar (checkboxes + acción batch) — tres modos: actualizar todo, actualizar solo uno (ya existe), actualizar los seleccionados | ⏳ Pendiente | Petición del autor 2026-10-15 |
-| ├ 18.1 - Backend: winget.upgradeSelected (payload { packageIds: string[] }) o loop frontend de winget.upgrade por cada ID con estado de progreso | ⏳ Pendiente | Decisión de diseño: loop frontend con jobs independientes (reusa patrón existente winget.upgrade) vs. batch nativo (nueva op que ejecute todos secuencialmente con un solo UAC) |
-| └ 18.2 - Frontend: checkboxes en el tab "updates" de la página WinGet + contador de seleccionados + botón "Actualizar seleccionados (N)" con confirmación | ⏳ Pendiente | UI: checkbox por tarjeta (solo en mode === 'updates'), seleccionar todo / deseleccionar, botón contextual junto a "Actualizar todo" |
+| Task 018 - WinGet: permitir seleccionar qué paquetes actualizar (checkboxes + acción batch) — tres modos: actualizar todo, actualizar solo uno (ya existe), actualizar los seleccionados | ✅ Completado | 2026-10-15 |
+| ├ 18.1 - Backend: winget.upgradeSelected (payload { packageIds: string[] }) o loop frontend de winget.upgrade por cada ID con estado de progreso | ✅ Completado | Decisión: loop frontend secuencial reutilizando winget.upgrade (cero backend nuevo); cada paquete mantiene su propio busy/notice; batch cancelable con ref; resumen agregado al final |
+| └ 18.2 - Frontend: checkboxes en el tab "updates" de la página WinGet + contador de seleccionados + botón "Actualizar seleccionados (N)" con confirmación | ✅ Completado | Checkbox por tarjeta (solo updates con versión disponible, CheckSquare/Square de lucide), seleccionar todo/nada, botón verde "Actualizar seleccionados (N)" con confirmación UAC, progreso N/M + cancelar en curso, tarjeta resaltada al seleccionar (accent), aviso batch agregado |
 
 ## Notas de arquitectura (Task 016 — Local Share)
 

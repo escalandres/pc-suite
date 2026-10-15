@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ArrowUpCircle, Info, List, RefreshCw, Search, Trash2, Download } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowUpCircle, CheckSquare, Info, List, RefreshCw, Search, Square, Trash2, Download } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type {
@@ -64,6 +64,12 @@ export function Winget() {
   const [busy, setBusy] = useState<Record<string, MutationKind>>({});
   const [notices, setNotices] = useState<Record<string, Notice>>({});
 
+  // Task 018: selección múltiple para actualización selectiva
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; failed: string[] } | null>(null);
+  const batchCancelRef = useRef(false);
+
   const load = useCallback(
     async (currentMode: Mode, search: string) => {
       setLoading(true);
@@ -127,6 +133,10 @@ export function Winget() {
   const switchMode = (next: Mode) => {
     setMode(next);
     setListError(null);
+    // Al cambiar de pestaña, limpiar selección: los checkboxes solo viven
+    // en el contexto del tab "updates".
+    setSelectedIds(new Set());
+    setBatchProgress(null);
     if (next === 'search') {
       setPackages([]);
       return;
@@ -186,6 +196,114 @@ export function Winget() {
         return next;
       });
     }
+  };
+
+  // ------------------------------------------------------------------
+  // Task 018: selección múltiple + batch de actualizaciones
+  // ------------------------------------------------------------------
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const allSelected = mode === 'updates' && packages.length > 0
+    && selectedIds.size === packages.filter((p) => p.available && p.available !== '').length;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      // Solo los paquetes CON actualización disponible (los demás no
+      // tienen sentido actualizar).
+      setSelectedIds(new Set(
+        packages
+          .filter((p) => p.available && p.available !== '')
+          .map((p) => p.id),
+      ));
+    }
+  };
+
+  /**
+   * Batch: ejecuta winget.upgrade por cada ID seleccionado, SECUENCIALMENTE
+   * (evita que winget entre en race con múltiples instancias). Cada paquete
+   * mantiene su propio estado busy/notice. Al final, un resumen agregado.
+   * Cancelable: batchCancelRef detiene el loop antes del siguiente paquete.
+   */
+  const runBatchUpgrade = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    const failed: string[] = [];
+    setBatchRunning(true);
+    setBatchProgress({ done: 0, total: ids.length, failed: [] });
+    batchCancelRef.current = false;
+
+    for (let i = 0; i < ids.length; i++) {
+      if (batchCancelRef.current) {
+        setNotice('__batch__', 'error', `Cancelado: ${i}/${ids.length} completados.`);
+        break;
+      }
+
+      const pkgId = ids[i];
+      const pkg = packages.find((p) => p.id === pkgId);
+
+      setBusy((prev) => ({ ...prev, [pkgId]: 'upgrade' as MutationKind }));
+      clearNotice(pkgId);
+
+      try {
+        const result = await bridge.call<WinGetMutationResult>(
+          OperationIds.wingetUpgrade,
+          { packageId: pkgId },
+          MUTATION_TIMEOUT_MS,
+        );
+        if (result.succeeded) {
+          setNotice(pkgId, 'success',
+            `Se actualizó ${pkg?.name ?? pkgId}${result.elevated ? ' (elevado)' : ''}.`);
+        } else {
+          failed.push(pkg?.name ?? pkgId);
+          setNotice(pkgId, 'error',
+            result.detail ?? `winget terminó con el código ${result.exitCode}.`);
+        }
+      } catch {
+        failed.push(pkg?.name ?? pkgId);
+        setNotice(pkgId, 'error', 'La operación falló.');
+      } finally {
+        setBusy((prev) => {
+          const next = { ...prev };
+          delete next[pkgId];
+          return next;
+        });
+        setBatchProgress({ done: i + 1, total: ids.length, failed });
+      }
+    }
+
+    setBatchRunning(false);
+
+    // Resumen final (solo si no fue cancelado — el cancel ya puso su aviso).
+    if (!batchCancelRef.current) {
+      if (failed.length === 0) {
+        setNotice('__batch__', 'success', `Se actualizaron ${ids.length} paquete(s) correctamente.`);
+      } else {
+        setNotice('__batch__', 'error',
+          `${ids.length - failed.length} actualizado(s), ${failed.length} fallido(s): ${failed.join(', ')}`);
+      }
+    }
+
+    // Refrescar la lista tras el batch (elimina los ya actualizados del tab).
+    await load('updates', '');
+    setSelectedIds(new Set());
+  };
+
+  const cancelBatch = () => {
+    batchCancelRef.current = true;
   };
 
   const installed = detect?.installed ?? false;
@@ -259,6 +377,7 @@ export function Winget() {
 
       {/* Aviso global de upgradeAll */}
       {notices['__all__'] && <NoticeBox notice={notices['__all__']} />}
+      {notices['__batch__'] && <NoticeBox notice={notices['__batch__']} />}
 
       {installed && (
         <>
@@ -290,31 +409,88 @@ export function Winget() {
             </div>
 
             {mode === 'updates' && packages.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      `¿Actualizar ${packages.length} paquete(s)? Windows puede mostrar un control de cuentas de usuario (UAC).`,
-                    )
-                  ) {
-                    return;
-                  }
-                  void runMutation(
-                    '__all__',
-                    'upgradeAll',
-                    OperationIds.wingetUpgradeAll,
-                    undefined,
-                    'Todas las actualizaciones se aplicaron.',
-                  );
-                }}
-                disabled={Boolean(busy['__all__'])}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
-                style={{ background: 'var(--pcs-accent)', color: '#fff' }}
-              >
-                <Download size={14} aria-hidden />
-                {busy['__all__'] ? 'Actualizando…' : 'Actualizar todo'}
-              </button>
+              <>
+                {/* Task 018: seleccionar todo / deseleccionar */}
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  disabled={batchRunning}
+                  className="flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                  style={{
+                    borderColor: 'var(--pcs-border)',
+                    color: allSelected ? 'var(--pcs-accent)' : 'var(--pcs-text-muted)',
+                  }}
+                >
+                  {allSelected ? <CheckSquare size={14} aria-hidden /> : <Square size={14} aria-hidden />}
+                  {allSelected ? 'Ninguno' : 'Todos'}
+                </button>
+
+                {/* Actualizar todo (existente) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `¿Actualizar ${packages.length} paquete(s)? Windows puede mostrar un control de cuentas de usuario (UAC).`,
+                      )
+                    ) {
+                      return;
+                    }
+                    void runMutation(
+                      '__all__',
+                      'upgradeAll',
+                      OperationIds.wingetUpgradeAll,
+                      undefined,
+                      'Todas las actualizaciones se aplicaron.',
+                    );
+                  }}
+                  disabled={Boolean(busy['__all__']) || batchRunning}
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                  style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+                >
+                  <Download size={14} aria-hidden />
+                  {busy['__all__'] ? 'Actualizando…' : 'Actualizar todo'}
+                </button>
+
+                {/* Task 018: actualizar solo los seleccionados */}
+                {selectedIds.size > 0 && !batchRunning && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `¿Actualizar ${selectedIds.size} paquete(s) seleccionado(s)? Windows puede mostrar un control de cuentas de usuario (UAC).`,
+                        )
+                      ) {
+                        return;
+                      }
+                      void runBatchUpgrade();
+                    }}
+                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                    style={{ background: 'var(--pcs-success)', color: '#fff' }}
+                  >
+                    <ArrowUpCircle size={14} aria-hidden />
+                    Actualizar seleccionados ({selectedIds.size})
+                  </button>
+                )}
+
+                {/* Cancelar batch en curso */}
+                {batchRunning && batchProgress && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                      {batchProgress.done}/{batchProgress.total}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={cancelBatch}
+                      className="rounded-md border px-2 py-1 text-xs font-medium"
+                      style={{ borderColor: 'var(--pcs-danger)', color: 'var(--pcs-danger)' }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -373,9 +549,32 @@ export function Winget() {
                   <li
                     key={pkg.id}
                     className="space-y-2 rounded-lg border p-3"
-                    style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+                    style={{
+                      background: selectedIds.has(pkg.id)
+                        ? 'color-mix(in srgb, var(--pcs-accent) 6%, var(--pcs-surface))'
+                        : 'var(--pcs-surface)',
+                      borderColor: selectedIds.has(pkg.id)
+                        ? 'color-mix(in srgb, var(--pcs-accent) 50%, var(--pcs-border))'
+                        : 'var(--pcs-border)',
+                    }}
                   >
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      {/* Task 018: checkbox para selección (solo en updates con
+                          versión disponible) */}
+                      {mode === 'updates' && hasUpdate && (
+                        <button
+                          type="button"
+                          onClick={() => toggleSelected(pkg.id)}
+                          disabled={batchRunning || Boolean(action)}
+                          aria-label={selectedIds.has(pkg.id) ? `Deseleccionar ${pkg.name}` : `Seleccionar ${pkg.name}`}
+                          className="mr-1 shrink-0 cursor-pointer self-center disabled:cursor-not-allowed disabled:opacity-40"
+                          style={{ color: selectedIds.has(pkg.id) ? 'var(--pcs-accent)' : 'var(--pcs-text-muted)' }}
+                        >
+                          {selectedIds.has(pkg.id)
+                            ? <CheckSquare size={16} aria-hidden />
+                            : <Square size={16} aria-hidden />}
+                        </button>
+                      )}
                       <span className="text-sm font-medium">{pkg.name}</span>
                       <code className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                         {pkg.id}
