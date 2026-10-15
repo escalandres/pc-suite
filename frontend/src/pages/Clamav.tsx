@@ -244,7 +244,7 @@ export function Clamav() {
         return;
       }
 
-      const result = payload.result ?? null;
+      const result = (payload.result as ClamAvScanResult | null) ?? null;
       if (result && kind) {
         setLastScan({ kind, result });
         if (result.succeeded) {

@@ -276,4 +276,27 @@ public static class OperationIds
 
     /// <summary>Reanuda un envío pausado (payload: { transferId }).</summary>
     public const string LocalShareResumeTransfer = "localshare.resumeTransfer";
+
+    // ---------------- Task 017: actualizaciones ----------------
+
+    /// <summary>
+    /// Consulta el manifiesto público (latest.json): ¿hay versión mayor que la
+    /// instalada? Timeout corto; un fallo de red es Available=false (la app
+    /// funciona igual). Payload cero.
+    /// </summary>
+    public const string UpdateCheck = "update.check";
+
+    /// <summary>
+    /// Descarga el instalador como Job (patrón existente: jobId + job.event
+    /// con progreso y desenlace). SHA-256 en streaming: discrepancia → job
+    /// Failed y el archivo se borra.
+    /// </summary>
+    public const string UpdateDownload = "update.download";
+
+    /// <summary>
+    /// Lanza el instalador YA verificado (payload: { path } — la que devolvió
+    /// el job de descarga). Única operación que ejecuta algo: requiere el
+    /// botón explícito del usuario. Tras lanzar, la app se cierra sola.
+    /// </summary>
+    public const string UpdateInstall = "update.install";
 }

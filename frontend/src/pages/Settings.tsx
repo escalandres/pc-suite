@@ -4,6 +4,7 @@ import { useTheme } from '../theme';
 import type { ThemePreference } from '../theme';
 import { bridge } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
+import { UpdatePanel } from '../components/UpdateCenter';
 import {
   PREF_DENSITY,
   PREF_NOTIFICATIONS,
@@ -139,6 +140,9 @@ export function Settings() {
           «Compacto» reduce espaciado y tamaños; «Cómodo» usa valores estándar.
         </p>
       </section>
+
+      {/* Actualizaciones (Task 17.3/17.4) */}
+      <UpdatePanel />
 
       {/* Acerca de */}
       <section

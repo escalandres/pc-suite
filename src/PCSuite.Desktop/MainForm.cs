@@ -192,6 +192,10 @@ public partial class MainForm : Form
             elevation: elevationManager,
             events: events);
 
+        // Actualizaciones (Task 017.3/17.4): manifiesto público + SHA-256 en
+        // streaming. update.install cierra la app tras lanzar el Setup.
+        var updateService = new PCSuite.Infrastructure.Updates.PcsuiteUpdateService();
+
         _router = new CommandRouter(
             [
                 new GetSystemInfoOperation(),
@@ -265,6 +269,14 @@ public partial class MainForm : Form
                 new LocalShareFirewallRuleOperation(localShareService),
                 new LocalSharePauseTransferOperation(localShareService),
                 new LocalShareResumeTransferOperation(localShareService),
+                new UpdateCheckOperation(updateService),
+                new UpdateDownloadOperation(updateService, jobManager),
+                new UpdateInstallOperation(updateService, onInstalled: () =>
+                {
+                    // El Setup ya quedó lanzado: cerrar la app para dejarle el
+                    // paso (él pide UAC si la instalación lo requiere).
+                    BeginInvoke(Close);
+                }),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

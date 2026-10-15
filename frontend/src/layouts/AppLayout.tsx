@@ -20,6 +20,7 @@ import {
 import { pageKey, toggleFavorite, useFavorites } from '../favorites';
 import { openHelp } from '../shortcuts';
 import { Breadcrumbs } from '../components/Breadcrumbs';
+import { UpdateCenter } from '../components/UpdateCenter';
 
 export type PageId =
   | 'home'
@@ -139,6 +140,10 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
             {collapsed ? <ChevronRight size={14} aria-hidden /> : <ChevronLeft size={14} aria-hidden />}
           </button>
         </div>
+
+        {/* Task 17.3 — badge de actualización disponible (check silencioso
+            al arrancar; el panel completo vive en Ajustes › Actualizaciones). */}
+        {!collapsed && <UpdateCenter />}
 
         <nav className="pcs-scroll-thin flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
           {NAV_ITEMS.map((item) => {
