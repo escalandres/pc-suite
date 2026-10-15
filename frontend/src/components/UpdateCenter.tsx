@@ -18,13 +18,13 @@ import type {
 } from '../types/bridge';
 
 /**
- * Task 17.3/17.4 â€” actualizaciones dentro de la app.
+ * Task 17.3/17.4 — actualizaciones dentro de la app.
  *
- * Flujo (propuesta Â§8): check al montar (no bloquea, 5 s mÃ¡ximo) â†’ badge
- * discreto â†’ panel con versiÃ³n/tamaÃ±o/notas â†’ "Descargar e instalar" (Job
- * con progreso y SHA-256 en streaming del lado nativo) â†’ "Instalar ahora"
- * (ÃšNICO botÃ³n que ejecuta algo) â†’ la app se cierra sola y el Setup pide
- * UAC Ã©l solo.
+ * Flujo (propuesta §8): check al montar (no bloquea, 5 s máximo) → badge
+ * discreto → panel con versión/tamaño/notas → "Descargar e instalar" (Job
+ * con progreso y SHA-256 en streaming del lado nativo) → "Instalar ahora"
+ * (ÚNICO botón que ejecuta algo) → la app se cierra sola y el Setup pide
+ * UAC él solo.
  */
 
 const CHECK_TIMEOUT = 10_000;
@@ -42,7 +42,7 @@ function formatMb(bytes: number): string {
 }
 
 /**
- * Estado global de actualizaciÃ³n, montado UNA vez en App: hace el check al
+ * Estado global de actualización, montado UNA vez en App: hace el check al
  * arrancar y expone el badge. El panel completo vive en Ajustes ("Acerca de").
  */
 export function UpdateCenter() {
@@ -53,7 +53,7 @@ export function UpdateCenter() {
     bridge
       .call<AppUpdateCheckResult>(OperationIds.updateCheck, undefined, CHECK_TIMEOUT)
       .then((result) => { if (!cancelled) setCheck(result); })
-      .catch(() => { /* sin red o fallo: la app funciona igual â€” sin drama */ });
+      .catch(() => { /* sin red o fallo: la app funciona igual — sin drama */ });
     return () => { cancelled = true; };
   }, []);
 
@@ -67,19 +67,18 @@ export function UpdateCenter() {
         background: 'color-mix(in srgb, var(--pcs-accent) 16%, transparent)',
         color: 'var(--pcs-accent)',
       }}
-      title={`VersiÃ³n ${check.latestVersion} disponible â€” Ajustes â€º Acerca de`}
-      onClick={() => { void bridge.call(OperationIds.updateCheck, undefined, CHECK_TIMEOUT).catch(() => {}); }}
+      title={`Versión ${check.latestVersion} disponible — Ajustes > Acerca de`}
     >
       <Sparkles size={12} aria-hidden />
-      ActualizaciÃ³n
+      Actualización
     </a>
   );
 }
 
 /**
- * Panel de actualizaciones para la pÃ¡gina de Ajustes: check manual, versiÃ³n
- * actual vs. disponible, descarga con progreso (Job) y el botÃ³n final de
- * instalaciÃ³n (el Ãºnico que ejecuta algo).
+ * Panel de actualizaciones para la página de Ajustes: check manual, versión
+ * actual vs. disponible, descarga con progreso (Job) y el botón final de
+ * instalación (el único que ejecuta algo).
  */
 export function UpdatePanel() {
   const [check, setCheck] = useState<AppUpdateCheckResult | null>(null);
@@ -129,14 +128,14 @@ export function UpdatePanel() {
         const result = payload.result as UpdateDownloadJobResult | null;
         if (result?.path) {
           setDownload({ phase: 'ready', path: result.path });
-          setNotice({ kind: 'success', text: 'Descarga verificada (SHA-256 âœ“). Lista para instalar.' });
+          setNotice({ kind: 'success', text: 'Descarga verificada (SHA-256 OK). Lista para instalar.' });
         } else {
           setDownload({ phase: 'idle' });
-          setNotice({ kind: 'error', text: 'La descarga terminÃ³ sin resultado.' });
+          setNotice({ kind: 'error', text: 'La descarga terminó sin resultado.' });
         }
       } else if (payload.status === 'failed') {
-        setDownload({ phase: 'failed', error: payload.error ?? 'La descarga fallÃ³.' });
-        setNotice({ kind: 'error', text: payload.error ?? 'La descarga fallÃ³.' });
+        setDownload({ phase: 'failed', error: payload.error ?? 'La descarga falló.' });
+        setNotice({ kind: 'error', text: payload.error ?? 'La descarga falló.' });
       } else if (payload.status === 'cancelled') {
         setDownload({ phase: 'idle' });
         setNotice(null);
@@ -164,8 +163,8 @@ export function UpdatePanel() {
     setInstalling(true);
     try {
       await bridge.call(OperationIds.updateInstall, { path: download.path }, INSTALL_TIMEOUT);
-      setNotice({ kind: 'success', text: 'Instalador lanzado. La app se cerrarÃ¡â€¦' });
-      // La app se cierra sola (onInstalled â†’ MainForm.Close). Si no se cerrÃ³,
+      setNotice({ kind: 'success', text: 'Instalador lanzado. La app se cerrará…' });
+      // La app se cierra sola (onInstalled → MainForm.Close). Si no se cerró,
       // el usuario puede seguirla usando; el mensaje ya explica el desenlace.
     } catch (e) {
       setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo instalar.' });
@@ -194,7 +193,7 @@ export function UpdatePanel() {
           style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
         >
           <RefreshCw size={12} aria-hidden className={checking ? 'animate-spin' : undefined} />
-          {checking ? 'Comprobandoâ€¦' : 'Buscar actualizaciones'}
+          {checking ? 'Comprobando…' : 'Buscar actualizaciones'}
         </button>
       </div>
 
@@ -211,7 +210,7 @@ export function UpdatePanel() {
       {check && !available && !check.error && (
         <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--pcs-success)' }}>
           <ShieldCheck size={13} aria-hidden />
-          PCSuite {check.currentVersion} estÃ¡ actualizado.
+          PCSuite {check.currentVersion} está actualizado.
         </p>
       )}
 
@@ -227,12 +226,12 @@ export function UpdatePanel() {
             <span className="text-xs font-mono" style={{ color: 'var(--pcs-text-muted)' }}>
               {check.currentVersion}
             </span>
-            <span style={{ color: 'var(--pcs-accent)' }}>â†’</span>
+            <span style={{ color: 'var(--pcs-accent)' }}>→</span>
             <span className="text-sm font-semibold" style={{ color: 'var(--pcs-accent)' }}>
               {check.latestVersion}
             </span>
             <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              {check.sizeBytes > 0 ? `Â· ${formatMb(check.sizeBytes)}` : ''}
+              {check.sizeBytes > 0 ? `· ${formatMb(check.sizeBytes)}` : ''}
             </span>
             {check.releaseNotesUrl && (
               <a
@@ -242,7 +241,7 @@ export function UpdatePanel() {
                 className="ml-auto flex items-center gap-1 text-xs"
                 style={{ color: 'var(--pcs-accent)' }}
               >
-                Notas de versiÃ³n
+                Notas de versión
                 <ExternalLink size={10} aria-hidden className="opacity-70" />
               </a>
             )}
@@ -263,7 +262,7 @@ export function UpdatePanel() {
                 />
               </div>
               <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                Descargando con verificaciÃ³n SHA-256â€¦ {Math.round(download.progress * 100)}%
+                Descargando con verificación SHA-256… {Math.round(download.progress * 100)}%
               </p>
             </div>
           )}
@@ -290,7 +289,7 @@ export function UpdatePanel() {
                 style={{ background: 'var(--pcs-success)', color: '#fff' }}
               >
                 <CheckCircle2 size={14} aria-hidden />
-                {installing ? 'Lanzandoâ€¦' : 'Instalar ahora'}
+                {installing ? 'Lanzando…' : 'Instalar ahora'}
               </button>
             )}
 
@@ -309,8 +308,8 @@ export function UpdatePanel() {
 
           {isReady && (
             <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              El instalador descargado y verificado reemplazarÃ¡ la versiÃ³n actual;
-              tu configuraciÃ³n y datos no se tocan. Windows puede pedir permiso (UAC).
+              El instalador descargado y verificado reemplazará la versión actual;
+              tu configuración y datos no se tocan. Windows puede pedir permiso (UAC).
             </p>
           )}
         </>
