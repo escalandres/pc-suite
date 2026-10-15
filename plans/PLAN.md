@@ -87,11 +87,11 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 - El botón Cancelar funciona (llama `IJobManager.RequestCancel` directamente)
 - Las dos UIs coexisten en la misma app sin conflicto
 - La suite completa de tests sigue en verde (712+)\n|
-| Task 016 — **Local Share: transferencia de archivos en red local (LAN)** — envío directo entre equipos con PCSuite, sin nube ni servicios externos. Especificación completa en PCSuite_Local_Share_Propuesta.md | ⏳ Pendiente | — |
-| ├ 16.0 — Reconocimiento del repositorio: mapear arquitectura, convenciones, bridge, jobs, UI, logging, tests y empaquetado. Evaluar bibliotecas mDNS/DNS-SD y enfoque TLS. Entregar docs/local-share/repository-assessment.md | ⏳ Pendiente | — |
-| ├ 16.1 — Diseño y contratos: estados, protocolo versionado, identidad/emparejamiento, política de archivos temporales, operación del bridge (localshare.*), decisiones TLS y mDNS. Entregar docs/local-share/technical-design.md y protocol.md | ⏳ Pendiente | — |
+| Task 016 — **Local Share: transferencia de archivos en red local (LAN)** — envío directo entre equipos con PCSuite, sin nube ni servicios externos. Especificación completa en PCSuite_Local_Share_Propuesta.md | ✅ Completado | 2026-10-13: validado de punta a punta en dos laptops físicas |
+| ├ 16.0 — Reconocimiento del repositorio: mapear arquitectura, convenciones, bridge, jobs, UI, logging, tests y empaquetado. Evaluar bibliotecas mDNS/DNS-SD y enfoque TLS. Entregar docs/local-share/repository-assessment.md | ✅ Completado | 2026-10-11 |
+| ├ 16.1 — Diseño y contratos: estados, protocolo versionado, identidad/emparejamiento, política de archivos temporales, operación del bridge (localshare.*), decisiones TLS y mDNS. Entregar docs/local-share/technical-design.md y protocol.md | ✅ Completado | 2026-10-11 |
 | ├ 16.2 — Transporte seguro mínimo: listener TCP+TLS, transferencia en streaming (sin cargar en memoria), cancelación, límites. Conexión manual por IP:puerto. Tests de integración en localhost (dos instancias, puertos distintos) | ✅ Completado | 2026-10-11 | — |
-| ├ 16.3 — Descubrimiento mDNS y emparejamiento: detección automática, emparejamiento explícito con código de verificación, revocación de confianza, conexión manual como fallback | ⏳ Pendiente | — |
+| ├ 16.3 — Descubrimiento mDNS y emparejamiento: detección automática, emparejamiento explícito con código de verificación, revocación de confianza, conexión manual como fallback | ✅ Completado | 2026-10-13: emparejamiento real con comparación numérica estilo Bluetooth; goodbye mDNS (patrón mDNS); selector nativo system.pickFiles; validado en dos laptops físicas |
 | ├ 16.4 — Integridad y escritura segura: SHA-256 en streaming (computar durante transferencia, no como paso separado), archivos temporales con nombres aleatorios, validación de rutas (anti-traversal), política de colisiones, publicación solo al completar | ✅ Completado | 2026-10-11 | — |
 | ├ 16.5 — UI React: vistas de dispositivos, envío (drag-and-drop), solicitud entrante (aceptar/rechazar), transferencias (progreso/velocidad/ETA), configuración. Usar el patrón Job existente para eventos de progreso | ✅ Completado | 2026-10-11 | — |
 | ├ 16.6 — Robustez y empaquetado: tests manuales dos equipos, firewall (diagnóstico + regla con UAC puntual), arranque en frío, documentación de troubleshooting | ✅ Completado | 2026-10-11: E2E localhost 4/4; firewall con UAC puntual + 14 tests; troubleshooting.md; puerto por defecto fuera del rango efímero. 762/762 tests |
@@ -109,8 +109,16 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 17.5 - Changelog por versión en la página | ⏳ Pendiente | Notas por versión ya viven en los releases de GitHub (releaseNotesUrl del manifiesto); falta la vista /notes/<vers>.html en el sitio |
 | └ 17.6 - (opcional) Firma PGP del manifiesto validada por el updater (reusa infra Task 009) | ⏳ Pendiente | Diferida por decisión del autor: primero el ciclo base end-to-end. Autenticidad del canal; SHA-256 solo da integridad |
 | ├ NOTA-17.3 — botón manual "Buscar actualizaciones" | ✅ Ya implementado | El UpdatePanel (Ajustes › Actualizaciones) ya tiene el botón que ejecuta el GET al manifiesto con confirmación visual (check + resultado). El badge del sidebar también dispara un re-check al hacer clic. No requiere trabajo adicional |
-| ├ 17.7 - WinGet: actualización selectiva de paquetes (checkboxes) | ⏳ Pendiente | Hoy existe "Actualizar todo" (upgradeAll) y "Actualizar" individual (upgrade por paquete). Falta: checkboxes en el tab "updates" + botón "Actualizar seleccionados (N)" que llame upgrade secuencialmente por cada uno seleccionado. Tres modos: actualizar todo, actualizar solo uno (ya existe), actualizar los seleccionados. Payload nuevo winget.upgradeSelected con array de packageIds, o loop frontend de winget.upgrade por cada ID con estado de progreso |
 | ├ SITE-INTEGRADO — landing desplegada en aes-studio.dev/pcsuite/ (Astro/Vercel) | ✅ Completado | 2026-10-15: verificado en producción — landing 200 OK, latest.json accesible, URLs apuntan a GitHub Releases, hashes coinciden con el release. Circuito público completo: aes-studio.dev/pcsuite/ ↔ latest.json ↔ github.com/escalandres/pc-suite/releases |
+
+
+### Task 018 — WinGet: actualización selectiva de paquetes
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 018 - WinGet: permitir seleccionar qué paquetes actualizar (checkboxes + acción batch) — tres modos: actualizar todo, actualizar solo uno (ya existe), actualizar los seleccionados | ⏳ Pendiente | Petición del autor 2026-10-15 |
+| ├ 18.1 - Backend: winget.upgradeSelected (payload { packageIds: string[] }) o loop frontend de winget.upgrade por cada ID con estado de progreso | ⏳ Pendiente | Decisión de diseño: loop frontend con jobs independientes (reusa patrón existente winget.upgrade) vs. batch nativo (nueva op que ejecute todos secuencialmente con un solo UAC) |
+| └ 18.2 - Frontend: checkboxes en el tab "updates" de la página WinGet + contador de seleccionados + botón "Actualizar seleccionados (N)" con confirmación | ⏳ Pendiente | UI: checkbox por tarjeta (solo en mode === 'updates'), seleccionar todo / deseleccionar, botón contextual junto a "Actualizar todo" |
 
 ## Notas de arquitectura (Task 016 — Local Share)
 
