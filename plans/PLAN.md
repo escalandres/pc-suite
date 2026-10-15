@@ -120,6 +120,25 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 18.1 - Backend: winget.upgradeSelected (payload { packageIds: string[] }) o loop frontend de winget.upgrade por cada ID con estado de progreso | ✅ Completado | Decisión: loop frontend secuencial reutilizando winget.upgrade (cero backend nuevo); cada paquete mantiene su propio busy/notice; batch cancelable con ref; resumen agregado al final |
 | └ 18.2 - Frontend: checkboxes en el tab "updates" de la página WinGet + contador de seleccionados + botón "Actualizar seleccionados (N)" con confirmación | ✅ Completado | Checkbox por tarjeta (solo updates con versión disponible, CheckSquare/Square de lucide), seleccionar todo/nada, botón verde "Actualizar seleccionados (N)" con confirmación UAC, progreso N/M + cancelar en curso, tarjeta resaltada al seleccionar (accent), aviso batch agregado |
 
+### Task 019 — Certificados: generación, inspección, conversión y firma
+
+> Propuesta completa: `docs/certificates/PCSuite_Certificates_Propuesta.md`
+> Trae el CertificatesGenerator (repo local del autor) dentro de PCSuite como
+> módulo con UI, + capacidades estilo ssh-keygen de OpenSSH.
+> NO duplica lo que ya existe (PgpService Task 009, SshKeyService Task 009,
+> CertificateStore Task 016) — lo UNIFICA bajo una misma página.
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 019 - Módulo "Certificados": generación X.509 autofirmada, claves PGP de firma dedicadas, inspección universal, conversión de formatos, CSR — todo BouncyCastle en proceso, sin gpg/OpenSSL — ver propuesta | ⏳ Propuesta | Diseño completo listo para implementar. Basado en el CertificatesGenerator del autor (RSA 4096 + SHA256withRSAandMGF1 + PGP signing keys) + ssh-keygen de OpenSSH como referencia de capacidades |
+| ├ 19.1 - X.509: generación de certificados autofirmados (RSA 2048/4096, ECDSA P-256/P-384, Ed25519; SHA-256/384/512 + PSS; CN/O/OU/C, SANs, validez; export PEM + PFX) | ⏳ Pendiente | Del CertificatesGenerator; BouncyCastle en proceso, sin makecert/openssl |
+| ├ 19.2 - PGP: clave de firma dedicada con identidad configurable + passphrase (FixedTimeEquals) + expiración; cert.pgp.generateSigning + cert.pgp.signFile — CIERRA el flujo de 17.6 | ⏳ Pendiente | La operación signFile es lo que publicar.ps1 necesita para firmar latest.json sin gpg instalado |
+| ├ 19.3 - Inspección universal: reconocer automáticamente X.509 PEM/DER, clave privada PEM, PFX, CSR, PGP .asc, SSH .pub → cert.inspect con fingerprint | ⏳ Pendiente | Estilo ssh-keygen -L: un solo endpoint que entiende cualquier formato de certificado/clave |
+| ├ 19.4 - Conversión de formatos: PEM↔DER, PEM↔PFX/PKCS#12, OpenSSH→PEM — cert.convert | ⏳ Pendiente | Caso de uso: importar a Windows cert store (PFX), extraer de bundle, usar clave SSH en OpenSSL |
+| ├ 19.5 - CSR: Certificate Signing Request PKCS#10 para enviar a una CA real (Let's Encrypt, DigiCert) — cert.csr.generate | ⏳ Pendiente | El usuario genera la clave + CSR aquí, la CA firma, y vuelve a importar |
+| ├ 19.6 - Integración con 17.6: publicar.ps1 usa cert.pgp.signFile para firmar el manifiesto — el updater valida con la clave embebida | ⏳ Pendiente | Flujo cerrado dentro de PCSuite: sin gpg CLI, sin dependencias externas |
+| └ 19.7 - UI: página "Certificados" (tabs Generar/Inspeccionar/Convertir + Mis claves PGP + SSH keys existentes) | ⏳ Pendiente | Una sola página para todos los formatos; reusa PgpService.ListKeysAsync y SshKeyService.ListAsync |
+
 ## Notas de arquitectura (Task 016 — Local Share)
 
 **Ajustes a la propuesta original** (basado en el análisis del repositorio):
