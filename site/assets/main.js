@@ -17,7 +17,7 @@
 
   const formatDate = (iso) => {
     try {
-      return new Date(iso).toLocaleDateString('es-ES', {
+      return new Date(iso).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'long', year: 'numeric',
       });
     } catch {
@@ -33,7 +33,13 @@
     const slot = (name) => card.querySelector(`[data-slot="${name}"]`);
 
     const label = slot('label');
-    if (label) label.textContent = artifact.label || artifact.id;
+    // Labels localizados por id (el manifiesto trae los suyos en español:
+    // son datos del updater, la UI traduce). Mirrors src/i18n/pcsuite.ts EN.
+    const LABELS = {
+      'setup-win64': 'Installer (recommended)',
+      'portable-win64': 'Portable (.zip)',
+    };
+    if (label) label.textContent = LABELS[artifact.id] || artifact.label || artifact.id;
 
     const size = slot('size');
     if (size) size.textContent = formatMb(artifact.size);
@@ -77,10 +83,10 @@
       const main = $('#cta-main');
       if (main) {
         main.href = setup.url;
-        main.textContent = `Descargar ${formatMb(setup.size)}`;
+        main.textContent = `Download ${formatMb(setup.size)}`;
       }
       const mb = $('[data-slot="setup-mb"]');
-      if (mb) mb.textContent = formatMb(setup.size).replace(' MB', ' MB');
+      if (mb) mb.textContent = String(Math.round(setup.size / (1024 * 1024)));
     }
     if (portable) {
       const alt = $('#cta-alt');
@@ -107,7 +113,7 @@
     const cards = $('#download-cards');
     if (cards) cards.hidden = true;
     const main = $('#cta-main');
-    if (main) main.textContent = 'Descarga no disponible';
+    if (main) main.textContent = 'Download unavailable';
   };
 
   // ---------- Copiar al portapapeles (con fallback para contexts no seguros) ----------
@@ -141,7 +147,7 @@
     if (!value) return;
     const ok = await copyText(value);
     const original = btn.textContent;
-    btn.textContent = ok ? '✓ Copiado' : 'No se pudo copiar';
+    btn.textContent = ok ? '✓ Copied' : 'Copy failed';
     if (ok) btn.classList.add('copied');
     setTimeout(() => {
       btn.textContent = original;

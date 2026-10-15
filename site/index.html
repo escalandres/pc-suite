@@ -1,155 +1,161 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PCSuite — The Swiss Army Knife for Windows developers and power users</title>
-  <meta name="description" content="Descarga PCSuite: antivirus, gestor de software, WSL, SSH, PGP, limpieza, seguridad y transferencia de archivos por LAN. Verificación SHA-256 de cada descarga.">
-  <link rel="canonical" href="https://aes-studio.dev/">
+  <title>PCSuite — The Swiss Army knife for Windows developers and power users</title>
+  <meta name="description" content="Download PCSuite: antivirus, software manager, WSL, SSH, PGP, cleanup, security and LAN file transfer. SHA-256 verification for every download.">
+  <link rel="canonical" href="https://aes-studio.dev/pcsuite/">
+  <link rel="alternate" hreflang="en" href="https://aes-studio.dev/pcsuite/">
+  <link rel="alternate" hreflang="es" href="https://aes-studio.dev/pcsuite/es/">
+  <link rel="alternate" hreflang="x-default" href="https://aes-studio.dev/pcsuite/">
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="PCSuite — The Swiss Army Knife for Windows">
-  <meta property="og:description" content="Suite de herramientas para Windows: antivirus, software, WSL, SSH, PGP, limpieza y Local Share. Descarga verificada con SHA-256.">
-  <meta property="og:image" content="https://aes-studio.dev/assets/logo.svg">
-  <meta property="og:url" content="https://aes-studio.dev/">
+  <meta property="og:title" content="PCSuite — The Swiss Army knife for Windows">
+  <meta property="og:description" content="A tools suite for Windows: antivirus, software, WSL, SSH, PGP, cleanup and Local Share. Verified downloads with SHA-256.">
+  <meta property="og:image" content="https://aes-studio.dev/og-image.png">
+  <meta property="og:url" content="https://aes-studio.dev/pcsuite/">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
   <nav class="nav">
     <a class="nav-brand" href="#top">
-      <img src="assets/logo.svg" alt="PCSuite" width="28" height="28">
+      <img src="assets/logo.svg" alt="" width="28" height="28" aria-hidden="true">
       <span>PCSuite</span>
     </a>
     <div class="nav-links">
-      <a href="#descarga">Descarga</a>
-      <a href="#caracteristicas">Características</a>
-      <a href="#actualizar">Actualizar</a>
+      <a href="#download">Download</a>
+      <a href="#features">Features</a>
+      <a href="archive/">Versions</a>
     </div>
     <span class="nav-studio">AES Studio</span>
   </nav>
 
   <header id="top" class="hero">
-    <img class="hero-logo" src="assets/logo.svg" alt="Logotipo de PCSuite" width="112" height="112">
+    <img class="hero-logo" src="assets/logo.svg" alt="PCSuite logo" width="112" height="112">
     <h1>PCSuite</h1>
-    <p class="tagline">The Swiss Army Knife for Windows developers and power users.</p>
-    <p class="sub">Antivirus, software, WSL, SSH, PGP, limpieza, seguridad y <strong>Local Share</strong>:
-      archivos entre equipos por tu red local, sin nube y con TLS de extremo a extremo.</p>
+    <p class="tagline">The Swiss Army knife for Windows developers and power users.</p>
+    <p class="sub">Antivirus, software, WSL, SSH, PGP, cleanup, security and <strong>Local Share</strong>:
+      file transfers across your local network, no cloud, end-to-end TLS.</p>
 
     <div class="hero-cta">
-      <a id="cta-main" class="btn btn-primary" href="#descarga">Descargar…</a>
-      <a id="cta-alt" class="btn btn-ghost" href="#descarga">Portable .zip</a>
+      <a id="cta-main" class="btn btn-primary" href="#download">Download…</a>
+      <a id="cta-alt" class="btn btn-ghost" href="#download">Portable .zip</a>
     </div>
     <p class="hero-note">Windows 10/11 x64 · ~<span data-slot="setup-mb">40</span> MB ·
-      SHA-256 publicado y verificado · sin telemetría</p>
+      published and verified SHA-256 · no telemetry</p>
   </header>
 
   <main>
-    <section id="descarga" class="section">
-      <h2>Descarga <span class="version-chip" data-slot="version">…</span></h2>
-      <p class="section-sub">Cada artefacto lleva su SHA-256: verifica lo que descargas,
-        también a mano con <code>Get-FileHash</code>.</p>
+    <section id="download" class="section">
+      <h2>Download <span class="version-chip" data-slot="version">…</span></h2>
+      <p class="section-sub">Every artifact ships with its SHA-256: verify what you download,
+        also by hand with <code>Get-FileHash</code>.</p>
 
       <noscript>
-        <div class="error-box">La versión y los enlaces se cargan con JavaScript.
-          Actívalo para ver la descarga verificada.</div>
+        <div class="error-box">The version and links are loaded with JavaScript.
+          Enable it to see the verified download.</div>
+        <style>#download-cards { display: none; }</style>
       </noscript>
 
       <div id="download-cards" class="cards">
         <article class="card artifact-card" data-artifact="setup-win64">
           <header>
-            <h3>Instalador <small>(recomendado)</small></h3>
-            <span class="chip chip-accent" data-slot="label">Setup .exe</span>
+            <h3>Installer <small>(recommended)</small></h3>
+            <span class="chip chip-accent" data-slot="label">Installer .exe</span>
           </header>
-          <p class="artifact-desc">Asistente clásico de Windows. Detecta una versión anterior
-            y la reemplaza limpiamente; tus datos no se tocan.</p>
+          <p class="artifact-desc">Classic Windows wizard. Detects a previous version and
+            replaces it cleanly; your data is untouched.</p>
           <p class="artifact-meta"><span data-slot="size">…</span> · <span data-slot="released">…</span></p>
-          <a class="btn btn-primary btn-block" data-slot="url" href="#">Descargar instalador</a>
+          <a class="btn btn-primary btn-block" data-slot="url" href="#">Download installer</a>
           <div class="hash-box">
             <div class="hash-head">
               <span>SHA-256</span>
-              <button class="btn-copy" type="button" data-copy-slot="sha">Copiar</button>
+              <button class="btn-copy" type="button" data-copy-slot="sha"
+                aria-label="Copy installer SHA-256">Copy</button>
             </div>
             <code data-slot="sha">…</code>
           </div>
-          <p class="verify">Verifica:
+          <p class="verify">Verify:
             <code data-slot="verify">Get-FileHash …</code></p>
         </article>
 
         <article class="card artifact-card" data-artifact="portable-win64">
           <header>
             <h3>Portable <small>(.zip)</small></h3>
-            <span class="chip" data-slot="label">Carpeta .zip</span>
+            <span class="chip" data-slot="label">Zip folder</span>
           </header>
-          <p class="artifact-desc">Descomprime donde quieras y ejecuta
-            <code>PCSuite.exe</code>. Sin instalación, sin registro.</p>
+          <p class="artifact-desc">Unzip anywhere and run <code>PCSuite.exe</code>.
+            No installation, no registration.</p>
           <p class="artifact-meta"><span data-slot="size">…</span> · <span data-slot="released">…</span></p>
-          <a class="btn btn-ghost btn-block" data-slot="url" href="#">Descargar portable</a>
+          <a class="btn btn-ghost btn-block" data-slot="url" href="#">Download portable</a>
           <div class="hash-box">
             <div class="hash-head">
               <span>SHA-256</span>
-              <button class="btn-copy" type="button" data-copy-slot="sha">Copiar</button>
+              <button class="btn-copy" type="button" data-copy-slot="sha"
+                aria-label="Copy portable SHA-256">Copy</button>
             </div>
             <code data-slot="sha">…</code>
           </div>
-          <p class="verify">Verifica:
+          <p class="verify">Verify:
             <code data-slot="verify">Get-FileHash …</code></p>
         </article>
       </div>
 
       <p id="download-error" class="error-box" hidden>
-        No se pudo cargar la información de versión.
-        Reintenta en unos minutos o consulta el <a href="archive/">registro de versiones</a>.
+        Could not load version information. Try again in a few minutes or see the
+        <a href="archive/">version history</a>.
       </p>
     </section>
 
-    <section id="caracteristicas" class="section">
-      <h2>Características</h2>
+    <section id="features" class="section">
+      <h2>Features</h2>
       <div class="features">
-        <div class="card feature"><h3>Local Share</h3><p>Envía archivos entre equipos con PCSuite en tu LAN: sin nube, TLS mutuo, código de emparejamiento estilo Bluetooth y SHA-256 de integridad.</p></div>
-        <div class="card feature"><h3>Antivirus</h3><p>ClamAV integrado: escaneos rápido y completo con progreso en vivo, cuarentena y actualización de definiciones.</p></div>
-        <div class="card feature"><h3>Software</h3><p>Busca, instala, actualiza y desinstala aplicaciones de Windows con WinGet, con elevación puntual por UAC.</p></div>
-        <div class="card feature"><h3>WSL</h3><p>Estado del subsistema, listado de distribuciones y actualización — todo sin salir de la app.</p></div>
-        <div class="card feature"><h3>SSH</h3><p>Genera claves, inspecciona fingerprints e importa claves públicas en tu <code>~/.ssh</code>.</p></div>
-        <div class="card feature"><h3>PGP</h3><p>Cifrado, firma y verificación 100% en proceso (BouncyCastle). El keyring nunca sale de tu perfil.</p></div>
-        <div class="card feature"><h3>Limpieza</h3><p>Barrido seguro de temporales del sistema, respetando ACLs: lo que no puede borrar, lo reporta.</p></div>
-        <div class="card feature"><h3>Seguridad</h3><p>Defender, firewall, antivirus y puertos — panel de solo lectura para conocer tu postura.</p></div>
-        <div class="card feature"><h3>Plugins</h3><p>Extiende PCSuite con módulos propios: detección, actualización y lanzamiento integrados.</p></div>
-        <div class="card feature"><h3>Tools</h3><p>Utilidades con esquemas de parámetros: la UI genera el formulario, el puente tipado ejecuta.</p></div>
+        <div class="card feature"><h3>Local Share</h3><p>Send files between machines with PCSuite on your LAN: no cloud, mutual TLS, a Bluetooth-style pairing code and SHA-256 integrity.</p></div>
+        <div class="card feature"><h3>Antivirus</h3><p>Built-in ClamAV: quick and full scans with live progress, quarantine and definition updates.</p></div>
+        <div class="card feature"><h3>Software</h3><p>Search, install, update and uninstall Windows apps with WinGet, with on-demand UAC elevation.</p></div>
+        <div class="card feature"><h3>WSL</h3><p>Subsystem status, distribution listing and updates — all without leaving the app.</p></div>
+        <div class="card feature"><h3>SSH</h3><p>Generate keys, inspect fingerprints and import public keys into your <code>~/.ssh</code>.</p></div>
+        <div class="card feature"><h3>PGP</h3><p>Encryption, signing and verification 100% in-process (BouncyCastle). Your keyring never leaves your profile.</p></div>
+        <div class="card feature"><h3>Cleanup</h3><p>Safe sweep of system temporaries, honoring ACLs: whatever it cannot delete, it reports.</p></div>
+        <div class="card feature"><h3>Security</h3><p>Defender, firewall, antivirus and ports — a read-only panel to know your posture.</p></div>
+        <div class="card feature"><h3>Plugins</h3><p>Extend PCSuite with your own modules: detection, update and launch integrated.</p></div>
+        <div class="card feature"><h3>Tools</h3><p>Utilities with parameter schemas: the UI generates the form, the typed bridge executes.</p></div>
       </div>
     </section>
 
-    <section id="actualizar" class="section">
-      <h2>Cómo actualizar</h2>
+    <section id="update" class="section">
+      <h2>How to update</h2>
       <div class="cards">
         <article class="card">
-          <h3>Dentro de la app</h3>
-          <p>Al abrir, PCSuite comprueba si hay novedades (un GET mínimo, nada más) y
-            te avisa con un aviso discreto. Descarga con <strong>verificación SHA-256
-            integrada</strong> y solo instala cuando tú confirmas.</p>
+          <h3>From the app</h3>
+          <p>On launch, PCSuite checks for news (one minimal GET, nothing more) and gives you
+            a discreet notice. Downloads with <strong>built-in SHA-256 verification</strong>
+            and installs only when you confirm.</p>
         </article>
         <article class="card">
-          <h3>Manual (siempre disponible)</h3>
-          <p>Descarga el instalador de arriba y ejecútalo: detecta la versión anterior y
-            la reemplaza limpiamente. Configuración, dispositivos emparejados e historial
-            viven en tu perfil y no se tocan.</p>
+          <h3>Manual (always available)</h3>
+          <p>Download the installer above and run it: it detects the previous version and
+            replaces it cleanly. Settings, paired devices and history live in your profile
+            and are left untouched.</p>
         </article>
       </div>
     </section>
 
     <section class="section">
-      <h2>Registro de cambios</h2>
-      <p class="section-sub">Cada publicación archiva su manifiesto y sus notas:
-        <a data-slot="notes" href="#">notas de la versión <span data-slot="version-inline">…</span></a>
-        · <a href="archive/">registro histórico completo</a>.</p>
+      <h2>Changelog</h2>
+      <p class="section-sub">Every release archives its manifest and notes:
+        <a data-slot="notes" href="#">release notes <span data-slot="version-inline">…</span></a>
+        · <a href="archive/">full version history</a>.</p>
     </section>
   </main>
 
   <footer>
-    <p>Requiere Windows 10/11 x64 · WebView2 Runtime (preinstalado con Edge)</p>
-    <p>Sin telemetría: PCSuite no envía nada a ningún servidor salvo la consulta de
-      actualizaciones (y con tu consentimiento para instalar).</p>
+    <p>Requires Windows 10/11 x64 · WebView2 Runtime (preinstalled with Edge)</p>
+    <p>No telemetry: PCSuite sends nothing to any server except the update check
+      (and only with your consent to install).</p>
     <p class="copyright">© <span id="year">2026</span> AES Studio ·
-      <code>sha256</code> publicado por versión en el manifiesto</p>
+      per-version <code>sha256</code> published in the manifest</p>
   </footer>
 
   <script src="assets/main.js" defer></script>
