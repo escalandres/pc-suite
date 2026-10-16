@@ -277,7 +277,7 @@ para publicar una nueva.
 
 # ---------- 3. SHA-256 del archivo exacto que se sube ----------
 Write-Host ""
-Write-Host "[1/5] Computando SHA-256 de los artefactos..."
+Write-Host "[1/6] Computando SHA-256 de los artefactos..."
 
 $setupHash = (Get-FileHash -Algorithm SHA256 $setupRel).Hash.ToLowerInvariant()
 $zipHash   = (Get-FileHash -Algorithm SHA256 $zipRel).Hash.ToLowerInvariant()
@@ -290,7 +290,7 @@ Write-Host "        Portable  : $zipHash"
 
 # ---------- 4. Manifiestos con URLs de GitHub Releases ----------
 Write-Host ""
-Write-Host "[2/4] Generando manifiestos (URLs de GitHub Releases)..."
+Write-Host "[2/6] Generando manifiestos (URLs de GitHub Releases)..."
 
 New-Item -ItemType Directory -Force -Path "site\pcsuite" | Out-Null
 New-Item -ItemType Directory -Force -Path $archiveDir | Out-Null
@@ -342,13 +342,13 @@ $null = $json | ConvertFrom-Json
 
 # ---------- 3. Generar HTML de notas de versión (Task 17.5) ----------
 Write-Host ""
-Write-Host "[3/4] Generando notas de versión HTML..."
+Write-Host "[3/6] Generando notas de versión HTML..."
 $notesMd = "docs\landing\notas\$Version.md"
 Convert-MarkdownToHtml -MarkdownPath $notesMd -Version $Version -RelDate $relDate
 
 # ---------- 4. Firmar manifiesto con PGP (Task 17.6) ----------
 Write-Host ""
-Write-Host "[4/5] Inyectando signingKeyFingerprint en el manifiesto..."
+Write-Host "[4/6] Inyectando signingKeyFingerprint en el manifiesto..."
 $manifestPath = Join-Path (Get-Location) "site\pcsuite\latest.json"
 
 # CRÍTICO: el fingerprint se inyecta ANTES de firmar. La firma PGP cubre el
@@ -373,7 +373,7 @@ if ($fingerprint) {
     Write-Host "  ⚠ Sin fingerprint: el manifiesto llevará el campo de la clave embebida vacío."
 }
 
-Write-Host "[5/5] Firmando manifiesto PGP (sobre el contenido FINAL)..."
+Write-Host "[5/6] Firmando manifiesto PGP (sobre el contenido FINAL)..."
 $null = Sign-Manifest -ManifestPath $manifestPath -GpgKey $GpgKey -SkipSign:$SkipSign -UseGpg:$UseGpg
 
 # Copiar .sig y .pub al directorio archive también
@@ -390,7 +390,7 @@ if (Test-Path $pubSrc) {
 
 # ---------- 5. Release en GitHub (gh) ----------
 Write-Host ""
-Write-Host "[5/5] Publicando el release en GitHub..."
+Write-Host "[6/6] Publicando el release en GitHub..."
 
 $ghAvailable = $false
 try { $null = & gh --version 2>$null; $ghAvailable = ($LASTEXITCODE -eq 0) } catch { }
