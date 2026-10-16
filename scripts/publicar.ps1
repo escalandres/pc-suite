@@ -1,13 +1,16 @@
 ﻿# ============================================================================
-# publicar.ps1 (Task 17.1, adaptado a GitHub Releases) — genera el manifiesto
-# del updater y publica los artefactos como GitHub Release.
+# publicar.ps1 (Task 17.1/17.5/17.6) — genera el manifiesto del updater,
+# las notas de versión HTML, la firma PGP y publica los artefactos como
+# GitHub Release.
 #
 # Flujo (propuesta Task 17, decisión 2026-10-14):
 #   1. Artefactos ya compilados (empaquetar.bat + ISCC) de la versión actual.
 #   2. SHA-256 del archivo EXACTO que se sube (fuente de verdad del updater).
 #   3. Manifiestos con URLs de GitHub Releases (los binarios viven ahí,
 #      no en el sitio: el deploy de Vercel queda en KBs).
-#   4. Si gh CLI está autenticado: crea el release con ambos assets.
+#   4. Notas de versión: markdown → HTML (site\notes\<vers>.html).
+#   5. Firma PGP: latest.json → latest.json.sig + latest.json.pub.
+#   6. Si gh CLI está autenticado: crea el release con ambos assets.
 #      Si no: imprime el comando exacto para copiar.
 #
 # Inmutabilidad: si la versión ya está en site\archive, aborta. El historial
@@ -17,11 +20,159 @@ param(
     [string]$Product = "pcsuite",
     [string]$Version = "",
     [string]$ReleaseRepo = "escalandres/pc-suite",
-    [string]$TagPrefix = "pcsuite-v"
+    [string]$TagPrefix = "pcsuite-v",
+    [string]$GpgKey = "releases@aes-studio.dev",  # Clave de firma PGP
+    [switch]$SkipSign  # Omitir firma PGP (para testing)
 )
 
 $ErrorActionPreference = "Stop"
 Set-Location -Path (Join-Path $PSScriptRoot "..")
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+
+function Convert-MarkdownToHtml {
+    param([string]$MarkdownPath, [string]$Version, [string]$RelDate)
+
+    if (-not (Test-Path $MarkdownPath)) {
+        Write-Host "  ⚠ No existe $MarkdownPath — se omite la generación de notas HTML."
+        return
+    }
+
+    $md = Get-Content -Raw -Path $MarkdownPath -Encoding UTF8
+
+    # Conversión simple de Markdown a HTML (suficiente para nuestras notas)
+    # Nota: para producción real se recomienda pandoc o marked.js via Node
+    $html = $md `
+        -replace '(?m)^### (.+)$', '<h3>$1</h3>' `
+        -replace '(?m)^## (.+)$', '<h2>$1</h2>' `
+        -replace '(?m)^# (.+)$', '<h1>$1</h1>' `
+        -replace '(?m)^> (.+)$', '<blockquote><p>$1</p></blockquote>' `
+        -replace '(?m)^\*\*(.+?)\*\*', '<strong>$1</strong>' `
+        -replace '(?m)`([^`]+)`', '<code>$1</code>' `
+        -replace '(?m)^\|(.+)\|$', '<tr><td>$1</td></tr>' `
+        -replace '(?m)^---$', '<hr>' `
+        -replace '\*\*(.+?)\*\*', '<strong>$1</strong>' `
+        -replace '`([^`]+)`', '<code>$1</code>' `
+        -replace '(?m)^- (.+)$', '<li>$1</li>' `
+        -replace '(?m)^(\d+)\. (.+)$', '<li>$2</li>'
+
+    # Wrap list items in <ul>
+    $html = $html -replace '(<li>.*</li>\n)+', '<ul>$&</ul>'
+
+    # Paragraphs: split by double newline, wrap non-tag lines in <p>
+    $paragraphs = $html -split '\n\n'
+    $result = ""
+    foreach ($para in $paragraphs) {
+        $trimmed = $para.Trim()
+        if (-not $trimmed) { continue }
+        if ($trimmed -match '^<(h[1-6]|ul|ol|li|blockquote|table|tr|th|td|hr|pre)') {
+            $result += "$trimmed\n\n"
+        } else {
+            $result += "<p>$trimmed</p>\n\n"
+        }
+    }
+    $html = $result.Trim()
+
+    # Tabla de descargas: convertir formato markdown simple a tabla HTML
+    $html = $html -replace '<p>\|(.+)\|</p>', '<tr><td>$1</td></tr>'
+    $html = $html -replace '<tr><td>Artefacto.+?</td></tr>', '<thead><tr><th>Artefacto</th><th>Tamaño</th><th>SHA-256</th></tr></thead>'
+    $html = $html -replace '(<tr><td>.+?</td></tr>\n)+', '<tbody>$&</tbody>'
+    $html = $html -replace '(<thead>.+?</tbody>)', '<table>$1</table>'
+
+    # Code blocks (PowerShell)
+    $html = $html -replace '```powershell\n(.+?)\n```', '<pre><code class="language-powershell">$1</code></pre>' -replace '```\w*\n(.+?)\n```', '<pre><code>$1</code></pre>'
+
+    # Template HTML completo
+    $fullHtml = @"
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCSuite $Version — Notas de versión</title>
+  <link rel="stylesheet" href="/pcsuite/assets/styles.css">
+  <link rel="icon" type="image/svg+xml" href="/pcsuite/assets/logo.svg">
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/pcsuite/">
+      <img src="/pcsuite/assets/logo.svg" alt="PCSuite" width="28" height="28">
+      <span>PCSuite</span>
+    </a>
+    <div class="nav-links">
+      <a href="/pcsuite/#descarga">Descarga</a>
+      <a href="/pcsuite/#actualizar">Actualizar</a>
+    </div>
+    <span class="nav-studio">AES Studio</span>
+  </nav>
+  <main class="section">
+    <h1>PCSuite $Version</h1>
+    <p class="section-sub">Publicado el $([DateTime]::ParseExact($RelDate, "yyyy-MM-ddTHH:mm:ssZ", $null).ToString("d 'de' MMMM 'de' yyyy", (New-Object System.Globalization.CultureInfo "es-ES")))</p>
+
+    <article class="notes-content">
+$html
+    </article>
+  </main>
+  <footer>
+    <p>Requiere Windows 10/11 x64 · WebView2 Runtime (preinstalado con Edge)</p>
+    <p>Sin telemetría: PCSuite no envía nada a ningún servidor salvo la consulta de actualizaciones (y con tu consentimiento para instalar).</p>
+    <p class="copyright">© $((Get-Date).Year) AES Studio · sha256 por versión publicado en el manifiesto</p>
+  </footer>
+</body>
+</html>
+"@
+
+    $notesDir = "site\notes"
+    New-Item -ItemType Directory -Force -Path $notesDir | Out-Null
+    $outFile = Join-Path $notesDir "$Version.html"
+    [IO.File]::WriteAllText($outFile, $fullHtml, [Text.UTF8Encoding]::new($false))
+    Write-Host "  ✓ Notas HTML generadas: $outFile"
+}
+
+function Sign-Manifest {
+    param([string]$ManifestPath, [string]$GpgKey, [switch]$Skip)
+
+    if ($Skip) {
+        Write-Host "  ⚠ Firma PGP omitida (flag -SkipSign)."
+        return
+    }
+
+    $sigPath = "$ManifestPath.sig"
+    $pubPath = "$ManifestPath.pub"
+
+    Write-Host "  Firmando manifiesto con GPG (clave: $GpgKey)..."
+
+    # Firmar detached (armored)
+    $signResult = & gpg --batch --yes --armor --detach-sign --local-user $GpgKey --output $sigPath $ManifestPath 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Error firmando con GPG: $signResult"
+    }
+    Write-Host "  ✓ Firma generada: $sigPath"
+
+    # Exportar clave pública
+    $exportResult = & gpg --batch --yes --armor --export $GpgKey 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Error exportando clave pública: $exportResult"
+    }
+    [IO.File]::WriteAllText($pubPath, $exportResult, [Text.UTF8Encoding]::new($false))
+    Write-Host "  ✓ Clave pública exportada: $pubPath"
+
+    # Extraer fingerprint SHA-256 de la clave pública (para el JSON)
+    $fprResult = & gpg --batch --yes --fingerprint --with-colons $GpgKey 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        # Formato: fpr::::::::<40 hex chars>:
+        $fprMatch = [regex]::Match($fprResult, 'fpr::::::::([0-9A-F]{40}):')
+        if ($fprMatch.Success) {
+            $fpr = $fprMatch.Groups[1].Value
+            $fprFormatted = ($fpr -split '(....)' | Where-Object { $_ }) -join ' '
+            Write-Host "  ✓ Fingerprint: $fprFormatted"
+            return $fprFormatted
+        }
+    }
+    return $null
+}
 
 # Version: unica fuente = Directory.Build.props (mismo truco que empaquetar.bat)
 if (-not $Version) {
@@ -67,7 +218,7 @@ para publicar una nueva.
 
 # ---------- 3. SHA-256 del archivo exacto que se sube ----------
 Write-Host ""
-Write-Host "[1/3] Computando SHA-256 de los artefactos..."
+Write-Host "[1/5] Computando SHA-256 de los artefactos..."
 
 $setupHash = (Get-FileHash -Algorithm SHA256 $setupRel).Hash.ToLowerInvariant()
 $zipHash   = (Get-FileHash -Algorithm SHA256 $zipRel).Hash.ToLowerInvariant()
@@ -80,7 +231,7 @@ Write-Host "        Portable  : $zipHash"
 
 # ---------- 4. Manifiestos con URLs de GitHub Releases ----------
 Write-Host ""
-Write-Host "[2/3] Generando manifiestos (URLs de GitHub Releases)..."
+Write-Host "[2/4] Generando manifiestos (URLs de GitHub Releases)..."
 
 New-Item -ItemType Directory -Force -Path "site\pcsuite" | Out-Null
 New-Item -ItemType Directory -Force -Path $archiveDir | Out-Null
@@ -96,7 +247,7 @@ $json = @"
   "channel": "stable",
   "version": "$Version",
   "releasedAt": "$relDate",
-  "releaseNotesUrl": "https://github.com/$ReleaseRepo/releases/tag/$tag",
+  "releaseNotesUrl": "https://aes-studio.dev/notes/$Version.html",
   "artifacts": [
     {
       "id": "setup-win64",
@@ -130,9 +281,48 @@ $null = $json | ConvertFrom-Json
     $json,
     [Text.UTF8Encoding]::new($false))
 
+# ---------- 3. Generar HTML de notas de versión (Task 17.5) ----------
+Write-Host ""
+Write-Host "[3/4] Generando notas de versión HTML..."
+$notesMd = "docs\landing\notas\$Version.md"
+Convert-MarkdownToHtml -MarkdownPath $notesMd -Version $Version -RelDate $relDate
+
+# ---------- 4. Firmar manifiesto con PGP (Task 17.6) ----------
+Write-Host ""
+Write-Host "[4/4] Firmando manifiesto PGP..."
+$manifestPath = Join-Path (Get-Location) "site\pcsuite\latest.json"
+$fingerprint = Sign-Manifest -ManifestPath $manifestPath -GpgKey $GpgKey -SkipSign:$SkipSign
+
+# Si hay fingerprint, actualizar latest.json con signingKeyFingerprint
+if ($fingerprint) {
+    $jsonWithFpr = $json -replace '"artifacts":', '"signingKeyFingerprint": "' + $fingerprint + '",`n  "artifacts":'
+    [IO.File]::WriteAllText(
+        (Join-Path (Get-Location) "site\pcsuite\latest.json"),
+        $jsonWithFpr,
+        [Text.UTF8Encoding]::new($false))
+    # Actualizar también el archivo en archive
+    [IO.File]::WriteAllText(
+        (Join-Path (Get-Location) "$archiveDir\manifest.json"),
+        $jsonWithFpr,
+        [Text.UTF8Encoding]::new($false))
+    Write-Host "  ✓ latest.json actualizado con signingKeyFingerprint"
+}
+
+# Copiar .sig y .pub al directorio archive también
+$sigSrc = "$manifestPath.sig"
+$pubSrc = "$manifestPath.pub"
+if (Test-Path $sigSrc) {
+    Copy-Item $sigSrc (Join-Path $archiveDir "latest.json.sig") -Force
+    Write-Host "  ✓ Firma copiada a archive"
+}
+if (Test-Path $pubSrc) {
+    Copy-Item $pubSrc (Join-Path $archiveDir "latest.json.pub") -Force
+    Write-Host "  ✓ Clave pública copiada a archive"
+}
+
 # ---------- 5. Release en GitHub (gh) ----------
 Write-Host ""
-Write-Host "[3/3] Publicando el release en GitHub..."
+Write-Host "[5/5] Publicando el release en GitHub..."
 
 $ghAvailable = $false
 try { $null = & gh --version 2>$null; $ghAvailable = ($LASTEXITCODE -eq 0) } catch { }
@@ -182,13 +372,16 @@ Write-Host ""
 Write-Host "============================================"
 Write-Host " $Product v$Version publicado"
 Write-Host "============================================"
-Write-Host ("  Manifiesto  : site\pcsuite\latest.json")
-Write-Host ("  Historial   : $archiveDir\manifest.json")
-Write-Host ("  Release     : https://github.com/$ReleaseRepo/releases/tag/$tag")
-Write-Host ("  Instalador  : $setupName  (~" + $mb.Invoke($setupSize) + " MB)")
-Write-Host ("                 sha256: $setupHash")
-Write-Host ("  Portable    : $zipName  (~" + $mb.Invoke($zipSize) + " MB)")
-Write-Host ("                 sha256: $zipHash")
+Write-Host ("  Manifiesto      : site\pcsuite\latest.json")
+Write-Host ("  Historial       : $archiveDir\manifest.json")
+Write-Host ("  Release         : https://github.com/$ReleaseRepo/releases/tag/$tag")
+Write-Host ("  Notas HTML      : site\notes\$Version.html")
+Write-Host ("  Firma PGP       : site\pcsuite\latest.json.sig")
+Write-Host ("  Clave pública   : site\pcsuite\latest.json.pub")
+Write-Host ("  Instalador      : $setupName  (~" + $mb.Invoke($setupSize) + " MB)")
+Write-Host ("                    sha256: $setupHash")
+Write-Host ("  Portable        : $zipName  (~" + $mb.Invoke($zipSize) + " MB)")
+Write-Host ("                    sha256: $zipHash")
 Write-Host ""
 Write-Host " Siguiente paso (manual): subir site\ al repo del sitio (Vercel)."
 Write-Host "============================================"

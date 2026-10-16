@@ -5,12 +5,18 @@ using PCSuite.Core.Updates;
 namespace PCSuite.Infrastructure.Updates;
 
 /// <summary>
-/// Servicio de actualizaciones (Task 17.3/17.4, propuesta §8).
+/// Servicio de actualizaciones (Task 17.3/17.4/17.6, propuesta §8).
 ///
 /// Check: GET al manifiesto con timeout corto y Cache-Control: no-cache —
 /// nunca bloquea nada (lo llama la UI al arrancar y desde Ajustes). Un fallo
 /// de red o timeout es un resultado silencioso Available=false: jamás un
 /// error en la cara del usuario por una comprobación de fondo.
+///
+/// PGP Signature Verification (Task 17.6):
+/// - Descarga latest.json + latest.json.sig en paralelo
+/// - Verifica la firma contra la clave pública embebida (ManifestSigningKey.asc)
+/// - TOFU: primera vez confía y guarda fingerprint; si cambia → aviso
+/// - Firma inválida o fingerprint cambiado → Available=false (silencioso)
 ///
 /// Download: UNA petición al manifiesto + streaming de 64 KB con SHA-256 en
 /// paralelo (el hash sale gratis, mismo patrón que Local Share). El hash del
@@ -42,6 +48,7 @@ public sealed class PcsuiteUpdateService : IPcsuiteUpdateService
     private readonly string _manifestUrl;
     private readonly Func<string, bool> _launchInstaller;
     private readonly string _currentVersion;
+    private readonly ManifestSignatureVerifier _signatureVerifier = new();
 
     /// <summary>Ruta + artefacto verificados en esta sesión (Download → Install gate).</summary>
     private string? _verifiedPath;
@@ -57,34 +64,83 @@ public sealed class PcsuiteUpdateService : IPcsuiteUpdateService
         _currentVersion = currentVersion ?? CurrentAssemblyVersion();
     }
 
+    /// <summary>
+    /// Constructor interno para tests: verificador de firma con clave propia
+    /// (el servidor local firma con una clave de test, no la de producción).
+    /// El comportamiento en producción no cambia.
+    /// </summary>
+    internal PcsuiteUpdateService(
+        string? manifestUrl,
+        Func<string, bool>? launchInstaller,
+        string? currentVersion,
+        ManifestSignatureVerifier signatureVerifier)
+        : this(manifestUrl, launchInstaller, currentVersion)
+    {
+        _signatureVerifier = signatureVerifier;
+    }
+
     // ------------------------------------------------------------------
     // Manifiesto (compartido por Check y Download)
     // ------------------------------------------------------------------
 
-    private async Task<(UpdateManifest Manifest, UpdateArtifact Setup)> FetchManifestAsync(
+    private async Task<(UpdateManifest Manifest, UpdateArtifact Setup, SignatureVerificationResult SigResult)> FetchManifestAsync(
         CancellationToken ct)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(CheckTimeout);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, _manifestUrl);
-        request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+        // Descargar manifiesto y firma en paralelo
+        var manifestUrl = _manifestUrl;
+        var signatureUrl = manifestUrl + ".sig";
+
+        using var manifestRequest = new HttpRequestMessage(HttpMethod.Get, manifestUrl);
+        manifestRequest.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
         {
             NoCache = true,
         };
 
-        using var response = await Http.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        using var sigRequest = new HttpRequestMessage(HttpMethod.Get, signatureUrl);
+        sigRequest.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+        {
+            NoCache = true,
+        };
 
-        var json = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+        var manifestTask = Http.SendAsync(manifestRequest, timeoutCts.Token);
+        var sigTask = Http.SendAsync(sigRequest, timeoutCts.Token);
+
+        await Task.WhenAll(manifestTask, sigTask).ConfigureAwait(false);
+
+        using var manifestResponse = manifestTask.Result;
+        manifestResponse.EnsureSuccessStatusCode();
+
+        var json = await manifestResponse.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
         var manifest = JsonSerializer.Deserialize<UpdateManifest>(json, JsonOpts)
             ?? throw new InvalidOperationException("Manifiesto vacío.");
+
+        // Verificar firma PGP
+        string? signatureArmored = null;
+        using var sigResponse = sigTask.Result;
+        if (sigResponse.IsSuccessStatusCode)
+        {
+            signatureArmored = await sigResponse.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+        }
+
+        var sigResult = await _signatureVerifier.VerifyAsync(
+            System.Text.Encoding.UTF8.GetBytes(json),
+            signatureArmored ?? string.Empty,
+            ct).ConfigureAwait(false);
+
+        // Si la firma no es válida, NO confiar en el manifiesto
+        if (!sigResult.Success)
+        {
+            throw new InvalidOperationException($"Firma del manifiesto inválida: {sigResult.Error}");
+        }
 
         var setup = manifest.Artifacts.FirstOrDefault(a => a.Id == "setup-win64")
             ?? throw new InvalidOperationException(
                 "El manifiesto no declara el artefacto setup-win64.");
 
-        return (manifest, setup);
+        return (manifest, setup, sigResult);
     }
 
     // ------------------------------------------------------------------
@@ -96,7 +152,7 @@ public sealed class PcsuiteUpdateService : IPcsuiteUpdateService
         var current = _currentVersion;
         try
         {
-            var (manifest, setup) = await FetchManifestAsync(ct).ConfigureAwait(false);
+            var (manifest, setup, sigResult) = await FetchManifestAsync(ct).ConfigureAwait(false);
 
             var available = CompareVersions(manifest.Version, current) > 0;
 
@@ -110,6 +166,8 @@ public sealed class PcsuiteUpdateService : IPcsuiteUpdateService
                     ? null
                     : manifest.ReleaseNotesUrl,
                 Error = null,
+                KeyRotationWarning = sigResult.FingerprintMatch ? null : 
+                    "La clave de firma cambió. Verifica el fingerprint en aes-studio.dev antes de actualizar."
             };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -119,7 +177,7 @@ public sealed class PcsuiteUpdateService : IPcsuiteUpdateService
         }
         catch (Exception)
         {
-            // Sin red / sin manifiesto: la app funciona igual. Sin dramatismo.
+            // Sin red / sin manifiesto / firma inválida: la app funciona igual. Sin dramatismo.
             return new UpdateCheckResult { Available = false, CurrentVersion = current };
         }
     }
@@ -133,10 +191,19 @@ public sealed class PcsuiteUpdateService : IPcsuiteUpdateService
         CancellationToken ct = default)
     {
         // 1. Manifiesto + validación de versión (UNA petición).
-        var (manifest, artifact) = await FetchManifestAsync(ct).ConfigureAwait(false);
+        var (manifest, artifact, sigResult) = await FetchManifestAsync(ct).ConfigureAwait(false);
+        
         if (CompareVersions(manifest.Version, _currentVersion) <= 0)
         {
             throw new InvalidOperationException("No hay actualización disponible.");
+        }
+
+        // TOFU: si el fingerprint cambió, no permitir la descarga
+        if (!sigResult.FingerprintMatch)
+        {
+            throw new InvalidOperationException(
+                "La clave de firma del manifiesto cambió. " +
+                "Verifica el fingerprint en aes-studio.dev antes de actualizar.");
         }
 
         var tempPath = Path.Combine(

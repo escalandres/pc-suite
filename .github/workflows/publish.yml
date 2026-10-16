@@ -1,0 +1,214 @@
+# ============================================================================
+# Publish PCSuite — GitHub Actions Workflow
+#
+# Genera manifiesto, notas HTML, firma PGP, GitHub Release y deploya el sitio.
+# Ejecución MANUAL únicamente (workflow_dispatch) para control de versiones.
+#
+# Secrets requeridos:
+#   - PGP_PRIVATE_KEY: contenido completo de releases@aes-studio.dev.sec.asc
+#   - GH_TOKEN: (automático) GITHUB_TOKEN con permisos contents:write
+# ============================================================================
+name: "Publish PCSuite"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a publicar (vacío = leer de Directory.Build.props)"
+        required: false
+        type: string
+      skip_sign:
+        description: "Omitir firma PGP (solo testing)"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  GPG_KEY_ID: "releases@aes-studio.dev"
+  RELEASE_REPO: "escalandres/pc-suite"
+  SITE_REPO: "escalandres/aes-studio"
+  TAG_PREFIX: "pcsuite-v"
+
+permissions:
+  contents: write   # para gh release create y push al repo del sitio
+
+jobs:
+  publish:
+    name: "Build, Sign & Publish"
+    runs-on: windows-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Checkout ambos repositorios
+      # -----------------------------------------------------------------------
+      - name: "Checkout pc-suite (main)"
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.RELEASE_REPO }}
+          fetch-depth: 0
+          path: pc-suite
+
+      - name: "Checkout aes-studio (site)"
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SITE_REPO }}
+          fetch-depth: 0
+          path: aes-studio
+
+      # -----------------------------------------------------------------------
+      # Setup herramientas
+      # -----------------------------------------------------------------------
+      - name: "Setup .NET 10"
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: "Install GPG (Chocolatey)"
+        run: choco install gnupg -y --no-progress
+
+      - name: "Install GitHub CLI"
+        run: choco install gh -y --no-progress
+
+      # -----------------------------------------------------------------------
+      # Importar clave PGP privada desde secret
+      # -----------------------------------------------------------------------
+      - name: "Import PGP private key"
+        env:
+          PGP_PRIVATE_KEY: ${{ secrets.PGP_PRIVATE_KEY }}
+        shell: pwsh
+        run: |
+          # Importar clave privada
+          $key = $env:PGP_PRIVATE_KEY
+          if (-not $key) {
+            Write-Error "Secret PGP_PRIVATE_KEY no configurado"
+            exit 1
+          }
+          $key | gpg --batch --yes --import
+          Write-Host "Clave importada:"
+          gpg --list-secret-keys --keyid-format=long
+
+      - name: "Set ultimate trust for signing key"
+        shell: pwsh
+        run: |
+        # Obtener fingerprint de la clave secreta
+        $fpr = (gpg --list-secret-keys --with-colons --fingerprint "${{ env.GPG_KEY_ID }}" |
+                Select-String 'fpr::::::::([0-9A-F]{40}):').Matches.Groups[1].Value
+        if (-not $fpr) {
+          Write-Error "No se encontró fingerprint para ${{ env.GPG_KEY_ID }}"
+          exit 1
+        }
+        Write-Host "Fingerprint: $fpr"
+        # Trust ultimate (necesario para --local-user sin passphrase)
+        "$fpr:6:" | gpg --import-ownertrust
+        Write-Host "Trust ultimate configurado"
+
+      # -----------------------------------------------------------------------
+      # Verificar que los artefactos existen (empaquetar.bat + ISCC previos)
+      # -----------------------------------------------------------------------
+      - name: "Verify artifacts exist"
+        id: set_version
+        working-directory: pc-suite
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          if (-not $version) {
+            $line = Select-String -Path "Directory.Build.props" -Pattern "<Version>(.*?)</Version>" | Select-Object -First 1
+            $version = $line.Matches[0].Groups[1].Value
+          }
+          if (-not $version) { throw "No se pudo determinar versión" }
+
+          $setup = "dist\instalador\PCSuite-Setup-$version-win64.exe"
+          $zip   = "dist\PCSuite-$version-win-x64.zip"
+
+          if (-not (Test-Path $setup)) { throw "Falta $setup — ejecuta empaquetar.bat + ISCC primero" }
+          if (-not (Test-Path $zip))   { throw "Falta $zip — ejecuta empaquetar.bat primero" }
+
+          Write-Host "✓ Artefactos encontrados para v$version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      # -----------------------------------------------------------------------
+      # Ejecutar publicar.ps1 (genera manifiesto, notas, firma, release)
+      # -----------------------------------------------------------------------
+      - name: "Run publicar.ps1"
+        working-directory: pc-suite/scripts
+        shell: pwsh
+        run: |
+          $skip = "${{ github.event.inputs.skip_sign }}"
+          $version = "${{ steps.set_version.outputs.version }}"
+          Write-Host "Publicando v$version (SkipSign=$skip)..."
+          .\publicar.ps1 -Version $version -SkipSign:$([bool]::Parse($skip))
+
+      # -----------------------------------------------------------------------
+      # Copiar site/ generado al repo del sitio (aes-studio)
+      # -----------------------------------------------------------------------
+      - name: "Copy site to aes-studio repo"
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse -Force pc-suite\site\* aes-studio\public\
+          Write-Host "✓ site/* copiado a aes-studio/public/"
+
+      # -----------------------------------------------------------------------
+      # Commit y push al repo del sitio (trigger Vercel deploy)
+      # -----------------------------------------------------------------------
+      - name: "Commit & push site changes"
+        working-directory: aes-studio
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          $version = "${{ steps.set_version.outputs.version }}"
+          git add -A
+          if (git diff --cached --quiet) {
+            Write-Host "Sin cambios en el sitio — skip commit"
+          } else {
+            git commit -m "chore: deploy site for v$version"
+            git push
+            Write-Host "✓ Sitio desplegado (Vercel deploy automático)"
+          }
+
+      # -----------------------------------------------------------------------
+      # Resumen final
+      # -----------------------------------------------------------------------
+      - name: "Publish summary"
+        shell: pwsh
+        run: |
+          $version = "${{ steps.set_version.outputs.version }}"
+          Write-Host "============================================"
+          Write-Host "PCSuite v$version PUBLICADO"
+          Write-Host "============================================"
+          Write-Host "GitHub Release : https://github.com/${{ env.RELEASE_REPO }}/releases/tag/${{ env.TAG_PREFIX }}$version"
+          Write-Host "Manifiesto     : https://aes-studio.dev/pcsuite/latest.json"
+          Write-Host "Notas v$version: https://aes-studio.dev/notes/$version.html"
+          Write-Host "Firma PGP      : https://aes-studio.dev/pcsuite/latest.json.sig"
+          Write-Host "Clave pública  : https://aes-studio.dev/pcsuite/latest.json.pub"
+          Write-Host "============================================"
+
+  # ---------------------------------------------------------------------------
+  # Job opcional: verificación post-deploy (ejecutar manualmente si se desea)
+  # ---------------------------------------------------------------------------
+  verify:
+    name: "Verify deployment"
+    runs-on: ubuntu-latest
+    needs: publish
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.skip_sign == 'false'
+    steps:
+      - name: "Wait for Vercel deploy (30s)"
+        run: sleep 30
+
+      - name: "Verify latest.json + fingerprint"
+        run: |
+          curl -sfL https://aes-studio.dev/pcsuite/latest.json | jq -r '.version, .signingKeyFingerprint'
+          echo "Fingerprint esperado: 79C6 BC2D 81EF 6F6E 3AE7 9E30 AB3C 1312 2F97 6179"
+
+      - name: "Verify signature file exists"
+        run: |
+          curl -sfL -o /dev/null https://aes-studio.dev/pcsuite/latest.json.sig && echo "✓ .sig exists"
+          curl -sfL -o /dev/null https://aes-studio.dev/pcsuite/latest.json.pub && echo "✓ .pub exists"
+
+      - name: "Verify notes HTML"
+        run: |
+          curl -sfL https://aes-studio.dev/notes/${{ needs.publish.outputs.version }}.html | grep -q "PCSuite" && echo "✓ Notes HTML OK"

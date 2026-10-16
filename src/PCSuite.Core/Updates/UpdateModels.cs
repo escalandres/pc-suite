@@ -20,6 +20,7 @@ public sealed class UpdateManifest
     public string ReleasedAt { get; set; } = "";
     public string ReleaseNotesUrl { get; set; } = "";
     public List<UpdateArtifact> Artifacts { get; set; } = [];
+    public string SigningKeyFingerprint { get; set; } = "";
 }
 
 /// <summary>
@@ -41,6 +42,12 @@ public sealed record UpdateCheckResult
 
     /// <summary>Null cuando todo fue bien; mensaje humano cuando no.</summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// Advertencia TOFU: la clave de firma del manifiesto cambió.
+    /// La UI debe mostrar esto prominentemente al usuario.
+    /// </summary>
+    public string? KeyRotationWarning { get; init; }
 }
 
 /// <summary>Interfaz del servicio de actualizaciones (Task 17.3/17.4).</summary>

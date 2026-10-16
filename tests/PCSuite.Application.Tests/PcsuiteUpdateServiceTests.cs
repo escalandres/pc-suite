@@ -1,19 +1,25 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using PCSuite.Core.PGP;
+using PCSuite.Infrastructure.PGP;
 using PCSuite.Infrastructure.Updates;
 
 namespace PCSuite.Application.Tests;
 
 /// <summary>
-/// Tests E2E del updater (Task 17.3/17.4): servidor HTTP local que sirve
-/// un manifiesto con artefactos REALES (bytes generados + hash correcto) y
-/// las variantes de fallo. Los criterios de aceptación de la propuesta §10:
+/// Tests E2E del updater (Task 17.3/17.4/17.6): servidor HTTP local que sirve
+/// un manifiesto firmado con PGP (clave de test generada por test — jamás la
+/// de producción) y artefactos REALES (bytes generados + hash correcto).
+/// Los criterios de aceptación de la propuesta §10:
 ///
-/// - Manifiesto con versión mayor → disponible; descarga → hash OK →
-///   install lanza el archivo verificado (launcher fake registra el intento).
+/// - Manifiesto con versión mayor → disponible; descarga → firma OK →
+///   hash OK → install lanza el archivo verificado (launcher fake registra
+///   el intento).
 /// - Manifiesto con SHA-256 ALTERADO → la descarga falla, el archivo se
 ///   BORRA de %TEMP% y InstallAsync jamás se ofrece (lanza/rechaza).
+/// - Manifiesto ALTERADO tras firmar / firma ausente → check silencioso,
+///   descarga rechazada (17.6: sin firma no hay confianza).
 /// - Versión menor o igual → no disponible.
 /// - Comparador SemVer (0.5.10 > 0.5.9; jamás lexicográfico).
 /// </summary>
@@ -21,7 +27,43 @@ public class PcsuiteUpdateServiceTests : IDisposable
 {
     private readonly SimpleHttpServer _server = new();
 
-    public void Dispose() => _server.Dispose();
+    /// <summary>Keyring PGP de test: firma el manifiesto local (ed25519).</summary>
+    private readonly TempExecutablePath _pgpDir = new();
+
+    private readonly PgpService _pgp;
+
+    private readonly PgpKeyInfo _signingKey;
+
+    /// <summary>Verificador con la clave pública de test + TOFU en temporal.</summary>
+    private readonly ManifestSignatureVerifier _verifier;
+
+    public PcsuiteUpdateServiceTests()
+    {
+        _pgp = new PgpService(new PgpKeyringStore(_pgpDir.DirectoryPath));
+        _signingKey = _pgp.GenerateKeyAsync(new PgpGenerateKeyRequest(
+            "Updater Test", "updater@test.es", PgpAlgorithms.Ed25519, null, null, null))
+            .GetAwaiter().GetResult();
+        var publicKeyArmored = _pgp.ExportKeyAsync(
+            new PgpExportKeyRequest(_signingKey.Fingerprint, false))
+            .GetAwaiter().GetResult();
+        _verifier = new ManifestSignatureVerifier(
+            publicKeyArmored,
+            Path.Combine(_pgpDir.DirectoryPath, "tofu-fingerprint.txt"));
+    }
+
+    public void Dispose()
+    {
+        _server.Dispose();
+        _pgpDir.Dispose();
+    }
+
+    /// <summary>Firma el manifiesto con la clave de test y lo sirve con .sig.</summary>
+    private string SignManifest(string manifest)
+    {
+        return _pgp.SignAsync(
+            new PgpSignRequest(manifest, _signingKey.Fingerprint, null))
+            .GetAwaiter().GetResult();
+    }
 
     private PcsuiteUpdateService CreateService(
         byte[] setupBytes,
@@ -51,6 +93,7 @@ public class PcsuiteUpdateServiceTests : IDisposable
         }
         """;
         _server.ManifestContent = manifest;
+        _server.SignatureContent = SignManifest(manifest);
         _server.SetupContent = setupBytes;
 
         return new PcsuiteUpdateService(
@@ -60,7 +103,8 @@ public class PcsuiteUpdateServiceTests : IDisposable
                 launches?.Add(path);
                 return true;
             },
-            currentVersion: currentVersion);
+            currentVersion: currentVersion,
+            signatureVerifier: _verifier);
     }
 
     [Fact]
@@ -166,6 +210,56 @@ public class PcsuiteUpdateServiceTests : IDisposable
     }
 
     // ------------------------------------------------------------------
+    // Firma del manifiesto (Task 17.6): alterada o ausente → sin confianza
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task Check_ConManifiestoAlteradoTrasFirmar_ResultadoSilencioso()
+    {
+        var service = CreateService([1, 2, 3], "0.5.0", currentVersion: "0.4.0");
+
+        // Un atacante modifica el manifiesto DESPUÉS de que lo firmáramos:
+        // la firma sigue servida, pero ya no corresponde al contenido.
+        _server.ManifestContent = _server.ManifestContent.Replace("0.5.0", "9.9.9");
+
+        var check = await service.CheckAsync();
+
+        // Silencioso: sin drama, sin error en la cara — pero sin confianza.
+        Assert.False(check.Available);
+    }
+
+    [Fact]
+    public async Task Download_ConManifiestoAlterado_SeRechaza()
+    {
+        var launches = new List<string>();
+        var service = CreateService([1, 2, 3], "0.5.0", launches: launches);
+
+        _server.ManifestContent = _server.ManifestContent.Replace("0.5.0", "9.9.9");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DownloadAsync());
+
+        Assert.Contains("Firma del manifiesto inválida", ex.Message);
+        Assert.Empty(launches);
+    }
+
+    [Fact]
+    public async Task Download_SinFirma_SeRechaza()
+    {
+        var launches = new List<string>();
+        var service = CreateService([1, 2, 3], "0.5.0", launches: launches);
+
+        // Sin latest.json.sig (404): sin firma no hay confianza.
+        _server.SignatureContent = null;
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DownloadAsync());
+
+        Assert.Contains("Firma del manifiesto inválida", ex.Message);
+        Assert.Empty(launches);
+    }
+
+    // ------------------------------------------------------------------
     // Comparador SemVer
     // ------------------------------------------------------------------
 
@@ -193,6 +287,9 @@ public class PcsuiteUpdateServiceTests : IDisposable
 
         public string ManifestContent { get; set; } = "{}";
         public byte[] SetupContent { get; set; } = [];
+
+        /// <summary>Firma PGP del manifiesto; null → el servidor responde 404.</summary>
+        public string? SignatureContent { get; set; }
 
         public string Url { get; }
 
@@ -232,7 +329,17 @@ public class PcsuiteUpdateServiceTests : IDisposable
             var read = await stream.ReadAsync(buffer);
             var request = System.Text.Encoding.ASCII.GetString(buffer, 0, read);
 
-            if (request.Contains("GET /latest.json"))
+            if (request.Contains("GET /latest.json.sig"))
+            {
+                if (SignatureContent is null)
+                {
+                    await WriteNotFoundAsync(stream);
+                    return;
+                }
+                var body = System.Text.Encoding.UTF8.GetBytes(SignatureContent);
+                await WriteResponse(stream, "application/pgp-signature", body);
+            }
+            else if (request.Contains("GET /latest.json"))
             {
                 var body = System.Text.Encoding.UTF8.GetBytes(ManifestContent);
                 await WriteResponse(stream, "application/json", body);
@@ -243,11 +350,16 @@ public class PcsuiteUpdateServiceTests : IDisposable
             }
             else
             {
-                var body = System.Text.Encoding.ASCII.GetBytes("404");
-                await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(
-                    "HTTP/1.1 404 Not Found\r\nContent-Length: 3\r\n\r\n"));
-                await stream.WriteAsync(body);
+                await WriteNotFoundAsync(stream);
             }
+        }
+
+        private static async Task WriteNotFoundAsync(NetworkStream stream)
+        {
+            var body = System.Text.Encoding.ASCII.GetBytes("404");
+            await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(
+                "HTTP/1.1 404 Not Found\r\nContent-Length: 3\r\n\r\n"));
+            await stream.WriteAsync(body);
         }
 
         private static async Task WriteResponse(NetworkStream stream, string contentType, byte[] body)
