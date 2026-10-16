@@ -242,6 +242,71 @@ public sealed class CertificateOperationTests
         Assert.DoesNotContain(MarkerPassphrase, response.Error.Message);
     }
 
+    [Fact]
+    public async Task VerifyFile_ThroughBridge_RoundTripSignAndVerify()
+    {
+        using var fx = CertificateFixture.Create();
+        var key = await fx.Pgp.GenerateKeyAsync(new PgpGenerateKeyRequest(
+            "Ana Test", "ana@test.es", PgpAlgorithms.Ed25519, null, null, null));
+        var inputPath = await WriteTempAsync(fx.OutputDir, "{ \"version\": \"0.5.3\" }");
+
+        var signed = await Send(
+            fx.Router,
+            "v1",
+            OperationIds.CertPgpSignFile,
+            JsonSerializer.Serialize(new { fingerprint = key.Fingerprint, inputPath }));
+        Assert.True(signed.Success);
+        var signaturePath = signed.Result!.Value.GetProperty("signaturePath").GetString()!;
+
+        var verified = await Send(
+            fx.Router,
+            "v2",
+            OperationIds.CertPgpVerifyFile,
+            JsonSerializer.Serialize(new { inputPath, signaturePath }));
+
+        // Contrato camelCase: firma válida con la identidad del firmante.
+        Assert.True(verified.Success);
+        var data = verified.Result!.Value;
+        Assert.True(data.GetProperty("valid").GetBoolean());
+        Assert.Equal(
+            key.Fingerprint,
+            data.GetProperty("signer").GetProperty("fingerprint").GetString());
+        Assert.Equal(
+            "Ana Test <ana@test.es>",
+            data.GetProperty("signer").GetProperty("userId").GetString());
+        Assert.False(new CertPgpVerifyFileOperation(fx.Service).RequiresElevation);
+    }
+
+    [Fact]
+    public async Task VerifyFile_TamperedContent_ReturnsSuccessWithValidFalse()
+    {
+        using var fx = CertificateFixture.Create();
+        var key = await fx.Pgp.GenerateKeyAsync(new PgpGenerateKeyRequest(
+            "Ana Test", "ana@test.es", PgpAlgorithms.Ed25519, null, null, null));
+        var inputPath = await WriteTempAsync(fx.OutputDir, "original");
+
+        var signed = await Send(
+            fx.Router,
+            "v3",
+            OperationIds.CertPgpSignFile,
+            JsonSerializer.Serialize(new { fingerprint = key.Fingerprint, inputPath }));
+        var signaturePath = signed.Result!.Value.GetProperty("signaturePath").GetString()!;
+        await File.WriteAllTextAsync(inputPath, "alterado");
+
+        var response = await Send(
+            fx.Router,
+            "v4",
+            OperationIds.CertPgpVerifyFile,
+            JsonSerializer.Serialize(new { inputPath, signaturePath }));
+
+        // Firma inválida = resultado legítimo (§6), NO un error del puente.
+        Assert.True(response.Success);
+        Assert.False(response.Result!.Value.GetProperty("valid").GetBoolean());
+        var detail = response.Result.Value.GetProperty("detail").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(detail));
+        Assert.DoesNotContain("   at ", detail);
+    }
+
     // ------------------------------------------------------------------
     // Ninguna operación cert.* declara elevación
     // ------------------------------------------------------------------

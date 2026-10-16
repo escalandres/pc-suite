@@ -157,6 +157,41 @@ public sealed class CertificateService : ICertificateService
     }
 
     // ==================================================================
+    // 19.2 — Verificación de firma PGP detached (cierre del ciclo:
+    // crear clave → exportar pública → firmar → IMPORTAR → verificar)
+    //
+    // Mismo contrato de texto UTF-8 que SignFileWithPgpAsync: simétrico con
+    // la firma. La clave pública del firmante debe estar en el keyring;
+    // una firma inválida o sin clave es un RESULTADO (Valid=false), no
+    // una excepción — igual que pgp.verify (§6).
+    // ==================================================================
+
+    public async Task<PCSuite.Core.PGP.PgpVerifyOutcome> VerifyFileWithPgpAsync(
+        string inputPath, string signaturePath, CancellationToken ct = default)
+    {
+        if (!File.Exists(inputPath))
+        {
+            throw new InvalidOperationException($"No se encontró el archivo original: {inputPath}");
+        }
+        if (!File.Exists(signaturePath))
+        {
+            throw new InvalidOperationException($"No se encontró la firma: {signaturePath}");
+        }
+
+        var content = await File.ReadAllTextAsync(inputPath, ct).ConfigureAwait(false);
+        var signature = await File.ReadAllTextAsync(signaturePath, ct).ConfigureAwait(false);
+
+        var outcome = await _pgp.VerifyAsync(
+            new PgpVerifyRequest(content, signature), ct).ConfigureAwait(false);
+
+        _logger?.LogInformation(
+            "Firma PGP verificada: {Input} vs {Signature} → {Valid}",
+            inputPath, signaturePath, outcome.Valid);
+
+        return outcome;
+    }
+
+    // ==================================================================
     // 19.3 — Inspección universal
     // ==================================================================
 
@@ -201,6 +236,10 @@ public sealed class CertificateService : ICertificateService
                 KindDescription = "PGP Private Key (cifrada con passphrase)",
                 Details = new Dictionary<string, string>(),
             });
+        }
+        if (content.Contains("-----BEGIN PGP SIGNATURE-----"))
+        {
+            return Task.FromResult(InspectPgpSignature(content));
         }
         if (content.Contains("ssh-rsa ") || content.Contains("ssh-ed25519 ") ||
             content.Contains("ecdsa-sha2-"))
@@ -827,6 +866,44 @@ public sealed class CertificateService : ICertificateService
                 ["Type"] = type,
                 ["Comment"] = comment,
             },
+        };
+    }
+
+    /// <summary>
+    /// Inspector de firmas PGP detached (.sig): extrae el KeyId del armor.
+    /// Aquí solo se LEE — para validar contra el original usa el tab
+    /// Firmar con PGP → Verificar (necesita la clave pública del firmante).
+    /// </summary>
+    private static CertificateInspectResult InspectPgpSignature(string armor)
+    {
+        var details = new Dictionary<string, string>
+        {
+            ["Cómo validarla"] = "Firmar con PGP → Verificar (requiere la clave pública del firmante)",
+        };
+
+        try
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(armor));
+            using var armored = new Org.BouncyCastle.Bcpg.ArmoredInputStream(stream);
+            var factory = new Org.BouncyCastle.Bcpg.OpenPgp.PgpObjectFactory(armored);
+            if (factory.NextPgpObject() is Org.BouncyCastle.Bcpg.OpenPgp.PgpSignatureList list
+                && list.Count > 0)
+            {
+                var keyId = list[0].KeyId.ToString("X16");
+                details["Key ID"] = keyId;
+                details["Algoritmo hash"] = list[0].HashAlgorithm.ToString();
+            }
+        }
+        catch
+        {
+            // armor corrupto: la inspección devuelve el tipo sin detalles
+        }
+
+        return new CertificateInspectResult
+        {
+            Kind = CertificateContentKind.PgpSignature,
+            KindDescription = "PGP Signature (detached, armoured)",
+            Details = details,
         };
     }
 }

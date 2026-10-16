@@ -100,6 +100,10 @@ public enum CertificateContentKind
     PgpPublicKey,
     PgpPrivateKey,
     SshPublicKey,
+
+    /// <summary>Firma PGP detached (.sig ASCII-armoured) — solo legible; para
+    /// validarla usa Firmar con PGP → Verificar.</summary>
+    PgpSignature,
 }
 
 /// <summary>Resultado de inspección universal: un endpoint que reconoce cualquier formato (Task 19.3).</summary>
@@ -166,6 +170,16 @@ public interface ICertificateService
 
     /// <summary>Firma un archivo con una clave PGP privada del keyring (Task 19.2 / 17.6).</summary>
     Task<PgpSignFileResult> SignFileWithPgpAsync(string fingerprint, string inputPath, string? passphrase, CancellationToken ct = default);
+
+    /// <summary>
+    /// Verifica una firma PGP detached (.sig) contra un archivo ORIGINAL
+    /// (Task 19.2, cierre del ciclo). La clave pública del firmante debe
+    /// estar en el keyring (impórtala primero); sin ella el resultado es
+    /// Valid=false con el motivo. Una firma inválida es un RESULTADO
+    /// legítimo, no una excepción.
+    /// </summary>
+    Task<PCSuite.Core.PGP.PgpVerifyOutcome> VerifyFileWithPgpAsync(
+        string inputPath, string signaturePath, CancellationToken ct = default);
 
     /// <summary>Inspecciona un archivo de certificado/clave: reconoce el formato automáticamente (Task 19.3).</summary>
     Task<CertificateInspectResult> InspectAsync(string path, string? password, CancellationToken ct = default);

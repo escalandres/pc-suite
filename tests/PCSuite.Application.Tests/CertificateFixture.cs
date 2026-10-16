@@ -55,6 +55,7 @@ internal sealed class CertificateFixture : IDisposable
                 new CertConvertOperation(service),
                 new CertPgpSignFileOperation(service),
                 new CertCsrGenerateOperation(service),
+                new CertPgpVerifyFileOperation(service),
             },
             NullLogger<CommandRouter>.Instance);
 

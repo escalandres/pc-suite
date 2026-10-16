@@ -290,6 +290,7 @@ public partial class MainForm : Form
                 new CertConvertOperation(certificateService),
                 new CertPgpSignFileOperation(certificateService),
                 new CertCsrGenerateOperation(certificateService),
+                new CertPgpVerifyFileOperation(certificateService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

@@ -106,6 +106,40 @@ public sealed class CsrGeneratePayload
     public IReadOnlyList<string>? SubjectAltNames { get; init; }
 }
 
+/// <summary>Resultado de cert.pgp.verifyFile (Task 19.2, cierre del ciclo).</summary>
+public sealed class PgpVerifyFileResultDto
+{
+    /// <summary>¿La firma verifica contra el archivo original? Una firma inválida
+    /// es un RESULTADO legítimo (valid=false), no un error del puente.</summary>
+    public bool Valid { get; init; }
+
+    /// <summary>Motivo legible cuando Valid=false (sin clave del firmante, contenido alterado…).</summary>
+    public string? Detail { get; init; }
+
+    /// <summary>Identidad del firmante cuando la clave pública está en el keyring.</summary>
+    public PgpSignerDto? Signer { get; init; }
+}
+
+/// <summary>Firma del archivo verificada.</summary>
+public sealed class PgpSignerDto
+{
+    public string Fingerprint { get; init; } = "";
+    public string UserId { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string Email { get; init; } = "";
+    public string Algorithm { get; init; } = "";
+}
+
+/// <summary>Payload de cert.pgp.verifyFile.</summary>
+public sealed class PgpVerifyFilePayload
+{
+    /// <summary>Archivo ORIGINAL firmado (la firma detached lo cubre).</summary>
+    public string InputPath { get; init; } = "";
+
+    /// <summary>Firma .sig (armoured) generada junto al original.</summary>
+    public string SignaturePath { get; init; } = "";
+}
+
 // =====================================================================
 // Operaciones del bridge
 // =====================================================================
@@ -285,6 +319,57 @@ public sealed class CertCsrGenerateOperation(ICertificateService service) : IOpe
                 $"csr-{timestamp}.pem");
         }
         return "";
+    }
+}
+
+/// <summary>
+/// cert.pgp.verifyFile — verifica una firma detached (.sig) contra el archivo
+/// ORIGINAL (Task 19.2, cierre del ciclo: crear → exportar → firmar →
+/// importar → verificar). Una firma inválida es un RESULTADO con valid=false
+/// (mismo contrato que pgp.verify, §6): jamás INTERNAL_ERROR ni stack traces.
+/// </summary>
+public sealed class CertPgpVerifyFileOperation(ICertificateService service) : IOperation
+{
+    public string Id => OperationIds.CertPgpVerifyFile;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        if (!ToolMapper.TryParsePayload(context.Payload, out PgpVerifyFilePayload payload)
+            || payload is null || string.IsNullOrEmpty(payload.InputPath)
+            || string.IsNullOrEmpty(payload.SignaturePath))
+        {
+            return OperationResult.Fail("error",
+                "El payload debe ser { inputPath, signaturePath }.");
+        }
+
+        try
+        {
+            var outcome = await service.VerifyFileWithPgpAsync(
+                payload.InputPath, payload.SignaturePath, ct).ConfigureAwait(false);
+
+            return OperationResult.Ok(BridgeJson.ToJson(new PgpVerifyFileResultDto
+            {
+                Valid = outcome.Valid,
+                Detail = outcome.Detail,
+                Signer = outcome.Signer is null ? null : new PgpSignerDto
+                {
+                    Fingerprint = outcome.Signer.Fingerprint,
+                    UserId = outcome.Signer.UserId,
+                    Name = outcome.Signer.Name,
+                    Email = outcome.Signer.Email,
+                    Algorithm = outcome.Signer.Algorithm,
+                },
+            }));
+        }
+        catch (PcsSuitePgpException exception)
+        {
+            return OperationResult.Fail(exception.ErrorCode, exception.ErrorMessage);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return OperationResult.Fail("verify_failed", ex.Message);
+        }
     }
 }
 

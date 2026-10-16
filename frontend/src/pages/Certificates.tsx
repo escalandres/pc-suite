@@ -16,6 +16,7 @@ import type {
   PgpKeyItem,
   PgpListKeysResult,
   PgpSignFileResult,
+  PgpVerifyFileResult,
   SystemPickFilesResult,
   X509GenerateResult,
 } from '../types/bridge';
@@ -266,6 +267,19 @@ export function Certificates() {
   const [exporting, setExporting] = useState(false);
   const [publicArmor, setPublicArmor] = useState<string | null>(null);
 
+  // Import de clave pública de terceros (pgp.importKey): el paso del VERIFICADOR —
+  // sin la clave del firmante en el keyring, la verificación no puede hacerse.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importArmor, setImportArmor] = useState('');
+  const [importing, setImporting] = useState(false);
+
+  // Verificación de firma detached: archivo original + .sig → cert.pgp.verifyFile.
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyPath, setVerifyPath] = useState('');
+  const [verifySigPath, setVerifySigPath] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyOutcome, setVerifyOutcome] = useState<PgpVerifyFileResult | null>(null);
+
   const loadKeys = useCallback(async () => {
     try {
       const result = await bridge.call<PgpListKeysResult>(
@@ -335,6 +349,76 @@ export function Certificates() {
       setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo exportar la clave.') });
     } finally {
       setExporting(false);
+    }
+  };
+
+  const importPublicKey = async () => {
+    const armor = importArmor.trim();
+    if (!armor.includes('-----BEGIN PGP') || importing) return;
+    setImporting(true);
+    setNotice(null);
+    try {
+      const imported = await bridge.call<PgpKeyItem>(
+        OperationIds.pgpImportKey,
+        { armoredKey: armor },
+        READ_TIMEOUT,
+      );
+      setImportArmor('');
+      setImportOpen(false);
+      setNotice({
+        kind: 'success',
+        text: `Clave pública importada: ${imported.userId} (${imported.fingerprint}). Ya puedes verificar sus firmas.`,
+      });
+    } catch (error) {
+      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo importar la clave: bloque armoured inválido.') });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  /** Selector nativo para UN archivo; devuelve null si se canceló. */
+  const pickOneFile = useCallback(async (): Promise<string | null> => {
+    const picked = await bridge.call<SystemPickFilesResult>(
+      OperationIds.systemPickFiles, undefined, PICK_TIMEOUT);
+    if (picked.cancelled || picked.paths.length === 0) return null;
+    return picked.paths[0];
+  }, []);
+
+  const pickVerifyOriginal = async () => {
+    setNotice(null);
+    try {
+      const path = await pickOneFile();
+      if (path) { setVerifyPath(path); setVerifyOutcome(null); }
+    } catch (error) {
+      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo abrir el selector.') });
+    }
+  };
+
+  const pickVerifySignature = async () => {
+    setNotice(null);
+    try {
+      const path = await pickOneFile();
+      if (path) { setVerifySigPath(path); setVerifyOutcome(null); }
+    } catch (error) {
+      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo abrir el selector.') });
+    }
+  };
+
+  const verifySignature = async () => {
+    if (!verifyPath || !verifySigPath || verifying) return;
+    setVerifying(true);
+    setNotice(null);
+    try {
+      const outcome = await bridge.call<PgpVerifyFileResult>(
+        OperationIds.certPgpVerifyFile,
+        { inputPath: verifyPath, signaturePath: verifySigPath },
+        READ_TIMEOUT,
+      );
+      setVerifyOutcome(outcome);
+    } catch (error) {
+      setNotice({ kind: 'error', text: errorMessage(error, 'La verificación falló.') });
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -1076,6 +1160,145 @@ export function Certificates() {
               </code>
             </div>
           )}
+
+          {/* ---- Importar clave pública (el paso del VERIFICADOR) ---- */}
+          <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--pcs-border)' }}>
+            <button
+              type="button"
+              onClick={() => { setImportOpen((open) => !open); setImportArmor(''); }}
+              className="flex items-center gap-1.5 text-sm font-medium"
+              style={{ color: 'var(--pcs-accent)' }}
+            >
+              {importOpen ? '− Cerrar' : '+ Importar clave pública…'}
+            </button>
+            <p className="mt-1 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+              ¿Te enviaron un archivo firmado? Importa aquí la clave pública del
+              firmante para poder verificarlo en la app.
+            </p>
+
+            {importOpen && (
+              <div className="mt-3">
+                <textarea
+                  value={importArmor}
+                  onChange={(event) => setImportArmor(event.target.value)}
+                  rows={8}
+                  placeholder={'-----BEGIN PGP PUBLIC KEY BLOCK-----\n…pega aquí el bloque completo…\n-----END PGP PUBLIC KEY BLOCK-----'}
+                  className="w-full rounded-md border p-3 font-mono text-xs"
+                  style={inputStyle}
+                  spellCheck={false}
+                />
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void importPublicKey()}
+                    disabled={!importArmor.includes('-----BEGIN PGP') || importing}
+                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40"
+                    style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+                  >
+                    <RefreshCw size={14} aria-hidden className={importing ? 'animate-spin' : undefined} />
+                    {importing ? 'Importando…' : 'Importar clave'}
+                  </button>
+                  <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                    Solo públicas: la importación jamás acepta material privado de terceros como tuyo.
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ---- Verificar firma de un archivo ---- */}
+          <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--pcs-border)' }}>
+            <button
+              type="button"
+              onClick={() => { setVerifyOpen((open) => !open); setVerifyOutcome(null); }}
+              className="flex items-center gap-1.5 text-sm font-medium"
+              style={{ color: 'var(--pcs-accent)' }}
+            >
+              {verifyOpen ? '− Cerrar' : '✓ Verificar firma de un archivo…'}
+            </button>
+            <p className="mt-1 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+              Comprueba que un archivo y su .sig no se han alterado. Necesita la
+              clave pública del firmante importada arriba.
+            </p>
+
+            {verifyOpen && (
+              <div className="mt-3">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Archivo original">
+                    <button
+                      type="button"
+                      onClick={() => void pickVerifyOriginal()}
+                      className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                      style={inputStyle}
+                    >
+                      <FolderOpen size={14} aria-hidden />
+                      <span className="truncate">{verifyPath || 'Elegir archivo…'}</span>
+                    </button>
+                  </Field>
+                  <Field label="Firma (.sig)">
+                    <button
+                      type="button"
+                      onClick={() => void pickVerifySignature()}
+                      className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                      style={inputStyle}
+                    >
+                      <FolderOpen size={14} aria-hidden />
+                      <span className="truncate">{verifySigPath || 'Elegir firma…'}</span>
+                    </button>
+                  </Field>
+                </div>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void verifySignature()}
+                    disabled={!verifyPath || !verifySigPath || verifying}
+                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40"
+                    style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+                  >
+                    <RefreshCw size={14} aria-hidden className={verifying ? 'animate-spin' : undefined} />
+                    {verifying ? 'Verificando…' : 'Verificar'}
+                  </button>
+                </div>
+
+                {verifyOutcome && (
+                  <div
+                    className="mt-3 rounded-md border px-4 py-3 text-sm"
+                    role={verifyOutcome.valid ? 'status' : 'alert'}
+                    style={
+                      verifyOutcome.valid
+                        ? {
+                            borderColor: 'var(--pcs-success)',
+                            color: 'var(--pcs-success)',
+                            background: 'color-mix(in srgb, var(--pcs-success) 8%, transparent)',
+                          }
+                        : {
+                            borderColor: 'var(--pcs-danger)',
+                            color: 'var(--pcs-danger)',
+                            background: 'color-mix(in srgb, var(--pcs-danger) 8%, transparent)',
+                          }
+                    }
+                  >
+                    {verifyOutcome.valid ? (
+                      <p>
+                        ✓ Firma válida — el archivo coincide con lo que firmó{' '}
+                        <strong>{verifyOutcome.signer?.userId || 'el firmante'}</strong>.
+                        {verifyOutcome.signer && (
+                          <span className="ml-1 font-mono text-xs" style={{ opacity: 0.8 }}>
+                            ({verifyOutcome.signer.fingerprint})
+                          </span>
+                        )}
+                      </p>
+                    ) : (
+                      <p>
+                        ✗ Firma inválida. {verifyOutcome.detail}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </section>
       )}
     </div>

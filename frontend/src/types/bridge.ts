@@ -116,9 +116,11 @@ export const OperationIds = {
   certConvert: 'cert.convert',
   certPgpSignFile: 'cert.pgp.signFile',
   certCsrGenerate: 'cert.csr.generate',
+  certPgpVerifyFile: 'cert.pgp.verifyFile',
   pgpListKeys: 'pgp.listKeys',
   pgpGenerateKey: 'pgp.generateKey',
   pgpExportKey: 'pgp.exportKey',
+  pgpImportKey: 'pgp.importKey',
 } as const;
 
 export const EventIds = {
@@ -499,6 +501,23 @@ export interface PgpListKeysResult {
 export interface PgpExportKeyResult {
   armoredKey: string;
   isPrivate: boolean;
+}
+
+/**
+ * Resultado de cert.pgp.verifyFile: una firma inválida es un RESULTADO
+ * legítimo (valid=false con detail), no un error del puente.
+ */
+export interface PgpVerifyFileResult {
+  valid: boolean;
+  detail?: string | null;
+  /** Identidad del firmante cuando su clave pública está en el keyring. */
+  signer?: {
+    fingerprint: string;
+    userId: string;
+    name: string;
+    email: string;
+    algorithm: string;
+  } | null;
 }
 
 /* =====================================================================

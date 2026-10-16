@@ -561,6 +561,114 @@ public sealed class CertificateServiceTests : IDisposable
 
         Assert.Contains("No se encontró", exception.Message);
     }
+
+    // ------------------------------------------------------------------
+    // 19.2 (cierre del ciclo) — Verificación de firma detached
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task VerifyFileWithPgp_ValidSignature_ReturnsValidWithSigner()
+    {
+        var key = await _fx.Pgp.GenerateKeyAsync(new PgpGenerateKeyRequest(
+            "Ana Test", "ana@test.es", PgpAlgorithms.Ed25519, null, null, null));
+        var inputPath = Path.Combine(_fx.OutputDir, "doc.txt");
+        await File.WriteAllTextAsync(inputPath, "contenido íntegro", Encoding.UTF8);
+
+        var signed = await _fx.Service.SignFileWithPgpAsync(
+            key.Fingerprint, inputPath, null);
+
+        var outcome = await _fx.Service.VerifyFileWithPgpAsync(
+            inputPath, signed.SignaturePath);
+
+        Assert.True(outcome.Valid);
+        Assert.Null(outcome.Detail);
+        Assert.NotNull(outcome.Signer);
+        Assert.Equal(key.Fingerprint, outcome.Signer!.Fingerprint);
+        Assert.Equal("Ana Test <ana@test.es>", outcome.Signer.UserId);
+    }
+
+    [Fact]
+    public async Task VerifyFileWithPgp_TamperedContent_ReturnsInvalidNoThrow()
+    {
+        var key = await _fx.Pgp.GenerateKeyAsync(new PgpGenerateKeyRequest(
+            "Ana Test", "ana@test.es", PgpAlgorithms.Ed25519, null, null, null));
+        var inputPath = Path.Combine(_fx.OutputDir, "tamper.txt");
+        await File.WriteAllTextAsync(inputPath, "original", Encoding.UTF8);
+
+        var signed = await _fx.Service.SignFileWithPgpAsync(
+            key.Fingerprint, inputPath, null);
+
+        // El contenido se altera DESPUÉS de firmar.
+        await File.WriteAllTextAsync(inputPath, "alterado", Encoding.UTF8);
+
+        var outcome = await _fx.Service.VerifyFileWithPgpAsync(
+            inputPath, signed.SignaturePath);
+
+        // Firma inválida = resultado legítimo, no excepción.
+        Assert.False(outcome.Valid);
+        Assert.False(string.IsNullOrWhiteSpace(outcome.Detail));
+        Assert.DoesNotContain("   at ", outcome.Detail);
+    }
+
+    [Fact]
+    public async Task VerifyFileWithPgp_SignerNotInKeyring_ReturnsInvalidWithReason()
+    {
+        var key = await _fx.Pgp.GenerateKeyAsync(new PgpGenerateKeyRequest(
+            "Ana Test", "ana@test.es", PgpAlgorithms.Ed25519, null, null, null));
+        var inputPath = Path.Combine(_fx.OutputDir, "externo.txt");
+        await File.WriteAllTextAsync(inputPath, "firmado por otra persona", Encoding.UTF8);
+
+        var signed = await _fx.Service.SignFileWithPgpAsync(
+            key.Fingerprint, inputPath, null);
+
+        // El VERIFICADOR no tiene la clave pública de Ana: keyring vacío.
+        using var emptyDir = new TempExecutablePath();
+        var verifierService = new PCSuite.Infrastructure.Certificates.CertificateService(
+            new PgpService(new PgpKeyringStore(emptyDir.DirectoryPath)),
+            null,
+            Path.Combine(emptyDir.DirectoryPath, "out"));
+
+        var outcome = await verifierService.VerifyFileWithPgpAsync(
+            inputPath, signed.SignaturePath);
+
+        Assert.False(outcome.Valid);
+        Assert.Null(outcome.Signer);
+        Assert.False(string.IsNullOrWhiteSpace(outcome.Detail));
+    }
+
+    [Fact]
+    public async Task VerifyFileWithPgp_MissingFiles_ThrowStaticMessages()
+    {
+        var existing = Path.Combine(_fx.OutputDir, "existe.txt");
+        await File.WriteAllTextAsync(existing, "x");
+
+        var missingOriginal = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _fx.Service.VerifyFileWithPgpAsync(
+                Path.Combine(_fx.OutputDir, "no-existe.txt"), existing));
+        Assert.Contains("No se encontró el archivo original", missingOriginal.Message);
+
+        var missingSignature = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _fx.Service.VerifyFileWithPgpAsync(
+                existing, Path.Combine(_fx.OutputDir, "no-existe.sig")));
+        Assert.Contains("No se encontró la firma", missingSignature.Message);
+    }
+
+    [Fact]
+    public async Task Inspect_PgpSignature_ReportsKeyIdAndGuidance()
+    {
+        var key = await _fx.Pgp.GenerateKeyAsync(new PgpGenerateKeyRequest(
+            "Ana Test", "ana@test.es", PgpAlgorithms.Ed25519, null, null, null));
+        var inputPath = Path.Combine(_fx.OutputDir, "inspect-sig.txt");
+        await File.WriteAllTextAsync(inputPath, "hola", Encoding.UTF8);
+        var signed = await _fx.Service.SignFileWithPgpAsync(
+            key.Fingerprint, inputPath, null);
+
+        var inspected = await _fx.Service.InspectAsync(signed.SignaturePath, null);
+
+        Assert.Equal(CertificateContentKind.PgpSignature, inspected.Kind);
+        Assert.Contains("Key ID", inspected.Details.Keys);
+        Assert.Contains("Verificar", inspected.Details["Cómo validarla"]);
+    }
 }
 
 /// <summary>Auxiliar de tests: vuelca el PEM del certificado a un archivo.</summary>

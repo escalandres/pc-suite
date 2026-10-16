@@ -316,4 +316,7 @@ public static class OperationIds
 
     /// <summary>Genera un CSR PKCS#10 + clave privada (Task 19.5).</summary>
     public const string CertCsrGenerate = "cert.csr.generate";
+
+    /// <summary>Verifica una firma PGP detached (.sig) contra el archivo original (Task 19.2).</summary>
+    public const string CertPgpVerifyFile = "cert.pgp.verifyFile";
 }
