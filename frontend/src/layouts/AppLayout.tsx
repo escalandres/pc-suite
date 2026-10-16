@@ -12,6 +12,7 @@ import {
   Package,
   Boxes,
   Bug,
+  FileKey,
   Settings,
   Star,
   ChevronLeft,
@@ -33,6 +34,7 @@ export type PageId =
   | 'winget'
   | 'wsl'
   | 'clamav'
+  | 'certificates'
   | 'activity'
   | 'settings';
 
@@ -67,6 +69,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'wsl', label: 'WSL', icon: Boxes, enabled: true },
   { id: 'clamav', label: 'ClamAV', icon: Bug, enabled: true },
   { id: 'cleaner', label: 'Limpiador', icon: Sparkles, enabled: true },
+  { id: 'certificates', label: 'Certificados', icon: FileKey, enabled: true },
   { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: true },
   { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: true },
   { id: 'plugins', label: 'Plugins', icon: Puzzle, enabled: true },

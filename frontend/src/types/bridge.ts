@@ -111,6 +111,11 @@ export const OperationIds = {
   updateCheck: 'update.check',
   updateDownload: 'update.download',
   updateInstall: 'update.install',
+  certX509Generate: 'cert.x509.generate',
+  certInspect: 'cert.inspect',
+  certConvert: 'cert.convert',
+  certPgpSignFile: 'cert.pgp.signFile',
+  pgpListKeys: 'pgp.listKeys',
 } as const;
 
 export const EventIds = {
@@ -403,10 +408,69 @@ export interface UpdateDownloadResult {
   jobId: string;
 }
 
-/** Payload del evento job.event para update.download (statusChanged â†’ completed). */
+/** Payload del evento job.event para update.download (statusChanged → completed). */
 export interface UpdateDownloadJobResult {
-  /** Ruta del archivo verificado â€” vuelve en el payload de update.install. */
+  /** Ruta del archivo verificado — vuelve en el payload de update.install. */
   path: string;
+}
+
+/* =====================================================================
+   Task 019 — Certificados
+   ===================================================================== */
+
+/** Resultado de cert.x509.generate. */
+export interface X509GenerateResult {
+  /** Certificado en PEM (la UI lo muestra; la clave NUNCA viaja en claro). */
+  certificatePem: string;
+  /** Ruta del archivo con la clave privada — el usuario la abre desde el explorador. */
+  privateKeyPath: string;
+  pfxPath?: string | null;
+  fingerprint: string;
+  serialNumber: string;
+  subject: string;
+  validFrom: string;
+  validTo: string;
+  algorithm: string;
+}
+
+/** Resultado de cert.inspect: reconoce X.509, CSR, claves, PGP y SSH. */
+export interface CertificateInspectResult {
+  kind: string;
+  kindDescription: string;
+  fingerprint?: string | null;
+  details: Record<string, string>;
+}
+
+/** Resultado de cert.convert (PEM↔DER por ahora). */
+export interface CertificateConvertResult {
+  outputPath: string;
+  outputFormat: string;
+}
+
+/** Resultado de cert.pgp.signFile: firma detached armoured junto al archivo. */
+export interface PgpSignFileResult {
+  signaturePath: string;
+  fingerprint: string;
+}
+
+/** Entrada de pgp.listKeys: claves del keyring propio (%APPDATA%\PCSuite\pgp). */
+export interface PgpKeyItem {
+  fingerprint: string;
+  keyId: string;
+  userId: string;
+  name: string;
+  email: string;
+  algorithm: string;
+  bits: number;
+  createdAt: string;
+  expiresAt?: string | null;
+  hasPrivate: boolean;
+  canEncrypt: boolean;
+}
+
+/** Resultado de pgp.listKeys. */
+export interface PgpListKeysResult {
+  keys: PgpKeyItem[];
 }
 
 /* =====================================================================

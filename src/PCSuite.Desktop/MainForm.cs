@@ -171,6 +171,14 @@ public partial class MainForm : Form
         // propósito: contraseña, texto plano y clave privada no se registran.
         var pgpService = new PgpService(new PgpKeyringStore());
 
+        // Certificados (Task 019): X.509 autofirmado, inspección universal,
+        // conversión PEM↔DER y firma PGP de archivos — todo BouncyCastle en
+        // proceso, sin elevación. Reutiliza el keyring de PgpService para
+        // firmar. Sin logger de contenido: solo rutas y metadatos públicos.
+        var certificateService = new PCSuite.Infrastructure.Certificates.CertificateService(
+            pgpService,
+            _loggerFactory.CreateLogger<PCSuite.Infrastructure.Certificates.CertificateService>());
+
         // Limpiador (Task 011): escaneo y borrado SOLO en raíces fijas del
         // sistema (§16 "Temporary file cleanup"); sin procesos ni elevación —
         // lo que la ACL no permite se omite y se contabiliza.
@@ -277,6 +285,10 @@ public partial class MainForm : Form
                     // paso (él pide UAC si la instalación lo requiere).
                     BeginInvoke(Close);
                 }),
+                new CertX509GenerateOperation(certificateService),
+                new CertInspectOperation(certificateService),
+                new CertConvertOperation(certificateService),
+                new CertPgpSignFileOperation(certificateService),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

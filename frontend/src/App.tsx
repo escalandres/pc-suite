@@ -7,6 +7,7 @@ import { DevTools } from './pages/DevTools';
 import { Winget } from './pages/Winget';
 import { Wsl } from './pages/Wsl';
 import { Clamav } from './pages/Clamav';
+import { Certificates } from './pages/Certificates';
 import { Cleaner } from './pages/Cleaner';
 import { Security } from './pages/Security';
 import { Settings } from './pages/Settings';
@@ -37,7 +38,7 @@ function parseHash(): { page: PageId; toolId?: string } {
   // Validar que la página existe
   const validPages: PageId[] = [
     'home', 'tools', 'localshare', 'cleaner', 'security',
-    'devtools', 'plugins', 'winget', 'wsl', 'clamav', 'activity', 'settings'
+    'devtools', 'plugins', 'winget', 'wsl', 'clamav', 'certificates', 'activity', 'settings'
   ];
   if (!validPages.includes(page)) return { page: 'home' };
   return { page, toolId };
@@ -203,6 +204,8 @@ function renderPage(
       return <Wsl />;
     case 'clamav':
       return <Clamav />;
+    case 'certificates':
+      return <Certificates />;
     case 'security':
       return <Security />;
     case 'cleaner':

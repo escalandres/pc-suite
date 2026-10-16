@@ -299,4 +299,18 @@ public static class OperationIds
     /// botón explícito del usuario. Tras lanzar, la app se cierra sola.
     /// </summary>
     public const string UpdateInstall = "update.install";
+
+    // ---------------- Task 019: certificados ----------------
+
+    /// <summary>Genera un certificado X.509 autofirmado (Task 19.1).</summary>
+    public const string CertX509Generate = "cert.x509.generate";
+
+    /// <summary>Inspecciona un archivo de certificado/clave: reconoce el formato (Task 19.3).</summary>
+    public const string CertInspect = "cert.inspect";
+
+    /// <summary>Convierte entre formatos: PEM↔DER (Task 19.4).</summary>
+    public const string CertConvert = "cert.convert";
+
+    /// <summary>Firma un archivo con una clave PGP privada del keyring (Task 19.2 / 17.6).</summary>
+    public const string CertPgpSignFile = "cert.pgp.signFile";
 }
