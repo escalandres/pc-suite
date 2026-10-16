@@ -117,6 +117,8 @@ export const OperationIds = {
   certPgpSignFile: 'cert.pgp.signFile',
   certCsrGenerate: 'cert.csr.generate',
   pgpListKeys: 'pgp.listKeys',
+  pgpGenerateKey: 'pgp.generateKey',
+  pgpExportKey: 'pgp.exportKey',
 } as const;
 
 export const EventIds = {
@@ -487,6 +489,16 @@ export interface PgpKeyItem {
 /** Resultado de pgp.listKeys. */
 export interface PgpListKeysResult {
   keys: PgpKeyItem[];
+}
+
+/**
+ * Resultado de pgp.exportKey. La PRIVADA solo sale si se pidió
+ * explícitamente (includePrivate) — la UI de Certificados solo exporta
+ * públicas.
+ */
+export interface PgpExportKeyResult {
+  armoredKey: string;
+  isPrivate: boolean;
 }
 
 /* =====================================================================

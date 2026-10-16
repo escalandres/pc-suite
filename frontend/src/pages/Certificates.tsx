@@ -12,6 +12,7 @@ import type {
   CertificateConvertResult,
   CertificateInspectResult,
   CsrGenerateResult,
+  PgpExportKeyResult,
   PgpKeyItem,
   PgpListKeysResult,
   PgpSignFileResult,
@@ -253,6 +254,18 @@ export function Certificates() {
   const [signing, setSigning] = useState(false);
   const [signResult, setSignResult] = useState<PgpSignFileResult | null>(null);
 
+  // Generación de clave de firma (pgp.generateKey): el tab es autosuficiente —
+  // el usuario crea su clave aquí mismo, sin salir de Certificados.
+  const [genOpen, setGenOpen] = useState(false);
+  const [genName, setGenName] = useState('');
+  const [genEmail, setGenEmail] = useState('');
+  const [genPassphrase, setGenPassphrase] = useState('');
+  const [genBusy, setGenBusy] = useState(false);
+
+  // Export de la clave pública (pgp.exportKey, includePrivate: false SIEMPRE).
+  const [exporting, setExporting] = useState(false);
+  const [publicArmor, setPublicArmor] = useState<string | null>(null);
+
   const loadKeys = useCallback(async () => {
     try {
       const result = await bridge.call<PgpListKeysResult>(
@@ -263,7 +276,7 @@ export function Certificates() {
         current || (privateKeys.length > 0 ? privateKeys[0].fingerprint : ''),
       );
     } catch {
-      // keyring vacío o error: la pestaña muestra su propio aviso
+      // keyring vacío o error: el tab muestra su propio aviso
       setKeys([]);
     }
   }, []);
@@ -271,6 +284,59 @@ export function Certificates() {
   useEffect(() => {
     void loadKeys();
   }, [loadKeys]);
+
+  const generateSigningKey = async () => {
+    if (!genName.trim() || !genEmail.trim() || genBusy) return;
+    setGenBusy(true);
+    setNotice(null);
+    try {
+      const created = await bridge.call<PgpKeyItem>(
+        OperationIds.pgpGenerateKey,
+        {
+          name: genName.trim(),
+          email: genEmail.trim(),
+          algorithm: 'ed25519',
+          passphrase: genPassphrase || undefined,
+        },
+        X509_TIMEOUT,
+      );
+      setGenPassphrase('');
+      setGenOpen(false);
+      setPublicArmor(null);
+      await loadKeys();
+      setSignFingerprint(created.fingerprint);
+      setNotice({
+        kind: 'success',
+        text: `Clave creada (${created.algorithm}): ${created.fingerprint}`,
+      });
+    } catch (error) {
+      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo generar la clave.') });
+    } finally {
+      setGenBusy(false);
+    }
+  };
+
+  const exportPublicKey = async () => {
+    if (!signFingerprint || exporting) return;
+    setExporting(true);
+    setNotice(null);
+    try {
+      const result = await bridge.call<PgpExportKeyResult>(
+        OperationIds.pgpExportKey,
+        { fingerprint: signFingerprint, includePrivate: false },
+        READ_TIMEOUT,
+      );
+      setPublicArmor(result.armoredKey);
+      setNotice({
+        kind: 'success',
+        text: 'Clave pública exportada — comparte este bloque; quien la importe podrá verificar tus firmas.',
+      });
+    } catch (error) {
+      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo exportar la clave.') });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const pickAndSign = async () => {
     setNotice(null);
@@ -823,67 +889,169 @@ export function Certificates() {
           className="rounded-lg border p-4"
           style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
         >
+          {/* ---- Generación de clave (autosuficiente: pgp.generateKey) ---- */}
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => { setGenOpen((open) => !open); setPublicArmor(null); }}
+              className="flex items-center gap-1.5 text-sm font-medium"
+              style={{ color: 'var(--pcs-accent)' }}
+            >
+              {genOpen ? '− Cerrar' : '+ Generar clave de firma…'}
+            </button>
+
+            {(genOpen || keys.length === 0) && (
+              <div
+                className="mt-3 rounded-md border p-4"
+                style={{ background: 'var(--pcs-bg)', borderColor: 'var(--pcs-border)' }}
+              >
+                <p className="mb-3 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                  {keys.length === 0
+                    ? 'Aún no hay claves con material privado. Crea tu clave de firma — queda en el keyring de la app (%APPDATA%\\PCSuite\\pgp) y la privada NUNCA sale de este equipo.'
+                    : 'La nueva clave se añade al keyring de la app. Algoritmo ed25519 (recomendada).'}
+                </p>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field label="Nombre *">
+                    <input
+                      type="text"
+                      value={genName}
+                      onChange={(event) => setGenName(event.target.value)}
+                      placeholder="Ana García"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Email *">
+                    <input
+                      type="email"
+                      value={genEmail}
+                      onChange={(event) => setGenEmail(event.target.value)}
+                      placeholder="ana@ejemplo.com"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Passphrase (opcional)">
+                    <input
+                      type="password"
+                      value={genPassphrase}
+                      onChange={(event) => setGenPassphrase(event.target.value)}
+                      autoComplete="new-password"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      style={inputStyle}
+                    />
+                  </Field>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void generateSigningKey()}
+                    disabled={!genName.trim() || !genEmail.includes('@') || genBusy}
+                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40"
+                    style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+                  >
+                    <RefreshCw size={14} aria-hidden className={genBusy ? 'animate-spin' : undefined} />
+                    {genBusy ? 'Generando…' : 'Crear clave'}
+                  </button>
+                  <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                    Sin elevación; ed25519 se genera en segundos.
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ---- Firma con clave existente ---- */}
           {keys.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-              No hay claves PGP con material privado en el keyring. Genera una
-              desde <strong>Herramientas → PGP</strong> primero.
+              Cuando tengas al menos una clave, aquí podrás firmar archivos y
+              exportar tu clave pública.
             </p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Clave firmante">
-                <select
-                  value={signFingerprint}
-                  onChange={(event) => setSignFingerprint(event.target.value)}
-                  className="w-full rounded-md border px-3 py-2 text-sm"
-                  style={inputStyle}
-                >
-                  {keys.map((key) => (
-                    <option key={key.fingerprint} value={key.fingerprint}>
-                      {key.userId || key.name} ({key.algorithm})
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Passphrase (solo si la clave la tiene)">
-                <input
-                  type="password"
-                  value={signPassphrase}
-                  onChange={(event) => setSignPassphrase(event.target.value)}
-                  autoComplete="off"
-                  className="w-full rounded-md border px-3 py-2 text-sm"
-                  style={inputStyle}
-                />
-              </Field>
-              <Field label="Archivo a firmar">
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Clave firmante">
+                  <select
+                    value={signFingerprint}
+                    onChange={(event) => { setSignFingerprint(event.target.value); setPublicArmor(null); }}
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    style={inputStyle}
+                  >
+                    {keys.map((key) => (
+                      <option key={key.fingerprint} value={key.fingerprint}>
+                        {key.userId || key.name} ({key.algorithm})
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Passphrase (solo si la clave la tiene)">
+                  <input
+                    type="password"
+                    value={signPassphrase}
+                    onChange={(event) => setSignPassphrase(event.target.value)}
+                    autoComplete="off"
+                    className="w-full rounded-md border px-3 py-2 text-sm"
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Archivo a firmar">
+                  <button
+                    type="button"
+                    onClick={() => void pickAndSign()}
+                    className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                    style={inputStyle}
+                  >
+                    <FolderOpen size={14} aria-hidden />
+                    <span className="truncate">{signPath || 'Elegir archivo…'}</span>
+                  </button>
+                </Field>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => void pickAndSign()}
-                  className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                  onClick={() => void runSign()}
+                  disabled={!signFingerprint || !signPath || signing}
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40"
+                  style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+                >
+                  <PenLine size={14} aria-hidden />
+                  {signing ? 'Firmando…' : 'Firmar archivo'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportPublicKey()}
+                  disabled={!signFingerprint || exporting}
+                  className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40"
                   style={inputStyle}
                 >
-                  <FolderOpen size={14} aria-hidden />
-                  <span className="truncate">{signPath || 'Elegir archivo…'}</span>
+                  <RefreshCw size={14} aria-hidden className={exporting ? 'animate-spin' : undefined} />
+                  {exporting ? 'Exportando…' : 'Exportar clave pública'}
                 </button>
-              </Field>
-            </div>
-          )}
+                <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                  Firma detached armoured (.sig) junto al original.
+                </span>
+              </div>
 
-          {keys.length > 0 && (
-            <div className="mt-4 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => void runSign()}
-                disabled={!signFingerprint || !signPath || signing}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40"
-                style={{ background: 'var(--pcs-accent)', color: '#fff' }}
-              >
-                <PenLine size={14} aria-hidden />
-                {signing ? 'Firmando…' : 'Firmar archivo'}
-              </button>
-              <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                Firma detached ASCII-armoured (.sig) junto al archivo original.
-              </span>
-            </div>
+              {publicArmor && (
+                <div className="mt-4">
+                  <p className="mb-1 text-sm font-medium">
+                    Tu clave pública — compártela; quien la importe podrá verificar tus firmas
+                  </p>
+                  <textarea
+                    readOnly
+                    value={publicArmor}
+                    rows={10}
+                    className="w-full rounded-md border p-3 font-mono text-xs"
+                    style={inputStyle}
+                    onFocus={(event) => event.target.select()}
+                  />
+                  <p className="mt-1 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                    Es un bloque de solo lectura: pulsa dentro, Ctrl+A y Ctrl+C para copiarlo.
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           {signResult && (
