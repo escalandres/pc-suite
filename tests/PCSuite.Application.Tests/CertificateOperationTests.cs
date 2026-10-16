@@ -61,6 +61,31 @@ public sealed class CertificateOperationTests
         Assert.DoesNotContain("   at ", response.Error.Message);
     }
 
+    [Fact]
+    public async Task CsrGenerate_ReturnsDto_CamelCase_AndNoElevation()
+    {
+        using var fx = CertificateFixture.Create();
+
+        var response = await Send(
+            fx.Router,
+            "r1",
+            OperationIds.CertCsrGenerate,
+            JsonSerializer.Serialize(new
+            {
+                commonName = "bridge.csr.local",
+                algorithm = "rsa2048",
+                subjectAltNames = new[] { "bridge.csr.local" },
+            }));
+
+        Assert.True(response.Success);
+        var data = response.Result!.Value;
+        Assert.Contains(
+            "-----BEGIN CERTIFICATE REQUEST-----",
+            data.GetProperty("csrPem").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(data.GetProperty("privateKeyPath").GetString()));
+        Assert.False(new CertCsrGenerateOperation(fx.Service).RequiresElevation);
+    }
+
     // ------------------------------------------------------------------
     // Payload estructurado: no-objeto → error controlado
     // ------------------------------------------------------------------

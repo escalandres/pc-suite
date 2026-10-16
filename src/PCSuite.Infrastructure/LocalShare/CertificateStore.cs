@@ -94,9 +94,11 @@ public sealed class CertificateStore
         // El cert que devuelve CreateSelfSigned lleva la clave efímera del
         // RSA.Create: SChannel la rechaza. El PFX en disco se protege con
         // la ACL del directorio de datos del usuario (%LOCALAPPDATA%).
-        return new X509Certificate2(
+        // X509CertificateLoader (SYSLIB0057): el ctor de X509Certificate2
+        // está obsoleto desde .NET 9.
+        return X509CertificateLoader.LoadPkcs12(
             cert.Export(X509ContentType.Pfx),
-            (string?)null,
+            null,
             KeyStorageFlags);
     }
 }

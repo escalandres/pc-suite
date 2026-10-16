@@ -115,6 +115,7 @@ export const OperationIds = {
   certInspect: 'cert.inspect',
   certConvert: 'cert.convert',
   certPgpSignFile: 'cert.pgp.signFile',
+  certCsrGenerate: 'cert.csr.generate',
   pgpListKeys: 'pgp.listKeys',
 } as const;
 
@@ -401,6 +402,11 @@ export interface AppUpdateCheckResult {
   releaseNotesUrl?: string | null;
   /** Mensaje humano si el check fallÃ³; null si todo fue bien. */
   error?: string | null;
+  /**
+   * Aviso TOFU (Task 17.6): la clave de firma del manifiesto CAMBIÓ desde la
+   * primera verificación. La UI DEBE mostrarlo prominentemente; null = normal.
+   */
+  keyRotationWarning?: string | null;
 }
 
 /** Resultado de update.download: el job queda corriendo (job.event). */
@@ -451,6 +457,16 @@ export interface CertificateConvertResult {
 export interface PgpSignFileResult {
   signaturePath: string;
   fingerprint: string;
+}
+
+/** Resultado de cert.csr.generate: CSR PKCS#10 + clave privada en archivo. */
+export interface CsrGenerateResult {
+  /** CSR en PEM (-----BEGIN CERTIFICATE REQUEST-----) listo para la CA. */
+  csrPem: string;
+  /** Ruta del archivo con la clave privada generada. */
+  privateKeyPath: string;
+  /** Ruta del archivo .pem con el CSR guardado en disco. */
+  csrPath?: string | null;
 }
 
 /** Entrada de pgp.listKeys: claves del keyring propio (%APPDATA%\PCSuite\pgp). */

@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -205,6 +206,28 @@ export function UpdatePanel() {
         >
           {notice.text}
         </p>
+      )}
+
+      {check?.keyRotationWarning && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-md border px-3 py-2.5 text-xs"
+          style={{
+            borderColor: 'color-mix(in srgb, var(--pcs-warning) 55%, transparent)',
+            background: 'color-mix(in srgb, var(--pcs-warning) 10%, transparent)',
+            color: 'var(--pcs-warning)',
+          }}
+        >
+          <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Clave de firma cambiada</p>
+            <p className="mt-0.5" style={{ color: 'var(--pcs-text-muted)' }}>
+              {check.keyRotationWarning} La descarga queda bloqueada hasta que
+              verifiques el fingerprint en{' '}
+              <span className="font-mono">aes-studio.dev</span>.
+            </p>
+          </div>
+        </div>
       )}
 
       {check && !available && !check.error && (

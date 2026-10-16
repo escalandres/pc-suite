@@ -17,9 +17,12 @@
   </ItemGroup>
 
   <!-- El parser de tablas winget, el validador de argumentos y los códigos de
-       salida son internos: se exponen a los tests sin hacerlos públicos. -->
+       salida son internos: se exponen a los tests sin hacerlos públicos.
+       SignRelease (Task 19.6) usa el ctor interno de ManifestSignatureVerifier
+       para su modo de verificación sin tocar el TOFU del usuario. -->
   <ItemGroup>
     <InternalsVisibleTo Include="PCSuite.Application.Tests" />
+    <InternalsVisibleTo Include="SignRelease" />
   </ItemGroup>
 
   <PropertyGroup>

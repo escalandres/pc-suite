@@ -313,4 +313,7 @@ public static class OperationIds
 
     /// <summary>Firma un archivo con una clave PGP privada del keyring (Task 19.2 / 17.6).</summary>
     public const string CertPgpSignFile = "cert.pgp.signFile";
+
+    /// <summary>Genera un CSR PKCS#10 + clave privada (Task 19.5).</summary>
+    public const string CertCsrGenerate = "cert.csr.generate";
 }

@@ -82,6 +82,30 @@ public sealed class PgpSignFilePayload
     public string? Passphrase { get; init; }
 }
 
+/// <summary>Resultado de cert.csr.generate (Task 19.5).</summary>
+public sealed class CsrGenerateResultDto
+{
+    /// <summary>CSR en PEM (-----BEGIN CERTIFICATE REQUEST-----).</summary>
+    public string CsrPem { get; init; } = "";
+
+    /// <summary>Ruta del archivo con la clave privada generada (CSR + clave se guardan por separado).</summary>
+    public string PrivateKeyPath { get; init; } = "";
+
+    /// <summary>Ruta del archivo .pem con el CSR (listo para enviar a la CA).</summary>
+    public string CsrPath { get; init; } = "";
+}
+
+/// <summary>Payload de cert.csr.generate.</summary>
+public sealed class CsrGeneratePayload
+{
+    public string CommonName { get; init; } = "";
+    public string? Organization { get; init; }
+    public string? Country { get; init; }
+    /// <summary>rsa2048 | rsa4096 | ecdsa-p256 | ecdsa-p384 | ed25519.</summary>
+    public string Algorithm { get; init; } = "rsa2048";
+    public IReadOnlyList<string>? SubjectAltNames { get; init; }
+}
+
 // =====================================================================
 // Operaciones del bridge
 // =====================================================================
@@ -207,6 +231,60 @@ public sealed class CertConvertOperation(ICertificateService service) : IOperati
         {
             return OperationResult.Fail("convert_failed", ex.Message);
         }
+    }
+}
+
+/// <summary>cert.csr.generate — CSR PKCS#10 con SANs en extensionRequest (Task 19.5).</summary>
+public sealed class CertCsrGenerateOperation(ICertificateService service) : IOperation
+{
+    public string Id => OperationIds.CertCsrGenerate;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        if (!ToolMapper.TryParsePayload(context.Payload, out CsrGeneratePayload payload)
+            || payload is null || string.IsNullOrEmpty(payload.CommonName))
+        {
+            return OperationResult.Fail("error",
+                "El payload debe ser { commonName, algorithm?, organization?, country?, subjectAltNames? }.");
+        }
+
+        try
+        {
+            var result = await service.GenerateCsrAsync(new CsrGenerateRequest
+            {
+                CommonName = payload.CommonName,
+                Organization = payload.Organization,
+                Country = payload.Country,
+                Algorithm = payload.Algorithm,
+                SubjectAltNames = payload.SubjectAltNames,
+            }, ct).ConfigureAwait(false);
+
+            return OperationResult.Ok(BridgeJson.ToJson(new CsrGenerateResultDto
+            {
+                CsrPem = result.CsrPem,
+                PrivateKeyPath = result.PrivateKeyPath,
+                CsrPath = InferCsrPath(result),
+            }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return OperationResult.Fail("csr_failed", ex.Message);
+        }
+    }
+
+    /// <summary>La clave privada y el CSR se guardan con el mismo timestamp.</summary>
+    private static string InferCsrPath(CsrGenerateResult result)
+    {
+        var keyName = Path.GetFileName(result.PrivateKeyPath);
+        if (keyName.StartsWith("csr-private-key-", StringComparison.Ordinal))
+        {
+            var timestamp = keyName["csr-private-key-".Length..].Replace(".pem", "");
+            return Path.Combine(
+                Path.GetDirectoryName(result.PrivateKeyPath) ?? "",
+                $"csr-{timestamp}.pem");
+        }
+        return "";
     }
 }
 

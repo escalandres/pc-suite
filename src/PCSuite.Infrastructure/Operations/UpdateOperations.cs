@@ -21,6 +21,13 @@ public sealed class UpdateCheckResultDto
 
     /// <summary>Null si todo fue bien; mensaje humano si falló (sin dramatismo).</summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// Aviso TOFU (Task 17.6): la clave de firma del manifiesto CAMBIÓ desde
+    /// la primera verificación. La UI debe mostrarlo prominentemente antes
+    /// de dejar instalar; null = sin rotación.
+    /// </summary>
+    public string? KeyRotationWarning { get; init; }
 }
 
 /// <summary>Resultado de update.download: el job queda corriendo (job.event).</summary>
@@ -63,6 +70,7 @@ public sealed class UpdateCheckOperation(IPcsuiteUpdateService service) : IOpera
             SizeBytes = check.SizeBytes,
             ReleaseNotesUrl = check.ReleaseNotesUrl,
             Error = check.Error,
+            KeyRotationWarning = check.KeyRotationWarning,
         };
         return OperationResult.Ok(BridgeJson.ToJson(dto));
     }

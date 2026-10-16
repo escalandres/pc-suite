@@ -2,13 +2,16 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Operators;
 using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto.Utilities;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.OpenSsl;
+using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509;
 using PCSuite.Core.Certificates;
@@ -85,6 +88,15 @@ public sealed class CertificateService : ICertificateService
         var keyPath = Path.Combine(_outputDir, $"private-key-{timestamp}.pem");
         File.WriteAllText(keyPath, keyPem);
 
+        // Export PFX opcional (PKCS#12): para importar en el almacén de
+        // certificados de Windows. La password solo se usa en memoria.
+        string? pfxPath = null;
+        if (!string.IsNullOrEmpty(request.PfxPassword))
+        {
+            pfxPath = Path.Combine(_outputDir, $"certificate-{timestamp}.pfx");
+            WritePfx(pfxPath, request.PfxPassword, keyPair.Private, certificate);
+        }
+
         var fingerprint = Convert.ToHexStringLower(
             SHA256.HashData(certificate.GetEncoded()));
 
@@ -92,7 +104,7 @@ public sealed class CertificateService : ICertificateService
         {
             CertificatePem = certPem,
             PrivateKeyPath = keyPath,
-            PfxPath = null,
+            PfxPath = pfxPath,
             Fingerprint = fingerprint,
             SerialNumber = certificate.SerialNumber.ToString(16),
             Subject = certificate.SubjectDN.ToString(),
@@ -205,7 +217,10 @@ public sealed class CertificateService : ICertificateService
     }
 
     // ==================================================================
-    // 19.4 — Conversión de formatos (PEM↔DER)
+    // 19.4 — Conversión de formatos
+    //
+    // PEM↔DER (certificado), PEM→PFX y PFX→PEM (bundle con clave+cert),
+    // OpenSSH→PEM (clave privada openssh-key-v1 → PKCS#8).
     // ==================================================================
 
     public Task<CertificateConvertResult> ConvertAsync(
@@ -242,10 +257,47 @@ public sealed class CertificateService : ICertificateService
                 File.WriteAllText(outputPath, PemEncode(cert));
                 break;
             }
+            case ("pem", "pfx"):
+            {
+                if (string.IsNullOrEmpty(request.OutputPassword))
+                {
+                    throw new InvalidOperationException(
+                        "PFX requiere password de exportación (OutputPassword).");
+                }
+                // El PEM de entrada debe ser un bundle con clave + certificado
+                // (formato fullchain típico de nginx/openssl).
+                var (cert, key) = ParsePemBundle(File.ReadAllText(request.InputPath));
+                outputPath = Path.Combine(_outputDir, $"{baseName}-{timestamp}.pfx");
+                WritePfx(outputPath, request.OutputPassword, key, cert);
+                break;
+            }
+            case ("pfx", "pem"):
+            {
+                var (cert, key) = ReadPfx(
+                    request.InputPath, request.InputPassword ?? string.Empty);
+                // Un solo archivo: clave privada (PKCS#8) + certificado.
+                outputPath = Path.Combine(_outputDir, $"{baseName}-{timestamp}.pem");
+                File.WriteAllText(outputPath, PemEncode(key) + PemEncode(cert));
+                break;
+            }
+            case ("openssh", "pem"):
+            {
+                // Clave privada openssh-key-v1 (sin cifrar) → PKCS#8 PEM,
+                // usable con OpenSSL/ssh-keygen -p y en cualquier servidor.
+                var key = ParseOpenSshPrivateKey(File.ReadAllText(request.InputPath));
+                outputPath = Path.Combine(_outputDir, $"{baseName}-{timestamp}.pem");
+                File.WriteAllText(outputPath, PemEncode(key));
+                break;
+            }
             default:
                 throw new InvalidOperationException(
-                    $"Conversión {request.InputFormat}→{request.OutputFormat} no soportada aún.");
+                    $"Conversión {request.InputFormat}→{request.OutputFormat} no soportada. " +
+                    "Soportadas: pem↔der, pem→pfx, pfx→pem, openssh→pem.");
         }
+
+        _logger?.LogInformation(
+            "Convertido {Input} ({From}) → {Output} ({To})",
+            request.InputPath, request.InputFormat, outputPath, request.OutputFormat);
 
         return Task.FromResult(new CertificateConvertResult
         {
@@ -255,17 +307,59 @@ public sealed class CertificateService : ICertificateService
     }
 
     // ==================================================================
-    // 19.5 — CSR (PKCS#10) — TODO: BouncyCastle 2.x cambió la API de
-    // Pkcs10; implementar en la próxima iteración cuando se explore la
-    // superficie disponible. El resto del servicio está listo.
+    // 19.5 — CSR (PKCS#10): el usuario genera clave + CSR, la CA firma y
+    // vuelve a importar. Todo BouncyCastle en proceso. Los SANs viajan en
+    // el atributo estándar extensionRequest (1.2.840.113549.1.9.14) —
+    // hoy las CA (Let's Encrypt incluida) SOLO honran los SANs, nunca el CN.
     // ==================================================================
 
     public Task<CsrGenerateResult> GenerateCsrAsync(
         CsrGenerateRequest request, CancellationToken ct = default)
     {
-        throw new InvalidOperationException(
-            "Generación de CSR en desarrollo — disponible en la próxima iteración. " +
-            "Usa 'openssl req -new -key key.pem -out csr.pem' mientras tanto.");
+        var (keyPair, signatureAlgorithm) = GenerateKeyPair(request.Algorithm);
+        var subject = BuildX509Name(
+            request.CommonName, request.Organization, organizationalUnit: null, request.Country);
+
+        // SANs opcionales como extensionRequest (SET OF Attribute estándar).
+        Asn1Set? attributes = null;
+        if (request.SubjectAltNames is { Count: > 0 } sans)
+        {
+            var extensions = new X509Extensions(
+                oids: new List<DerObjectIdentifier> { X509Extensions.SubjectAlternativeName },
+                values: new List<X509Extension>
+                {
+                    new(false, new DerOctetString(BuildSans(sans).GetEncoded())),
+                });
+            attributes = new DerSet(
+                new DerSequence(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
+        }
+
+        var csr = new Pkcs10CertificationRequest(
+            signatureAlgorithm, subject, keyPair.Public, attributes, keyPair.Private);
+
+        if (!csr.Verify())
+        {
+            throw new InvalidOperationException(
+                "El CSR generado no verifica contra su propia clave: abortando.");
+        }
+
+        Directory.CreateDirectory(_outputDir);
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+        var csrPem = PemEncode(csr);
+        var csrPath = Path.Combine(_outputDir, $"csr-{timestamp}.pem");
+        File.WriteAllText(csrPath, csrPem);
+
+        var keyPem = PemEncode(keyPair.Private);
+        var keyPath = Path.Combine(_outputDir, $"csr-private-key-{timestamp}.pem");
+        File.WriteAllText(keyPath, keyPem);
+
+        _logger?.LogInformation("CSR generado: {CsrPath} ({Algorithm})", csrPath, request.Algorithm);
+
+        return Task.FromResult(new CsrGenerateResult
+        {
+            CsrPem = csrPem,
+            PrivateKeyPath = keyPath,
+        });
     }
 
     // ==================================================================
@@ -394,6 +488,176 @@ public sealed class CertificateService : ICertificateService
         throw new InvalidOperationException("El PEM no contiene un certificado X.509.");
     }
 
+    /// <summary>
+    /// Lee un bundle PEM (clave + certificado en el mismo archivo, estilo
+    /// fullchain de nginx) y devuelve el primer certificado y la primera
+    /// clave privada que encuentre.
+    /// </summary>
+    private static (Org.BouncyCastle.X509.X509Certificate Cert, AsymmetricKeyParameter Key)
+        ParsePemBundle(string pem)
+    {
+        Org.BouncyCastle.X509.X509Certificate? cert = null;
+        AsymmetricKeyParameter? key = null;
+
+        using var reader = new StringReader(pem);
+        var pemReader = new PemReader(reader);
+        object? obj;
+        while ((obj = pemReader.ReadObject()) is not null)
+        {
+            switch (obj)
+            {
+                case Org.BouncyCastle.X509.X509Certificate c when cert is null:
+                    cert = c;
+                    break;
+                case AsymmetricCipherKeyPair pair when key is null:
+                    key = pair.Private;
+                    break;
+                case AsymmetricKeyParameter k when k.IsPrivate && key is null:
+                    key = k;
+                    break;
+            }
+        }
+
+        if (cert is null || key is null)
+        {
+            throw new InvalidOperationException(
+                "El PEM debe contener AMBOS: certificado X.509 y clave privada " +
+                "(bundle estilo fullchain).");
+        }
+        return (cert, key);
+    }
+
+    /// <summary>Escribe un PKCS#12 con clave + certificado (BC 2.x: builder).</summary>
+    private static void WritePfx(
+        string path, string password, AsymmetricKeyParameter key, Org.BouncyCastle.X509.X509Certificate cert)
+    {
+        var store = new Pkcs12StoreBuilder().Build();
+        store.SetKeyEntry(
+            "pcsuite",
+            new AsymmetricKeyEntry(key),
+            [new X509CertificateEntry(cert)]);
+        using var stream = File.Create(path);
+        store.Save(stream, password.ToCharArray(), new SecureRandom());
+    }
+
+    /// <summary>Lee un PKCS#12 y devuelve la clave privada + certificado.</summary>
+    private static (Org.BouncyCastle.X509.X509Certificate Cert, AsymmetricKeyParameter Key)
+        ReadPfx(string path, string password)
+    {
+        var store = new Pkcs12StoreBuilder().Build();
+        using (var stream = File.OpenRead(path))
+        {
+            try
+            {
+                store.Load(stream, password.ToCharArray());
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "No se pudo abrir el PFX: password incorrecta o archivo inválido.", ex);
+            }
+        }
+
+        foreach (var alias in store.Aliases)
+        {
+            if (!store.IsKeyEntry(alias))
+            {
+                continue;
+            }
+            var key = store.GetKey(alias).Key;
+            Org.BouncyCastle.X509.X509Certificate? cert = null;
+            var chain = store.GetCertificateChain(alias);
+            if (chain is { Length: > 0 })
+            {
+                cert = chain[0].Certificate;
+            }
+            else if (store.GetCertificate(alias) is { } entry)
+            {
+                cert = entry.Certificate;
+            }
+            if (cert is not null)
+            {
+                return (cert, key);
+            }
+        }
+
+        throw new InvalidOperationException("El PFX no contiene ninguna entrada con clave + certificado.");
+    }
+
+    /// <summary>
+    /// Parsea una clave privada OpenSSH (openssh-key-v1, SIN cifrar) desde
+    /// su armor PEM. Las claves cifradas con passphrase se rechazan con
+    /// mensaje controlado — descifrado bcrypt en próxima iteración.
+    /// </summary>
+    private static AsymmetricKeyParameter ParseOpenSshPrivateKey(string content)
+    {
+        var base64 = ExtractArmorBody(
+            content, "-----BEGIN OPENSSH PRIVATE KEY-----", "-----END OPENSSH PRIVATE KEY-----");
+        if (base64.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "El archivo no contiene un bloque OPENSSH PRIVATE KEY.");
+        }
+
+        byte[] blob;
+        try
+        {
+            blob = Convert.FromBase64String(base64);
+        }
+        catch (FormatException)
+        {
+            throw new InvalidOperationException("El cuerpo OpenSSH no es base64 válido.");
+        }
+
+        try
+        {
+            var key = OpenSshPrivateKeyUtilities.ParsePrivateKeyBlob(blob);
+            if (!key.IsPrivate)
+            {
+                throw new InvalidOperationException("El blob OpenSSH no contiene una clave privada.");
+            }
+            return key;
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                "Clave OpenSSH ilegible o CIFRADA con passphrase (aún no soportada).", ex);
+        }
+    }
+
+    /// <summary>Extrae y concatena el cuerpo base64 entre dos marcadores armor.</summary>
+    private static string ExtractArmorBody(string content, string begin, string end)
+    {
+        var sb = new StringBuilder();
+        var inBody = false;
+        foreach (var rawLine in content.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+            if (line.StartsWith(begin, StringComparison.Ordinal))
+            {
+                inBody = true;
+                continue;
+            }
+            if (line.StartsWith(end, StringComparison.Ordinal))
+            {
+                break;
+            }
+            if (inBody && !line.StartsWith(':'))
+            {
+                sb.Append(line);
+            }
+        }
+        return sb.ToString();
+    }
+
     // ------------------------------------------------------------------
     // Inspectores
     // ------------------------------------------------------------------
@@ -470,19 +734,46 @@ public sealed class CertificateService : ICertificateService
         using var reader = new StringReader(pem);
         var pemReader = new PemReader(reader);
         var obj = pemReader.ReadObject();
-        var subject = "desconocido";
-        if (obj is Org.BouncyCastle.Asn1.Pkcs.CertificationRequest csr)
+        if (obj is not Pkcs10CertificationRequest csr)
         {
-            subject = csr.GetCertificationRequestInfo().Subject.ToString();
+            throw new InvalidOperationException("El PEM no contiene un CSR.");
         }
+
+        var details = new Dictionary<string, string>
+        {
+            ["Subject"] = csr.GetCertificationRequestInfo().Subject.ToString(),
+        };
+
+        // SANs pedidos (extensionRequest) — lo único que las CA honran hoy.
+        try
+        {
+            var requested = csr.GetRequestedExtensions();
+            var san = requested?.GetExtension(X509Extensions.SubjectAlternativeName);
+            if (san is not null)
+            {
+                var generalNames = GeneralNames.GetInstance(san.GetParsedValue());
+                var labels = generalNames.GetNames()
+                    .Select(DescribeSan)
+                    .Where(label => !string.IsNullOrEmpty(label))
+                    .ToList();
+                if (labels.Count > 0)
+                {
+                    details["SANs"] = string.Join(", ", labels);
+                }
+            }
+        }
+        catch
+        {
+            // sin extensionRequest o ilegible: la inspección sigue
+        }
+
+        details["Signature valid"] = csr.Verify().ToString();
+
         return new CertificateInspectResult
         {
             Kind = CertificateContentKind.X509Csr,
             KindDescription = "Certificate Signing Request (PKCS#10)",
-            Details = new Dictionary<string, string>
-            {
-                ["Subject"] = subject,
-            },
+            Details = details,
         };
     }
 

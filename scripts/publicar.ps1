@@ -21,8 +21,9 @@ param(
     [string]$Version = "",
     [string]$ReleaseRepo = "escalandres/pc-suite",
     [string]$TagPrefix = "pcsuite-v",
-    [string]$GpgKey = "releases@aes-studio.dev",  # Clave de firma PGP
-    [switch]$SkipSign  # Omitir firma PGP (para testing)
+    [string]$GpgKey = "releases@aes-studio.dev",  # Email/fingerprint de la clave de firma
+    [switch]$SkipSign,  # Omitir firma PGP (para testing)
+    [switch]$UseGpg  # Legacy: firmar con gpg CLI en vez de SignRelease (Task 19.6)
 )
 
 $ErrorActionPreference = "Stop"
@@ -131,8 +132,34 @@ $html
     Write-Host "  ✓ Notas HTML generadas: $outFile"
 }
 
+function Get-SigningFingerprint {
+    param([string]$GpgKey, [switch]$UseGpg)
+
+    # Fingerprint de la clave de firma SIN firmar nada (Task 19.6): se
+    # inyecta en latest.json antes de que la firma cubra el contenido final.
+    if (-not $UseGpg) {
+        $signTool = Join-Path $PSScriptRoot "..\src\Tools\SignRelease\SignRelease.csproj"
+        $result = & dotnet run --project $signTool -- --fingerprint-only --email $GpgKey 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  ⚠ SignRelease no pudo leer el fingerprint: $result"
+            return $null
+        }
+        # Última línea del output = fingerprint formateado (AB12 CD34 ...).
+        return @($result | Where-Object { $_ -match '^([0-9A-F]{4} )+[0-9A-F]{4}$' })[-1]
+    }
+
+    $fprResult = & gpg --batch --yes --fingerprint --with-colons $GpgKey 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $fprMatch = [regex]::Match($fprResult, 'fpr::::::::([0-9A-F]{40}):')
+        if ($fprMatch.Success) {
+            return (($fprMatch.Groups[1].Value) -split '(....)' | Where-Object { $_ }) -join ' '
+        }
+    }
+    return $null
+}
+
 function Sign-Manifest {
-    param([string]$ManifestPath, [string]$GpgKey, [switch]$Skip)
+    param([string]$ManifestPath, [string]$GpgKey, [switch]$Skip, [switch]$UseGpg)
 
     if ($Skip) {
         Write-Host "  ⚠ Firma PGP omitida (flag -SkipSign)."
@@ -142,6 +169,38 @@ function Sign-Manifest {
     $sigPath = "$ManifestPath.sig"
     $pubPath = "$ManifestPath.pub"
 
+    # Ruta por defecto (Task 19.6): SignRelease — el MISMO stack que la app
+    # (PgpService/BouncyCastle en proceso), sin gpg CLI. La clave de
+    # releases@aes-studio.dev vive en el keyring local (%APPDATA%\PCSuite\pgp);
+    # su mitad pública es la embebida en el updater (ManifestSigningKey.asc),
+    # así que la firma generada aquí es la que el updater acepta.
+    if (-not $UseGpg) {
+        Write-Host "  Firmando manifiesto con SignRelease (PgpService, sin gpg)..."
+        $signTool = Join-Path $PSScriptRoot "..\src\Tools\SignRelease\SignRelease.csproj"
+        $signResult = & dotnet run --project $signTool -- $ManifestPath --email $GpgKey 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Error firmando con SignRelease: $signResult (gpg legacy: -UseGpg)"
+        }
+        if (Test-Path $sigPath) { Write-Host "  ✓ Firma generada: $sigPath" }
+        if (Test-Path $pubPath) { Write-Host "  ✓ Clave pública exportada: $pubPath" }
+
+        # Sanity check ANTES de publicar: la firma debe verificar contra la
+        # clave EMBEBIDA del updater — si falla, el release se detiene aquí
+        # en vez de producir un latest.json que ningún updater aceptaría.
+        $verifyResult = & dotnet run --project $signTool -- $ManifestPath --verify 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "La firma NO verifica contra la clave embebida: $verifyResult"
+        }
+        Write-Host "  ✓ Firma verificada contra la clave embebida del updater"
+
+        $fprFormatted = @($signResult |
+            Select-String 'signingKeyFingerprint \(JSON\): (.+)$').
+            Matches.Groups[1].Value
+        if ($fprFormatted) { Write-Host "  ✓ Fingerprint: $fprFormatted" }
+        return $fprFormatted
+    }
+
+    # Legacy: gpg CLI (requiere la clave privada importada en el keyring de gpg).
     Write-Host "  Firmando manifiesto con GPG (clave: $GpgKey)..."
 
     # Firmar detached (armored)
@@ -289,11 +348,15 @@ Convert-MarkdownToHtml -MarkdownPath $notesMd -Version $Version -RelDate $relDat
 
 # ---------- 4. Firmar manifiesto con PGP (Task 17.6) ----------
 Write-Host ""
-Write-Host "[4/4] Firmando manifiesto PGP..."
+Write-Host "[4/5] Inyectando signingKeyFingerprint en el manifiesto..."
 $manifestPath = Join-Path (Get-Location) "site\pcsuite\latest.json"
-$fingerprint = Sign-Manifest -ManifestPath $manifestPath -GpgKey $GpgKey -SkipSign:$SkipSign
 
-# Si hay fingerprint, actualizar latest.json con signingKeyFingerprint
+# CRÍTICO: el fingerprint se inyecta ANTES de firmar. La firma PGP cubre el
+# contenido EXACTO del latest.json desplegado — si el JSON mutara después de
+# firmarse, todos los updaters instalados la rechazarían ("manifiesto
+# alterado") y las actualizaciones no aparecerían nunca.
+$fingerprint = Get-SigningFingerprint -GpgKey $GpgKey -UseGpg:$UseGpg
+
 if ($fingerprint) {
     $jsonWithFpr = $json -replace '"artifacts":', '"signingKeyFingerprint": "' + $fingerprint + '",`n  "artifacts":'
     [IO.File]::WriteAllText(
@@ -306,7 +369,12 @@ if ($fingerprint) {
         $jsonWithFpr,
         [Text.UTF8Encoding]::new($false))
     Write-Host "  ✓ latest.json actualizado con signingKeyFingerprint"
+} else {
+    Write-Host "  ⚠ Sin fingerprint: el manifiesto llevará el campo de la clave embebida vacío."
 }
+
+Write-Host "[5/5] Firmando manifiesto PGP (sobre el contenido FINAL)..."
+$null = Sign-Manifest -ManifestPath $manifestPath -GpgKey $GpgKey -SkipSign:$SkipSign -UseGpg:$UseGpg
 
 # Copiar .sig y .pub al directorio archive también
 $sigSrc = "$manifestPath.sig"

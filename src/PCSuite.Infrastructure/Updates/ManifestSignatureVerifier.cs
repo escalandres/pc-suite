@@ -40,11 +40,12 @@ public sealed class ManifestSignatureVerifier
     }
 
     /// <summary>
-    /// Constructor interno para tests: clave pública armoured y carpeta del
-    /// fingerprint TOFU explícitas — los tests jamás tocan el %LOCALAPPDATA%
-    /// real ni la clave de producción.
+    /// Constructor interno para tests y tools: clave pública armoured
+    /// (null = la embebida de producción) y ruta del fingerprint TOFU
+    /// explícitas — jamás se toca el %LOCALAPPDATA% real ni la clave de
+    /// producción cuando no se quiere.
     /// </summary>
-    internal ManifestSignatureVerifier(string publicKeyArmored, string fingerprintFilePath)
+    internal ManifestSignatureVerifier(string? publicKeyArmored, string fingerprintFilePath)
     {
         _publicKeyArmored = publicKeyArmored;
         _fingerprintPath = fingerprintFilePath;

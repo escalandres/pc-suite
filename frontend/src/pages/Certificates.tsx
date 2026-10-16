@@ -11,6 +11,7 @@ import { OperationIds } from '../types/bridge';
 import type {
   CertificateConvertResult,
   CertificateInspectResult,
+  CsrGenerateResult,
   PgpKeyItem,
   PgpListKeysResult,
   PgpSignFileResult,
@@ -32,7 +33,7 @@ const READ_TIMEOUT = 30_000;
 const X509_TIMEOUT = 120_000; // RSA 4096 tarda unos segundos en generar
 const PICK_TIMEOUT = 10 * 60_000; // el diálogo nativo puede estar abierto minutos
 
-type Tab = 'x509' | 'inspect' | 'convert' | 'sign';
+type Tab = 'x509' | 'csr' | 'inspect' | 'convert' | 'sign';
 
 interface Notice {
   kind: 'success' | 'error';
@@ -119,6 +120,47 @@ export function Certificates() {
     }
   };
 
+  // ------------------- CSR (Task 19.5) -------------------
+  const [csrAlgorithm, setCsrAlgorithm] = useState('rsa2048');
+  const [csrCommonName, setCsrCommonName] = useState('');
+  const [csrOrganization, setCsrOrganization] = useState('');
+  const [csrCountry, setCsrCountry] = useState('');
+  const [csrSans, setCsrSans] = useState('');
+  const [csrBusy, setCsrBusy] = useState(false);
+  const [lastCsr, setLastCsr] = useState<CsrGenerateResult | null>(null);
+
+  const generateCsr = async () => {
+    if (!csrCommonName.trim() || csrBusy) return;
+    setCsrBusy(true);
+    setNotice(null);
+    try {
+      const sanList = csrSans
+        .split(',')
+        .map((san) => san.trim())
+        .filter((san) => san.length > 0);
+      const result = await bridge.call<CsrGenerateResult>(
+        OperationIds.certCsrGenerate,
+        {
+          commonName: csrCommonName.trim(),
+          organization: csrOrganization.trim() || undefined,
+          country: csrCountry.trim() || undefined,
+          algorithm: csrAlgorithm,
+          subjectAltNames: sanList.length > 0 ? sanList : undefined,
+        },
+        X509_TIMEOUT,
+      );
+      setLastCsr(result);
+      setNotice({
+        kind: 'success',
+        text: 'CSR generado. Envíalo a tu CA; la clave privada quedó en el escritorio.',
+      });
+    } catch (error) {
+      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo generar el CSR.') });
+    } finally {
+      setCsrBusy(false);
+    }
+  };
+
   // ------------------- Inspección -------------------
   const [inspectPath, setInspectPath] = useState('');
   const [inspecting, setInspecting] = useState(false);
@@ -146,9 +188,22 @@ export function Certificates() {
 
   // ------------------- Conversión -------------------
   const [convertPath, setConvertPath] = useState('');
-  const [convertDirection, setConvertDirection] = useState<'pem2der' | 'der2pem'>('pem2der');
+  const [convertDirection, setConvertDirection] = useState<string>('pem2der');
+  const [convertInputPassword, setConvertInputPassword] = useState('');
+  const [convertOutputPassword, setConvertOutputPassword] = useState('');
   const [converting, setConverting] = useState(false);
   const [convertResult, setConvertResult] = useState<CertificateConvertResult | null>(null);
+
+  /** Direcciones soportadas por cert.convert (inputFormat → outputFormat). */
+  const CONVERT_DIRECTIONS: { value: string; label: string; from: string; to: string; needsOutPassword: boolean; needsInPassword: boolean }[] = [
+    { value: 'pem2der', label: 'PEM → DER (binario)', from: 'pem', to: 'der', needsOutPassword: false, needsInPassword: false },
+    { value: 'der2pem', label: 'DER → PEM (texto)', from: 'der', to: 'pem', needsOutPassword: false, needsInPassword: false },
+    { value: 'pem2pfx', label: 'PEM (clave+cert) → PFX/PKCS#12', from: 'pem', to: 'pfx', needsOutPassword: true, needsInPassword: false },
+    { value: 'pfx2pem', label: 'PFX/PKCS#12 → PEM (clave+cert)', from: 'pfx', to: 'pem', needsOutPassword: false, needsInPassword: true },
+    { value: 'openssh2pem', label: 'Clave OpenSSH → PEM (PKCS#8)', from: 'openssh', to: 'pem', needsOutPassword: false, needsInPassword: false },
+  ];
+  const convertNeedsOutPassword = CONVERT_DIRECTIONS.find((d) => d.value === convertDirection)?.needsOutPassword ?? false;
+  const convertNeedsInPassword = CONVERT_DIRECTIONS.find((d) => d.value === convertDirection)?.needsInPassword ?? false;
 
   const pickAndConvert = async () => {
     setNotice(null);
@@ -168,12 +223,16 @@ export function Certificates() {
     setConverting(true);
     setNotice(null);
     try {
+      const direction = CONVERT_DIRECTIONS.find((d) => d.value === convertDirection);
+      if (!direction) return;
       const result = await bridge.call<CertificateConvertResult>(
         OperationIds.certConvert,
         {
           inputPath: convertPath,
-          inputFormat: convertDirection === 'pem2der' ? 'pem' : 'der',
-          outputFormat: convertDirection === 'pem2der' ? 'der' : 'pem',
+          inputFormat: direction.from,
+          outputFormat: direction.to,
+          inputPassword: convertNeedsInPassword && convertInputPassword ? convertInputPassword : undefined,
+          outputPassword: convertNeedsOutPassword && convertOutputPassword ? convertOutputPassword : undefined,
         },
         READ_TIMEOUT,
       );
@@ -252,6 +311,7 @@ export function Certificates() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'x509', label: 'X.509 autofirmado' },
+    { id: 'csr', label: 'CSR (PKCS#10)' },
     { id: 'inspect', label: 'Inspeccionar' },
     { id: 'convert', label: 'Convertir' },
     { id: 'sign', label: 'Firmar con PGP' },
@@ -466,6 +526,135 @@ export function Certificates() {
         </section>
       )}
 
+      {/* ============ CSR (PKCS#10) ============ */}
+      {tab === 'csr' && (
+        <section
+          className="rounded-lg border p-4"
+          style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+        >
+          <p className="mb-4 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+            Genera la clave + el Certificate Signing Request para que una CA real
+            (Let's Encrypt, DigiCert…) lo firme. Los SANs viajan en el atributo
+            estándar <code>extensionRequest</code> — las CA de hoy SOLO honran los
+            SANs, nunca el CN.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Algoritmo">
+              <select
+                value={csrAlgorithm}
+                onChange={(event) => setCsrAlgorithm(event.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                style={inputStyle}
+              >
+                {X509_ALGORITHMS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Common Name *">
+              <input
+                type="text"
+                value={csrCommonName}
+                onChange={(event) => setCsrCommonName(event.target.value)}
+                placeholder="api.aes-studio.dev"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Organización (opcional)">
+              <input
+                type="text"
+                value={csrOrganization}
+                onChange={(event) => setCsrOrganization(event.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="País (opcional, código de 2 letras)">
+              <input
+                type="text"
+                value={csrCountry}
+                onChange={(event) => setCsrCountry(event.target.value)}
+                maxLength={2}
+                placeholder="ES"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Subject Alternative Names (separados por coma)">
+              <input
+                type="text"
+                value={csrSans}
+                onChange={(event) => setCsrSans(event.target.value)}
+                placeholder="api.aes-studio.dev, www.aes-studio.dev"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+            </Field>
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void generateCsr()}
+              disabled={!csrCommonName.trim() || csrBusy}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40"
+              style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+            >
+              <RefreshCw size={14} aria-hidden className={csrBusy ? 'animate-spin' : undefined} />
+              {csrBusy ? 'Generando…' : 'Generar CSR'}
+            </button>
+            <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+              CSR + clave privada se guardan en Desktop\PCSuite-Certificados.
+            </span>
+          </div>
+
+          {lastCsr && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">Clave privada</span>
+                  <button
+                    type="button"
+                    onClick={() => void openInExplorer(lastCsr.privateKeyPath)}
+                    className="flex items-center gap-1 text-xs"
+                    style={{ color: 'var(--pcs-accent)' }}
+                  >
+                    <FolderOpen size={12} aria-hidden />
+                    Mostrar en el Explorador
+                  </button>
+                </div>
+                <code
+                  className="block rounded-md border px-3 py-2 font-mono text-xs"
+                  style={inputStyle}
+                >
+                  {lastCsr.privateKeyPath}
+                </code>
+              </div>
+
+              <details>
+                <summary className="cursor-pointer text-sm font-medium">Ver CSR (PEM)</summary>
+                <textarea
+                  readOnly
+                  value={lastCsr.csrPem}
+                  rows={12}
+                  className="mt-2 w-full rounded-md border p-3 font-mono text-xs"
+                  style={inputStyle}
+                  onFocus={(event) => event.target.select()}
+                />
+              </details>
+              <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                Copia el bloque PEM y envíalo a tu CA. La clave privada NUNCA
+                sale de este equipo.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ============ Inspeccionar ============ */}
       {tab === 'inspect' && (
         <section
@@ -536,14 +725,15 @@ export function Certificates() {
             <Field label="Dirección">
               <select
                 value={convertDirection}
-                onChange={(event) =>
-                  setConvertDirection(event.target.value as 'pem2der' | 'der2pem')
-                }
+                onChange={(event) => setConvertDirection(event.target.value)}
                 className="w-full rounded-md border px-3 py-2 text-sm"
                 style={inputStyle}
               >
-                <option value="pem2der">PEM → DER (binario)</option>
-                <option value="der2pem">DER → PEM (texto)</option>
+                {CONVERT_DIRECTIONS.map((direction) => (
+                  <option key={direction.value} value={direction.value}>
+                    {direction.label}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Archivo de entrada">
@@ -559,6 +749,30 @@ export function Certificates() {
                 </span>
               </button>
             </Field>
+            {convertNeedsInPassword && (
+              <Field label="Password del PFX de entrada">
+                <input
+                  type="password"
+                  value={convertInputPassword}
+                  onChange={(event) => setConvertInputPassword(event.target.value)}
+                  autoComplete="off"
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+              </Field>
+            )}
+            {convertNeedsOutPassword && (
+              <Field label="Password del PFX de salida">
+                <input
+                  type="password"
+                  value={convertOutputPassword}
+                  onChange={(event) => setConvertOutputPassword(event.target.value)}
+                  autoComplete="off"
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+              </Field>
+            )}
           </div>
 
           <div className="mt-4 flex items-center gap-3">
@@ -574,6 +788,7 @@ export function Certificates() {
             </button>
             <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
               El resultado se guarda en Desktop\PCSuite-Certificados.
+              {convertDirection === 'pem2pfx' && ' El PEM debe contener clave + certificado (bundle fullchain).'}
             </span>
           </div>
 

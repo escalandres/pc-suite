@@ -1,4 +1,12 @@
 using System.Text;
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto.Utilities;
+using Org.BouncyCastle.OpenSsl;
+using Org.BouncyCastle.Pkcs;
 using PCSuite.Core.Certificates;
 using PCSuite.Core.PGP;
 using PCSuite.Infrastructure.PGP;
@@ -96,6 +104,283 @@ public sealed class CertificateServiceTests : IDisposable
             }));
 
         Assert.Contains("no soportado", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task GenerateX509_WithPfxPassword_WritesPkcs12WithKeyAndCert()
+    {
+        var result = await _fx.Service.GenerateX509Async(new X509GenerateRequest
+        {
+            Algorithm = X509Algorithms.Rsa2048,
+            CommonName = "pfx.local",
+            PfxPassword = "s3creta",
+        });
+
+        Assert.NotNull(result.PfxPath);
+        Assert.True(File.Exists(result.PfxPath));
+
+        // El PFX reabre con la password y contiene clave + certificado
+        // (cert.convert pfx→pem usa exactamente este camino).
+        var converted = await _fx.Service.ConvertAsync(new CertificateConvertRequest
+        {
+            InputPath = result.PfxPath!,
+            InputFormat = "pfx",
+            OutputFormat = "pem",
+            InputPassword = "s3creta",
+        });
+        var output = await File.ReadAllTextAsync(converted.OutputPath);
+        Assert.Contains("PRIVATE KEY", output);
+        Assert.Contains("BEGIN CERTIFICATE", output);
+    }
+
+    // ------------------------------------------------------------------
+    // 19.5 — CSR (PKCS#10)
+    // ------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("rsa2048")]
+    [InlineData("ecdsa-p256")]
+    [InlineData("ed25519")]
+    public async Task GenerateCsr_ByAlgorithm_VerifiesAgainstOwnKey(string algorithm)
+    {
+        var result = await _fx.Service.GenerateCsrAsync(new CsrGenerateRequest
+        {
+            Algorithm = algorithm,
+            CommonName = "api.aes-studio.dev",
+        });
+
+        Assert.Contains("-----BEGIN CERTIFICATE REQUEST-----", result.CsrPem);
+        Assert.Contains("-----END CERTIFICATE REQUEST-----", result.CsrPem);
+        Assert.True(File.Exists(result.PrivateKeyPath));
+        Assert.Contains("PRIVATE KEY", await File.ReadAllTextAsync(result.PrivateKeyPath));
+
+        // El CSR verifica contra su propia clave (PemReader → Pkcs10).
+        using var reader = new StringReader(result.CsrPem);
+        var pemReader = new PemReader(reader);
+        var parsed = pemReader.ReadObject();
+        var csr = Assert.IsType<Pkcs10CertificationRequest>(parsed);
+        Assert.True(csr.Verify());
+    }
+
+    [Fact]
+    public async Task GenerateCsr_WithSans_TravelsInExtensionRequest()
+    {
+        var result = await _fx.Service.GenerateCsrAsync(new CsrGenerateRequest
+        {
+            Algorithm = X509Algorithms.Rsa2048,
+            CommonName = "api.aes-studio.dev",
+            Organization = "AES Studio",
+            Country = "ES",
+            SubjectAltNames = ["api.aes-studio.dev", "192.168.1.10", "admin@aes-studio.dev"],
+        });
+
+        using var reader = new StringReader(result.CsrPem);
+        var pemReader = new PemReader(reader);
+        var csr = Assert.IsType<Pkcs10CertificationRequest>(pemReader.ReadObject());
+
+        Assert.Contains("O=AES Studio", csr.GetCertificationRequestInfo().Subject.ToString());
+        Assert.Contains("C=ES", csr.GetCertificationRequestInfo().Subject.ToString());
+
+        // extensionRequest: las CA solo honran los SANs — deben estar presentes.
+        var requested = csr.GetRequestedExtensions();
+        Assert.NotNull(requested);
+        var san = requested.GetExtension(X509Extensions.SubjectAlternativeName);
+        Assert.NotNull(san);
+        var generalNames = GeneralNames.GetInstance(san.GetParsedValue());
+        var labels = generalNames.GetNames()
+            .Select(name => SanTestExtensions.DescribeSanForTest(name))
+            .ToList();
+        Assert.Contains("api.aes-studio.dev", labels);
+        Assert.Contains("192.168.1.10", labels);
+        Assert.Contains("admin@aes-studio.dev", labels);
+    }
+
+    [Fact]
+    public async Task GenerateCsr_ThenInspect_ReportsCsrWithSansAndValidSignature()
+    {
+        var generated = await _fx.Service.GenerateCsrAsync(new CsrGenerateRequest
+        {
+            Algorithm = X509Algorithms.EcdsaP256,
+            CommonName = "inspect.csr.local",
+            SubjectAltNames = ["inspect.csr.local"],
+        });
+        var path = Path.Combine(_fx.OutputDir, "csr-input.pem");
+        await File.WriteAllTextAsync(path, generated.CsrPem);
+
+        var inspected = await _fx.Service.InspectAsync(path, null);
+
+        Assert.Equal(CertificateContentKind.X509Csr, inspected.Kind);
+        Assert.Contains("inspect.csr.local", inspected.Details["Subject"]);
+        Assert.Contains("inspect.csr.local", inspected.Details["SANs"]);
+        Assert.Equal("True", inspected.Details["Signature valid"]);
+    }
+
+    // ------------------------------------------------------------------
+    // 19.4 — Conversiones PEM↔DER / PFX / OpenSSH
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task Convert_PemBundleToPfx_RoundTripsKeyAndCert()
+    {
+        var generated = await _fx.Service.GenerateX509Async(new X509GenerateRequest
+        {
+            Algorithm = X509Algorithms.Rsa2048,
+            CommonName = "bundle.local",
+        });
+
+        // Bundle estilo fullchain: clave + certificado en un solo PEM.
+        var bundlePath = Path.Combine(_fx.OutputDir, "bundle.pem");
+        await File.WriteAllTextAsync(
+            bundlePath,
+            await File.ReadAllTextAsync(generated.PrivateKeyPath) + generated.CertificatePem);
+
+        var toPfx = await _fx.Service.ConvertAsync(new CertificateConvertRequest
+        {
+            InputPath = bundlePath,
+            InputFormat = "pem",
+            OutputFormat = "pfx",
+            OutputPassword = "cl4ve",
+        });
+        Assert.True(File.Exists(toPfx.OutputPath));
+
+        // PFX → PEM de vuelta: clave + certificado sobreviven.
+        var back = await _fx.Service.ConvertAsync(new CertificateConvertRequest
+        {
+            InputPath = toPfx.OutputPath,
+            InputFormat = "pfx",
+            OutputFormat = "pem",
+            InputPassword = "cl4ve",
+        });
+        var output = await File.ReadAllTextAsync(back.OutputPath);
+        Assert.Contains("PRIVATE KEY", output);
+        Assert.Contains("BEGIN CERTIFICATE", output);
+    }
+
+    [Fact]
+    public async Task Convert_PemToPfx_WithoutPassword_ThrowsStaticMessage()
+    {
+        var path = Path.Combine(_fx.OutputDir, "bundle-nopass.pem");
+        await File.WriteAllTextAsync(path, "-----BEGIN PRIVATE KEY-----\n");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _fx.Service.ConvertAsync(new CertificateConvertRequest
+            {
+                InputPath = path,
+                InputFormat = "pem",
+                OutputFormat = "pfx",
+            }));
+
+        Assert.Contains("password", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Convert_PemBundleWithoutKey_ThrowsStaticMessage()
+    {
+        var generated = await _fx.Service.GenerateX509Async(new X509GenerateRequest
+        {
+            Algorithm = X509Algorithms.Rsa2048,
+            CommonName = "solo-cert.local",
+        });
+        var certOnlyPath = Path.Combine(_fx.OutputDir, "cert-only.pem");
+        await File.WriteAllTextAsync(certOnlyPath, generated.CertificatePem);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _fx.Service.ConvertAsync(new CertificateConvertRequest
+            {
+                InputPath = certOnlyPath,
+                InputFormat = "pem",
+                OutputFormat = "pfx",
+                OutputPassword = "cl4ve",
+            }));
+
+        Assert.Contains("AMBOS", exception.Message);
+    }
+
+    [Fact]
+    public async Task Convert_PfxWithWrongPassword_ThrowsStaticMessage()
+    {
+        var generated = await _fx.Service.GenerateX509Async(new X509GenerateRequest
+        {
+            Algorithm = X509Algorithms.Rsa2048,
+            CommonName = "wrong-pass.local",
+            PfxPassword = "correcta",
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _fx.Service.ConvertAsync(new CertificateConvertRequest
+            {
+                InputPath = generated.PfxPath!,
+                InputFormat = "pfx",
+                OutputFormat = "pem",
+                InputPassword = "incorrecta",
+            }));
+
+        Assert.Contains("password", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("   at ", exception.Message);
+    }
+
+    [Fact]
+    public async Task Convert_OpenSshKeyToPem_ProducesPkcs8PrivateKey()
+    {
+        // Generamos una clave Ed25519 y la codificamos en formato OpenSSH
+        // (openssh-key-v1) con el encoder del propio BouncyCastle — el
+        // mismo formato que produce ssh-keygen.
+        var generator = new Ed25519KeyPairGenerator();
+        generator.Init(new Ed25519KeyGenerationParameters(new Org.BouncyCastle.Security.SecureRandom()));
+        var keyPair = generator.GenerateKeyPair();
+        var blob = OpenSshPrivateKeyUtilities.EncodePrivateKey(keyPair.Private);
+
+        var base64 = Convert.ToBase64String(blob);
+        var sb = new StringBuilder();
+        sb.AppendLine("-----BEGIN OPENSSH PRIVATE KEY-----");
+        for (var i = 0; i < base64.Length; i += 70)
+        {
+            sb.AppendLine(base64.Substring(i, Math.Min(70, base64.Length - i)));
+        }
+        sb.AppendLine("-----END OPENSSH PRIVATE KEY-----");
+        var sshPath = Path.Combine(_fx.OutputDir, "id_ed25519");
+        await File.WriteAllTextAsync(sshPath, sb.ToString());
+
+        var converted = await _fx.Service.ConvertAsync(new CertificateConvertRequest
+        {
+            InputPath = sshPath,
+            InputFormat = "openssh",
+            OutputFormat = "pem",
+        });
+
+        // El PEM resultante es un PKCS#8 legible con la MISMA clave.
+        var output = await File.ReadAllTextAsync(converted.OutputPath);
+        Assert.Contains("-----BEGIN PRIVATE KEY-----", output);
+        using var reader = new StringReader(output);
+        var pemReader = new PemReader(reader);
+        var parsed = pemReader.ReadObject();
+        var parsedKey = parsed switch
+        {
+            AsymmetricCipherKeyPair pair => pair.Private,
+            AsymmetricKeyParameter key => key,
+            _ => null,
+        };
+        Assert.NotNull(parsedKey);
+        var originalParams = (Ed25519PrivateKeyParameters)keyPair.Private;
+        var parsedParams = Assert.IsType<Ed25519PrivateKeyParameters>(parsedKey);
+        Assert.True(originalParams.Equals(parsedParams));
+    }
+
+    [Fact]
+    public async Task Convert_NotOpenSshArmor_ThrowsStaticMessage()
+    {
+        var path = Path.Combine(_fx.OutputDir, "fake-ssh.txt");
+        await File.WriteAllTextAsync(path, "no es una clave openssh\n");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _fx.Service.ConvertAsync(new CertificateConvertRequest
+            {
+                InputPath = path,
+                InputFormat = "openssh",
+                OutputFormat = "pem",
+            }));
+
+        Assert.Contains("OPENSSH PRIVATE KEY", exception.Message);
     }
 
     // ------------------------------------------------------------------
@@ -286,5 +571,21 @@ internal static class X509TestExtensions
         var path = Path.Combine(Path.GetTempPath(), "pcsuite-test-cert-" + Guid.NewGuid().ToString("N") + ".pem");
         File.WriteAllText(path, result.CertificatePem);
         return path;
+    }
+}
+
+/// <summary>Etiqueta legible de un GeneralName (misma lógica del servicio).</summary>
+internal static class SanTestExtensions
+{
+    public static string? DescribeSanForTest(GeneralName name)
+    {
+        return name.TagNo switch
+        {
+            GeneralName.DnsName or GeneralName.Rfc822Name when name.Name is DerIA5String text =>
+                text.GetString(),
+            GeneralName.IPAddress when name.Name is Asn1OctetString ip =>
+                new System.Net.IPAddress(ip.GetOctets()).ToString(),
+            _ => null,
+        };
     }
 }
