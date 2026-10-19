@@ -162,6 +162,14 @@ export function Winget() {
     });
   };
 
+  /**
+   * Limpia TODOS los avisos de la página (resumen batch, "todo" y por
+   * tarjeta). Se invoca al INICIAR una nueva tanda de actualizaciones: los
+   * resultados de la tanda anterior ("2 actualizado(s), 1 fallido(s)…")
+   * no deben seguir en pantalla mientras corre la nueva.
+   */
+  const clearAllNotices = () => setNotices({});
+
   const runMutation = async (
     key: string,
     kind: MutationKind,
@@ -241,6 +249,9 @@ export function Winget() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
 
+    // Pantalla limpia al empezar: los avisos y el resumen de la tanda
+    // anterior desaparecen en el momento del clic, no al final de la nueva.
+    clearAllNotices();
     const failed: string[] = [];
     setBatchRunning(true);
     setBatchProgress({ done: 0, total: ids.length, failed: [] });
@@ -436,6 +447,8 @@ export function Winget() {
                     ) {
                       return;
                     }
+                    // Limpiar los resultados de la tanda anterior al iniciar.
+                    clearAllNotices();
                     void runMutation(
                       '__all__',
                       'upgradeAll',
