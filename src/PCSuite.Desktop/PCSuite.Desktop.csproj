@@ -52,12 +52,22 @@
   </PropertyGroup>
 
   <!-- Task 005: PCSuite.Elevated.exe debe quedar al lado de la app para que
-       ElevationManager pueda lanzarlo con runas (misma configuración). -->
+       ElevationManager pueda lanzarlo con runas (misma configuración).
+
+       BUG 2026-10-19 (la app no arrancaba desde iniciar.bat): el target
+       copiaba TODO el bin del helper (**\*.*), incluidas las DLL de
+       dependencia (Core, Infrastructure…) — versiones ATRASADAS que
+       sobrescribían los binarios recién compilados de la app →
+       TypeLoadException al arrancar. Ahora la copia es QUIRÚRGICA: solo
+       los archivos propios del helper, jamás dependencias. -->
   <Target Name="CopyElevatedHelper" AfterTargets="Build">
     <ItemGroup>
-      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0\**\*.*" Exclude="..\PCSuite.Elevated\bin\$(Configuration)\net10.0\**\*.pdb" />
+      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\PCSuite.Elevated.exe" />
+      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\PCSuite.Elevated.dll" />
+      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\PCSuite.Elevated.deps.json" />
+      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\PCSuite.Elevated.runtimeconfig.json" />
     </ItemGroup>
-    <Copy SourceFiles="@(_ElevatedHelperFiles)" DestinationFiles="@(_ElevatedHelperFiles->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_ElevatedHelperFiles)" DestinationFiles="@(_ElevatedHelperFiles->'$(OutDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>
