@@ -40,6 +40,15 @@ public static class ElevatedOperationIds
     // derivan del propio helper (jamás del payload). Nunca un shell.
     public const string LocalShareFirewallRule = "elevated.localshare.firewallRule";
 
+    // Desinstalador forzado (Task 020): el payload porta la clave de registro
+    // o los ítems aprobados, pero el proceso elevado RELEE el registro y
+    // REVALIDA cada ítem contra reglas duras (rutas absolutas, jamás raíces
+    // del sistema, servicios por contención de ruta). El comando jamás viaja
+    // por el puente: se relee de la entrada de la propia app.
+    public const string UninstallRunOfficial = "elevated.uninstall.runOfficial";
+
+    public const string UninstallCleanup = "elevated.uninstall.cleanup";
+
     /// <summary>
     /// IDs permitidos. Añadir un ID aquí solo habilita poder registrarlo;
     /// no registra nada por sí mismo.
@@ -54,5 +63,7 @@ public static class ElevatedOperationIds
         WslUpdate,
         ClamavUpdateDefinitions,
         LocalShareFirewallRule,
+        UninstallRunOfficial,
+        UninstallCleanup,
     };
 }

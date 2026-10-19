@@ -291,6 +291,10 @@ public partial class MainForm : Form
                 new CertPgpSignFileOperation(certificateService),
                 new CertCsrGenerateOperation(certificateService),
                 new CertPgpVerifyFileOperation(certificateService),
+                new UninstallListOperation(),
+                new UninstallDiscoverOperation(),
+                new UninstallRunOfficialOperation(elevationManager),
+                new UninstallCleanupOperation(elevationManager),
             ],
             _loggerFactory.CreateLogger<CommandRouter>());
         _bridge = new WebViewBridge(_router, _loggerFactory.CreateLogger<WebViewBridge>());

@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Los tests usan APIs Windows (Registry/SCM/Task Scheduler) deliberadamente:
+         PCSuite es una app de escritorio Windows y la suite solo corre aquí. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

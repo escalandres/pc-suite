@@ -319,4 +319,18 @@ public static class OperationIds
 
     /// <summary>Verifica una firma PGP detached (.sig) contra el archivo original (Task 19.2).</summary>
     public const string CertPgpVerifyFile = "cert.pgp.verifyFile";
+
+    // ---------------- Task 020: desinstalador forzado ----------------
+
+    /// <summary>Lista las apps del registro de desinstalación de Windows (incluye las que winget no ve).</summary>
+    public const string UninstallList = "uninstall.list";
+
+    /// <summary>Construye el plan de eliminación de una app (solo lectura, sin elevación).</summary>
+    public const string UninstallDiscover = "uninstall.discover";
+
+    /// <summary>Lanza el desinstalador oficial de la app (elevado, UAC puntual).</summary>
+    public const string UninstallRunOfficial = "uninstall.runOfficial";
+
+    /// <summary>Aplica la limpieza de residuos sobre el plan aprobado (elevado, UAC puntual).</summary>
+    public const string UninstallCleanup = "uninstall.cleanup";
 }

@@ -59,4 +59,7 @@ public static class BridgeErrorCodes
     // ilegible) con mensaje apto para la UI y jamás material privado ni
     // passphrases. Todo ocurre en proceso, así que no hay timeout propio.
     public const string PgpFailed = "PGP_FAILED";
+
+    // Códigos de uninstall.* (Task 020): fallos del desinstalador forzado.
+    public const string UninstallFailed = "UNINSTALL_FAILED";
 }

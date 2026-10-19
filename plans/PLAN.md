@@ -139,6 +139,24 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 19.6 - Integración con 17.6: publicar.ps1 usa cert.pgp.signFile para firmar el manifiesto — el updater valida con la clave embebida | ✅ Completado | Nuevo tool src/Tools/SignRelease (PgpService en proceso, SIN gpg): --import (clave de release al keyring de la app), --fingerprint-only (inyección pre-firma), firma (.sig+.pub), --verify (sanity check contra la clave EMBEBIDA antes de publicar). publicar.ps1 lo usa por defecto (gpg legacy con -UseGpg). BUG crítico corregido: el fingerprint se inyecta ANTES de firmar (la firma cubre el contenido final exacto). Pipeline validado end-to-end con la clave real |
 | └ 19.7 - UI: página "Certificados" (tabs Generar/Inspeccionar/Convertir + Mis claves PGP + SSH keys existentes) | ✅ Completado | 5 tabs (X.509/CSR/Inspeccionar/Convertir/Firmar PGP); Convertir expone pem↔der, pem→pfx (password), pfx→pem (password), openssh→pem; selector nativo, dropdown de claves con material privado, "Mostrar en el Explorador", sin stack traces. El tab Firmar es AUTOSUFICIENTE y cierra el ciclo completo: generar clave de firma inline (pgp.generateKey) → exportar pública (pgp.exportKey) → firmar (cert.pgp.signFile) → importar pública de terceros (pgp.importKey) → verificar firmas (cert.pgp.verifyFile: original + .sig → válido/inválido + identidad). La privada jamás sale del keyring |
 
+
+### Task 020 - Desinstalador forzado: apps que winget no puede quitar o no ve
+
+> Cubre dos escenarios: winget falla al desinstalar, o la app NI SIQUIERA
+> aparece en winget. Fuente de verdad: el registro de desinstalación de
+> Windows (lo que usa appwiz.cpl) - discovery por contención de ruta,
+> nunca por patrones de nombre. Plan revisado por el usuario ANTES de
+> que exista UAC alguno, y revalidación independiente dentro del
+> proceso elevado (dos barreras).
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 020 - Desinstalador forzado | ✅ Completado | 921/921 tests. Pestaña "Registro" en Paquetes: lista apps del registro (incluye las que winget no ve), plan de eliminación con ítems derivados (quirúrgicos) vs candidatos (heurísticos, sin marcar), desinstalador oficial con UAC + limpieza de residuos con UAC |
+| ├ 20.1 - Catálogo del registro: enumerar HKLM 64/32 + HKCU (DisplayName, UninstallString, GUID MSI, InstallLocation, SystemComponent) - uninstall.list, solo lectura | ✅ Completado | UninstallCatalog: 3 raíces canónicas, validación de rutas de clave contra raíces fijas, extracción de GUID MSI (subclave y MsiExec) |
+| ├ 20.2 - Plan de eliminación: procesos/servicios/tareas por CONTENCIÓN DE RUTA (jamás por nombre), carpetas de datos y claves como candidatos sin marcar - uninstall.discover | ✅ Completado | UninstallPlanner: MainModule dentro de InstallLocation; ImagePath de servicios del registro SCM; Task Scheduler COM (Schedule.Service) con acciones Exec; frontera incluida en IsPathInside |
+| ├ 20.3 - Desinstalador oficial con elevación (UAC puntual): msiexec /x {GUID} o el exe registrado, en ventana propia - uninstall.runOfficial | ✅ Completado | El payload solo porta la clave de registro; el helper RELEE el comando del registro (jamás viaja por el puente); se niega a lanzar rutas relativas o inexistentes; validación previa a la elevación (clave inexistente = cero prompts) |
+| ├ 20.4 - Limpieza de residuos con elevación: procesos -> servicios -> tareas -> carpetas -> registro, ítem a ítem con desenlace - uninstall.cleanup | ✅ Completado | Doble barrera: validación en el puente (ítems inválidos ni cruzan) + REVALIDACIÓN en el helper (carpetas jamás raíces del sistema; servicios re-verificados por contención contra las carpetas aprobadas; claves solo bajo raíces permitidas). ServiceController + P/Invoke DeleteService; requiresRestart cuando el SCM marca para el próximo arranque |
+| └ 20.5 - UI: pestaña "Registro" con filtro, badges (MSI/sistema), plan con checkboxes (derivados pre-marcados, candidatos sin marcar), resumen de limpieza ítem a ítem | ✅ Completado | La pestaña funciona aunque winget NO esté instalado (no toca winget). Botones numerados: 1. desinstalador oficial (UAC), 2. limpiar residuos (UAC). Aviso naranja para componentes del sistema |
 ## Notas de arquitectura (Task 016 — Local Share)
 
 **Ajustes a la propuesta original** (basado en el análisis del repositorio):

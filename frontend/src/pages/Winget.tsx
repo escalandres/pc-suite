@@ -3,6 +3,11 @@ import { ArrowUpCircle, CheckSquare, Info, List, RefreshCw, Search, Square, Tras
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type {
+  InstalledApp,
+  InstalledAppListResult,
+  RemovalPlan,
+  UninstallCleanupResult,
+  UninstallOfficialResult,
   WinGetDetectResult,
   WinGetMutationResult,
   WinGetPackageCollectionResult,
@@ -27,7 +32,7 @@ const DETECT_TIMEOUT_MS = 45_000;
 const QUERY_TIMEOUT_MS = 135_000;
 const MUTATION_TIMEOUT_MS = 930_000;
 
-type Mode = 'search' | 'installed' | 'updates';
+type Mode = 'search' | 'installed' | 'updates' | 'registry';
 type MutationKind = 'install' | 'upgrade' | 'uninstall' | 'upgradeAll';
 
 interface Notice {
@@ -39,12 +44,14 @@ const MODES: { id: Mode; label: string; icon: typeof Search }[] = [
   { id: 'search', label: 'Buscar', icon: Search },
   { id: 'installed', label: 'Instalados', icon: List },
   { id: 'updates', label: 'Actualizaciones', icon: ArrowUpCircle },
+  { id: 'registry', label: 'Registro', icon: Trash2 },
 ];
 
 const EMPTY_HINTS: Record<Mode, string> = {
   search: 'Escribe una consulta para buscar en el índice de winget.',
   installed: 'No hay paquetes instalados desde winget.',
   updates: 'Todo está actualizado: no hay actualizaciones pendientes.',
+  registry: 'No hay apps con entrada de desinstalación en el registro.',
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -70,11 +77,130 @@ export function Winget() {
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; failed: string[] } | null>(null);
   const batchCancelRef = useRef(false);
 
+  // Task 020: desinstalador forzado (pestaña Registro)
+  const [registryApps, setRegistryApps] = useState<InstalledApp[]>([]);
+  const [registryQuery, setRegistryQuery] = useState('');
+  const [planFor, setPlanFor] = useState<InstalledApp | null>(null);
+  const [plan, setPlan] = useState<RemovalPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<UninstallCleanupResult | null>(null);
+
+  const openPlan = async (app: InstalledApp) => {
+    setPlanFor(app);
+    setPlan(null);
+    setCleanupResult(null);
+    setCheckedItems(new Set());
+    setPlanLoading(true);
+    try {
+      const result = await bridge.call<RemovalPlan>(
+        OperationIds.uninstallDiscover,
+        { registryKeyPath: app.registryKeyPath },
+        30_000,
+      );
+      setPlan(result);
+      setCheckedItems(new Set(
+        result.items.filter((item) => item.tier === 'derived').map((item) => item.identifier),
+      ));
+    } catch (error) {
+      setPlanFor(null);
+    setNotice('__registry__', 'error',
+        errorMessage(error, 'No se pudo construir el plan de eliminación.'));
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const closePlan = () => {
+    setPlanFor(null);
+    setPlan(null);
+    setCleanupResult(null);
+    void load('registry', '');
+  };
+
+  const togglePlanItem = (identifier: string) => {
+    setCheckedItems((current) => {
+      const next = new Set(current);
+      if (next.has(identifier)) next.delete(identifier);
+      else next.add(identifier);
+      return next;
+    });
+  };
+
+  const runOfficialUninstaller = async () => {
+    if (!planFor) return;
+    if (!window.confirm(
+      `¿Lanzar el desinstalador oficial de "${planFor.displayName}"? ` +
+      'Windows pedirá permiso (UAC) y el asistente se abrirá en su propia ventana. ' +
+      'Complétalo y vuelve aquí para limpiar los residuos.',
+    )) {
+      return;
+    }
+
+    clearNotice('__registry__');
+    try {
+      const result = await bridge.call<UninstallOfficialResult>(
+        OperationIds.uninstallRunOfficial,
+        { registryKeyPath: planFor.registryKeyPath },
+        120_000,
+      );
+      setNotice('__registry__', 'success',
+        `Desinstalador oficial lanzado (${result.launcher}). Complétalo en su ventana y luego limpia los residuos.`);
+    } catch (error) {
+      setNotice('__registry__', 'error',
+        errorMessage(error, 'No se pudo lanzar el desinstalador oficial.'));
+    }
+  };
+
+  const runCleanup = async () => {
+    if (!plan || !planFor || checkedItems.size === 0 || cleanupBusy) return;
+    if (!window.confirm(
+      `¿Eliminar ${checkedItems.size} elemento(s) de "${planFor.displayName}"? ` +
+      'Windows pedirá permiso (UAC). Esta acción no se puede deshacer.',
+    )) {
+      return;
+    }
+
+    setCleanupBusy(true);
+    clearNotice('__registry__');
+    setCleanupResult(null);
+    try {
+      const items = plan.items
+        .filter((item) => checkedItems.has(item.identifier))
+        .map((item) => ({ kind: item.kind, value: item.identifier }));
+      const result = await bridge.call<UninstallCleanupResult>(
+        OperationIds.uninstallCleanup,
+        { items },
+        300_000,
+      );
+      setCleanupResult(result);
+      void load('registry', '');
+    } catch (error) {
+      setNotice('__registry__', 'error',
+        errorMessage(error, 'La limpieza falló.'));
+    } finally {
+      setCleanupBusy(false);
+    }
+  };
+
   const load = useCallback(
     async (currentMode: Mode, search: string) => {
       setLoading(true);
       setListError(null);
       try {
+        if (currentMode === 'registry') {
+          // Task 020: registro de desinstalación de Windows — sin winget.
+          const result = await bridge.call<InstalledAppListResult>(
+            OperationIds.uninstallList,
+            undefined,
+            QUERY_TIMEOUT_MS,
+          );
+          setRegistryApps(result.apps ?? []);
+          setPackages([]);
+          return;
+        }
+
         const operation =
           currentMode === 'search'
             ? OperationIds.wingetSearch
@@ -90,6 +216,7 @@ export function Winget() {
         setPackages(result.packages ?? []);
       } catch (error) {
         setPackages([]);
+        setRegistryApps([]);
         setListError(errorMessage(error, 'No se pudieron cargar los paquetes.'));
       } finally {
         setLoading(false);
@@ -134,9 +261,13 @@ export function Winget() {
     setMode(next);
     setListError(null);
     // Al cambiar de pestaña, limpiar selección: los checkboxes solo viven
-    // en el contexto del tab "updates".
+    // en el contexto del tab "updates". El plan del Task 020 también se
+    // cierra al navegar fuera de "Registro".
     setSelectedIds(new Set());
     setBatchProgress(null);
+    setPlanFor(null);
+    setPlan(null);
+    setCleanupResult(null);
     if (next === 'search') {
       setPackages([]);
       return;
@@ -394,8 +525,11 @@ export function Winget() {
       {/* Aviso global de upgradeAll */}
       {notices['__all__'] && <NoticeBox notice={notices['__all__']} />}
       {notices['__batch__'] && <NoticeBox notice={notices['__batch__']} />}
+      {notices['__registry__'] && <NoticeBox notice={notices['__registry__']} />}
 
-      {installed && (
+      {/* Task 020: las pestañas viven aquí — "Registro" funciona aunque winget
+          no esté instalado (la pestaña no toca winget). */}
+      {!loadingDetect && (
         <>
           {/* Selector de pestañas + acción "Actualizar todo" */}
           <div className="flex flex-wrap items-center gap-2">
@@ -544,18 +678,42 @@ export function Winget() {
 
           {loading && (
             <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-              Consultando winget…
+              {mode === 'registry' ? 'Consultando el registro…' : 'Consultando winget…'}
             </p>
           )}
 
-          {!loading && !listError && packages.length === 0 && (
+          {!loading && mode === 'registry' && !planFor && (
+            <RegistryList
+              apps={registryApps}
+              query={registryQuery}
+              onQueryChange={setQuery => setRegistryQuery(setQuery)}
+              onOpenPlan={(app) => void openPlan(app)}
+            />
+          )}
+
+          {!loading && mode === 'registry' && planFor && (
+            <RegistryPlanPanel
+              app={planFor}
+              plan={plan}
+              loading={planLoading}
+              checked={checkedItems}
+              onToggle={togglePlanItem}
+              onRunOfficial={() => void runOfficialUninstaller()}
+              onCleanup={() => void runCleanup()}
+              cleanupBusy={cleanupBusy}
+              cleanupResult={cleanupResult}
+              onClose={closePlan}
+            />
+          )}
+
+          {!loading && mode !== 'registry' && !listError && packages.length === 0 && (
             <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
               {EMPTY_HINTS[mode]}
             </p>
           )}
 
           {/* Resultados */}
-          {!loading && packages.length > 0 && (
+          {!loading && mode !== 'registry' && packages.length > 0 && (
             <ul className="space-y-2">
               {packages.map((pkg) => {
                 const notice = notices[pkg.id];
@@ -752,6 +910,298 @@ function NoticeBox(props: { notice: Notice }) {
       role={notice.kind === 'error' ? 'alert' : 'status'}
     >
       <span>{notice.text}</span>
+    </div>
+  );
+}
+
+// =====================================================================
+// Task 020 — Desinstalador forzado: componentes de la pestaña Registro
+// =====================================================================
+
+const KIND_LABELS: Record<string, string> = {
+  process: 'Proceso',
+  service: 'Servicio',
+  scheduledtask: 'Tarea programada',
+  folder: 'Carpeta',
+  registrykey: 'Clave de registro',
+};
+
+function formatSize(kb: number): string {
+  if (kb <= 0) return '';
+  if (kb < 1024) return `${kb} KB`;
+  if (kb < 1024 * 1024) return `${Math.round(kb / 1024)} MB`;
+  return `${(kb / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function RegistryList(props: {
+  apps: InstalledApp[];
+  query: string;
+  onQueryChange: (query: string) => void;
+  onOpenPlan: (app: InstalledApp) => void;
+}) {
+  const { apps, query, onQueryChange, onOpenPlan } = props;
+  const normalized = query.trim().toLowerCase();
+  const visible = normalized
+    ? apps.filter((app) =>
+        app.displayName.toLowerCase().includes(normalized)
+        || app.publisher.toLowerCase().includes(normalized))
+    : apps;
+
+  return (
+    <>
+      <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+        Apps con entrada de desinstalación en el registro de Windows — incluye
+        las que winget no ve. El desinstalador forzado funciona en dos pasos:
+        plan revisado + UAC puntual.
+      </p>
+
+      <form
+        onSubmit={(event) => event.preventDefault()}
+        className="flex items-center gap-2 rounded-md border px-3"
+        style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+      >
+        <Search size={15} aria-hidden style={{ color: 'var(--pcs-text-muted)' }} />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="Filtrar por nombre o editor…"
+          className="w-full bg-transparent py-2 text-sm outline-none"
+          style={{ color: 'var(--pcs-text)' }}
+        />
+      </form>
+
+      {visible.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+          {EMPTY_HINTS.registry}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {visible.map((app) => (
+            <li
+              key={app.registryKeyPath}
+              className="rounded-lg border p-3"
+              style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+            >
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-sm font-medium">{app.displayName}</span>
+                {app.displayVersion && (
+                  <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                    v{app.displayVersion}
+                  </span>
+                )}
+                {app.publisher && (
+                  <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                    {app.publisher}
+                  </span>
+                )}
+                {app.msiGuid && (
+                  <span
+                    className="rounded border px-1.5 py-0.5 text-[10px] font-medium"
+                    style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text-muted)' }}
+                    title={app.msiGuid}
+                  >
+                    MSI
+                  </span>
+                )}
+                {app.isSystemComponent && (
+                  <span
+                    className="rounded border px-1.5 py-0.5 text-[10px] font-medium"
+                    style={{ borderColor: 'var(--pcs-orange)', color: 'var(--pcs-orange)' }}
+                    title="Componente marcado como del sistema por el instalador"
+                  >
+                    sistema
+                  </span>
+                )}
+                <span className="ml-auto flex shrink-0 items-center gap-2">
+                  {app.estimatedSizeKb > 0 && (
+                    <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                      {formatSize(app.estimatedSizeKb)}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onOpenPlan(app)}
+                    className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors"
+                    style={{ borderColor: 'var(--pcs-danger)', color: 'var(--pcs-danger)' }}
+                  >
+                    <Trash2 size={12} aria-hidden />
+                    Desinstalar…
+                  </button>
+                </span>
+              </div>
+              {app.installLocation && (
+                <p className="mt-1 truncate font-mono text-xs" style={{ color: 'var(--pcs-text-muted)' }} title={app.installLocation}>
+                  {app.installLocation}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function RegistryPlanPanel(props: {
+  app: InstalledApp;
+  plan: RemovalPlan | null;
+  loading: boolean;
+  checked: Set<string>;
+  onToggle: (identifier: string) => void;
+  onRunOfficial: () => void;
+  onCleanup: () => void;
+  cleanupBusy: boolean;
+  cleanupResult: UninstallCleanupResult | null;
+  onClose: () => void;
+}) {
+  const { app, plan, loading, checked, onToggle, onRunOfficial, onCleanup, cleanupBusy, cleanupResult, onClose } = props;
+
+  return (
+    <div
+      className="space-y-3 rounded-lg border p-4"
+      style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+    >
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border px-2.5 py-1.5 text-xs font-medium"
+          style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
+        >
+          ← Volver al listado
+        </button>
+        <span className="text-sm font-semibold">{app.displayName}</span>
+      </div>
+
+      {app.isSystemComponent && (
+        <p
+          className="rounded-md border px-3 py-2 text-xs"
+          style={{ borderColor: 'var(--pcs-orange)', color: 'var(--pcs-orange)' }}
+          role="alert"
+        >
+          Esta app está marcada como componente del sistema por su instalador.
+          Eliminarla puede afectar a otro software: revisa el plan con calma.
+        </p>
+      )}
+
+      {loading && (
+        <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+          Construyendo el plan de eliminación…
+        </p>
+      )}
+
+      {plan && (
+        <>
+          {plan.hasOfficialUninstaller && (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={onRunOfficial}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium"
+                style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+              >
+                1. Ejecutar desinstalador oficial (UAC)
+              </button>
+              <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                Camino preferente: el asistente de la propia app, con elevación.
+                Complétalo y vuelve para limpiar lo que deje.
+              </span>
+            </div>
+          )}
+
+          <p className="text-sm font-medium">Esto es EXACTAMENTE lo que se eliminará:</p>
+          <ul className="space-y-1.5">
+            {plan.items.map((item) => {
+              const isChecked = checked.has(item.identifier);
+              const isDerived = item.tier === 'derived';
+              return (
+                <li key={`${item.kind}:${item.identifier}`} className="flex items-start gap-2 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => onToggle(item.identifier)}
+                    aria-label={isChecked ? `Deseleccionar ${item.identifier}` : `Seleccionar ${item.identifier}`}
+                    className="mt-0.5 shrink-0 cursor-pointer"
+                    style={{ color: isChecked ? 'var(--pcs-accent)' : 'var(--pcs-text-muted)' }}
+                  >
+                    {isChecked ? <CheckSquare size={15} aria-hidden /> : <Square size={15} aria-hidden />}
+                  </button>
+                  <span
+                    className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium"
+                    style={{
+                      borderColor: isDerived ? 'color-mix(in srgb, var(--pcs-accent) 45%, transparent)' : 'var(--pcs-border)',
+                      color: isDerived ? 'var(--pcs-accent)' : 'var(--pcs-text-muted)',
+                    }}
+                    title={isDerived
+                      ? 'Derivado del registro de la app o por contención de ruta (quirúrgico)'
+                      : 'Candidato heurístico: revisa antes de marcar'}
+                  >
+                    {KIND_LABELS[item.kind] ?? item.kind}
+                    {isDerived ? '' : '?'}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block break-all font-mono text-xs">{item.identifier}</span>
+                    {item.detail && (
+                      <span className="block text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                        {item.detail}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onCleanup}
+              disabled={checked.size === 0 || cleanupBusy}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-40"
+              style={{ background: 'var(--pcs-danger)', color: '#fff' }}
+            >
+              <Trash2 size={14} aria-hidden />
+              {cleanupBusy ? 'Limpiando…' : `${plan.hasOfficialUninstaller ? '2. Limpiar residuos' : 'Aplicar limpieza'} (${checked.size})`}
+            </button>
+            <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+              Los ítems derivados (azul) vienen del registro de la app; los
+              candidatos (?) son heurísticos — desmárcalos si no te convencen.
+              UAC puntual por limpieza.
+            </span>
+          </div>
+
+          {cleanupResult && (
+            <div
+              className="rounded-md border px-4 py-3 text-sm"
+              role="status"
+              style={{
+                borderColor: cleanupResult.results.every((r) => r.succeeded)
+                  ? 'var(--pcs-success)'
+                  : 'var(--pcs-warning)',
+                color: cleanupResult.results.every((r) => r.succeeded)
+                  ? 'var(--pcs-success)'
+                  : 'var(--pcs-warning)',
+              }}
+            >
+              <p className="font-semibold">
+                {cleanupResult.results.filter((r) => r.succeeded).length}/
+                {cleanupResult.results.length} ítems eliminados.
+                {cleanupResult.requiresRestart && ' Reinicia para completar los servicios.'}
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {cleanupResult.results
+                  .filter((result) => !result.succeeded)
+                  .map((result) => (
+                    <li key={result.identifier} className="text-xs">
+                      ✗ [{KIND_LABELS[result.kind] ?? result.kind}] {result.identifier}
+                      {result.detail ? ` — ${result.detail}` : ''}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

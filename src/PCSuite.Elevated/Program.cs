@@ -55,6 +55,11 @@ internal static class Program
         // el puerto (revalidado), regla y programa derivados del helper.
         registry.Register(new LocalShareFirewallElevatedOperation());
 
+        // Desinstalador forzado (Task 020): el helper RELEE el comando del
+        // registro de la app y REVALIDA cada ítem del plan (dos barreras).
+        registry.Register(new PCSuite.Infrastructure.Uninstall.UninstallRunOfficialElevatedOperation());
+        registry.Register(new PCSuite.Infrastructure.Uninstall.UninstallCleanupElevatedOperation());
+
         try
         {
             var server = new ElevatedIpcServer(registry);

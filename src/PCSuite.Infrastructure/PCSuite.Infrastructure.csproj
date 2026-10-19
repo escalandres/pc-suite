@@ -14,6 +14,7 @@
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.12" />
     <PackageReference Include="System.Management" Version="10.0.12" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.12" />
   </ItemGroup>
 
   <!-- El parser de tablas winget, el validador de argumentos y los códigos de

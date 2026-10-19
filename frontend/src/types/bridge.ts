@@ -111,6 +111,10 @@ export const OperationIds = {
   updateCheck: 'update.check',
   updateDownload: 'update.download',
   updateInstall: 'update.install',
+  uninstallList: 'uninstall.list',
+  uninstallDiscover: 'uninstall.discover',
+  uninstallRunOfficial: 'uninstall.runOfficial',
+  uninstallCleanup: 'uninstall.cleanup',
   certX509Generate: 'cert.x509.generate',
   certInspect: 'cert.inspect',
   certConvert: 'cert.convert',
@@ -518,6 +522,66 @@ export interface PgpVerifyFileResult {
     email: string;
     algorithm: string;
   } | null;
+}
+
+/* =====================================================================
+   Task 020 — Desinstalador forzado
+   ===================================================================== */
+
+/** App instalada según el registro de desinstalación de Windows (la fuente
+ * de appwiz; incluye apps que winget no ve). */
+export interface InstalledApp {
+  registryKeyPath: string;
+  displayName: string;
+  publisher: string;
+  displayVersion: string;
+  installLocation: string;
+  uninstallString: string;
+  msiGuid?: string | null;
+  estimatedSizeKb: number;
+  isSystemComponent: boolean;
+}
+
+/** Resultado de uninstall.list. */
+export interface InstalledAppListResult {
+  apps: InstalledApp[];
+}
+
+/** Ítem del plan de eliminación. */
+export interface RemovalPlanItem {
+  /** process | service | scheduledtask | folder | registrykey */
+  kind: string;
+  /** derived (quirúrgico, pre-marcado) | candidate (heurístico, sin marcar) */
+  tier: string;
+  identifier: string;
+  detail: string;
+}
+
+/** Plan de eliminación revisable (uninstall.discover). */
+export interface RemovalPlan {
+  app: InstalledApp;
+  hasOfficialUninstaller: boolean;
+  items: RemovalPlanItem[];
+}
+
+/** Resultado de uninstall.runOfficial: el asistente quedó lanzado. */
+export interface UninstallOfficialResult {
+  launched: boolean;
+  launcher: string;
+}
+
+/** Desenlace de un ítem de la limpieza. */
+export interface RemovalItemResult {
+  kind: string;
+  identifier: string;
+  succeeded: boolean;
+  detail?: string | null;
+}
+
+/** Resultado de uninstall.cleanup (vía elevado). */
+export interface UninstallCleanupResult {
+  results: RemovalItemResult[];
+  requiresRestart: boolean;
 }
 
 /* =====================================================================
