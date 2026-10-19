@@ -532,7 +532,7 @@ export function Clamav() {
               onClick={() => {
                 if (
                   !window.confirm(
-                    '¿Ejecutar un escaneo completo de todos los discos? Puede tardar varias horas y consumir mucha CPU.',
+                    '¿Ejecutar un escaneo completo de todos los discos? Puede tardar varias horas y consumir mucha CPU. Windows pedirá permiso de administrador (UAC) para leer también los archivos del sistema.',
                   )
                 ) {
                   return;

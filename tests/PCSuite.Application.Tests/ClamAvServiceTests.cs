@@ -306,13 +306,13 @@ public sealed class ClamAvServiceTests
     }
 
     // ------------------------------------------------------------------
-    // Escaneos (nunca elevan)
+    // Escaneos (elevados con UAC desde 2026-10-18: runas + --log temporal)
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task QuickScan_Success_BuildsFixedArgv_1HourTimeout_NoUac()
+    public async Task QuickScan_Success_ElevatedUac_FixedArgvPlusLog_1HourTimeout()
     {
-        using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(ClamAvFixtures.CleanScan));
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
 
         var outcome = await fx.Service.QuickScanAsync();
 
@@ -324,20 +324,57 @@ public sealed class ClamAvServiceTests
         Assert.Equal("1.5.4", outcome.EngineVersion);
         Assert.Equal(7123456, outcome.KnownViruses);
         Assert.Null(outcome.Detail);
+        // El helper elevado no participa: el UAC lo pone el runas directo.
         Assert.Empty(fx.Elevation.Requests);
 
         var request = Assert.Single(fx.Runner.Requests);
+        Assert.True(request.RequiresElevation); // UAC por escaneo (decisión 2026-10-18)
         Assert.Equal("--recursive", request.Arguments[0]);
         Assert.Equal("--verbose", request.Arguments[1]);
-        Assert.All(request.Arguments.Skip(2), target => Assert.True(Path.IsPathRooted(target)));
+        var logIndex = Assert.Single(
+            request.Arguments.Select((argument, index) => (argument, index))
+                .Where(t => t.argument.StartsWith("--log=", StringComparison.Ordinal))
+                .Select(t => t.index));
+        Assert.EndsWith(".log", request.Arguments[logIndex]);
+        Assert.All(
+            request.Arguments.Skip(2).Take(logIndex - 2),
+            target => Assert.True(Path.IsPathRooted(target)));
         Assert.Equal(QuickScanTimeout, request.Timeout);
+    }
+
+    [Fact]
+    public async Task QuickScan_ResultParsedFromScanLog_NotFromPipes()
+    {
+        // runas no redirige stdout: el servicio debe leer el --log y devolverlo
+        // COMO StandardOutput para que el parser no cambie. El fake escribe el
+        // log y devuelve StandardOutput VACÍO: si algo llega parseado, salió
+        // del tail del log.
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
+
+        var outcome = await fx.Service.QuickScanAsync();
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(1234, outcome.ScannedFiles);
+        Assert.Equal("1.5.4", outcome.EngineVersion);
+    }
+
+    [Fact]
+    public async Task QuickScan_UacDeclined_ThrowsElevationCancelled_WithoutHistoryEntry()
+    {
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.Throwing(new ElevationDeclinedException()));
+
+        var exception = await Assert.ThrowsAsync<ClamAvException>(() => fx.Service.QuickScanAsync());
+
+        Assert.Equal(BridgeErrorCodes.ElevationCancelled, exception.ErrorCode);
+        Assert.Equal("Se rechazó el permiso de administrador (UAC): el escaneo no se ejecutó.", exception.ErrorMessage);
+        Assert.Empty(fx.History.Read()); // el rechazo no es un resultado de escaneo
     }
 
     [Fact]
     public async Task QuickScan_WithThreats_Succeeds_ReportsThreatsAndSummaryCounts()
     {
         using var fx = ClamAvFixture.Create(
-            FakeProcessRunner.Returning(ClamAvFixtures.InfectedScan, exitCode: 1));
+            FakeProcessRunner.WritingScanLog(ClamAvFixtures.InfectedScan, exitCode: 1));
 
         var outcome = await fx.Service.QuickScanAsync();
 
@@ -357,7 +394,8 @@ public sealed class ClamAvServiceTests
         // Guard del throttle: 200 líneas "OK" llegan en microsegundos y NO
         // pueden generar 200 eventos IPC (escaneos de 1 h saturarían el
         // puente). La amenaza y el resumen pasan siempre; el evento final
-        // lleva los contadores EXACTOS del resumen de clamscan.
+        // lleva los contadores EXACTOS del resumen de clamscan. Con la
+        // elevación las líneas llegan por el tail del log, no por pipes.
         var lines = new List<string>();
         for (var i = 0; i < 200; i++)
         {
@@ -372,7 +410,7 @@ public sealed class ClamAvServiceTests
         lines.Add("Infected files: 1");
         var output = string.Join("\n", lines);
 
-        using var fx = ClamAvFixture.Create(FakeProcessRunner.Pumping(output, exitCode: 1));
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(output, exitCode: 1));
         var progress = new InlineProgress();
         var outcome = await fx.Service.QuickScanAsync(progress: progress);
         var events = progress.Items;
@@ -396,7 +434,7 @@ public sealed class ClamAvServiceTests
     public async Task FullScan_Exit2WithSummary_SucceedsAsPartial_WithFixedDetail()
     {
         using var fx = ClamAvFixture.Create(
-            FakeProcessRunner.Returning(ClamAvFixtures.PartialScan, exitCode: 2));
+            FakeProcessRunner.WritingScanLog(ClamAvFixtures.PartialScan, exitCode: 2));
 
         var outcome = await fx.Service.FullScanAsync();
 
@@ -409,9 +447,16 @@ public sealed class ClamAvServiceTests
         Assert.Empty(fx.Elevation.Requests);
 
         var request = Assert.Single(fx.Runner.Requests);
+        Assert.True(request.RequiresElevation);
         Assert.Equal("--recursive", request.Arguments[0]);
-        Assert.True(request.Arguments.Count >= 2); // al menos un disco fijo listo (C:\)
-        Assert.All(request.Arguments.Skip(1), root => Assert.True(Path.IsPathRooted(root)));
+        var logIndex = Assert.Single(
+            request.Arguments.Select((argument, index) => (argument, index))
+                .Where(t => t.argument.StartsWith("--log=", StringComparison.Ordinal))
+                .Select(t => t.index));
+        Assert.True(logIndex >= 2); // --recursive + al menos un disco fijo (C:\) + --log
+        Assert.All(
+            request.Arguments.Skip(1).Take(logIndex - 1),
+            root => Assert.True(Path.IsPathRooted(root)));
         Assert.Equal(TimeSpan.FromSeconds(7200), request.Timeout);
     }
 
@@ -419,7 +464,7 @@ public sealed class ClamAvServiceTests
     public async Task FullScan_Exit2WithoutSummary_FailsStructured_WithSanitizedDetail()
     {
         using var fx = ClamAvFixture.Create(
-            FakeProcessRunner.Returning(ClamAvFixtures.ErrorNoSummary, exitCode: 2));
+            FakeProcessRunner.WritingScanLog(ClamAvFixtures.ErrorNoSummary, exitCode: 2));
 
         var outcome = await fx.Service.FullScanAsync();
 
@@ -431,6 +476,8 @@ public sealed class ClamAvServiceTests
     [Fact]
     public async Task Scan_UnknownExitCode_FailsWithExitCodeFallbackMessage()
     {
+        // El fake NO escribe el log (Returning): el servicio debe tolerar el
+        // log ausente — salida vacía y fallo estructurado con el exit code.
         using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning("", exitCode: 3));
 
         var outcome = await fx.Service.QuickScanAsync();
@@ -472,33 +519,36 @@ public sealed class ClamAvServiceTests
     [Fact]
     public async Task CustomScan_ValidFile_PassesPathAsSingleArgvElement_3600s()
     {
-        using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(ClamAvFixtures.CleanScan));
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
 
         var outcome = await fx.Service.CustomScanAsync(fx.ClamScanPath!);
 
         Assert.True(outcome.Succeeded);
         var request = Assert.Single(fx.Runner.Requests);
-        Assert.Equal(3, request.Arguments.Count);
+        Assert.True(request.RequiresElevation);
+        Assert.Equal(4, request.Arguments.Count); // --recursive --verbose <ruta> --log=<temp>
         Assert.Equal("--recursive", request.Arguments[0]);
         Assert.Equal("--verbose", request.Arguments[1]);
         Assert.Equal(fx.ClamScanPath, request.Arguments[2]);
+        Assert.StartsWith("--log=", request.Arguments[3]);
         Assert.Equal(CustomScanTimeout, request.Timeout);
     }
 
     [Fact]
     public async Task CustomScan_ShellMetacharactersStayInASingleElement_NoShell()
     {
-        using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(ClamAvFixtures.CleanScan));
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
         var target = Path.Combine(fx.TempDirectory, "informe & calc.exe");
         File.WriteAllText(target, string.Empty);
 
         await fx.Service.CustomScanAsync(target);
 
         var request = Assert.Single(fx.Runner.Requests);
-        Assert.Equal(3, request.Arguments.Count);
+        Assert.Equal(4, request.Arguments.Count);
         Assert.Equal("--recursive", request.Arguments[0]);
         Assert.Equal("--verbose", request.Arguments[1]);
         Assert.Equal(Path.GetFullPath(target), request.Arguments[2]); // "…& calc.exe" viaja entero
+        Assert.StartsWith("--log=", request.Arguments[3]);
     }
 
     [Fact]
@@ -559,7 +609,7 @@ public sealed class ClamAvServiceTests
     public async Task History_AfterScans_ReturnsNewestFirst_WithCounts()
     {
         using var fx = ClamAvFixture.Create(
-            FakeProcessRunner.Returning(ClamAvFixtures.InfectedScan, exitCode: 1));
+            FakeProcessRunner.WritingScanLog(ClamAvFixtures.InfectedScan, exitCode: 1));
 
         await fx.Service.QuickScanAsync();
         await fx.Service.CustomScanAsync(fx.ClamScanPath!);
@@ -581,7 +631,7 @@ public sealed class ClamAvServiceTests
     public async Task History_RecordsFailedScan_AsStructuredEntry()
     {
         using var fx = ClamAvFixture.Create(
-            FakeProcessRunner.Returning(ClamAvFixtures.ErrorNoSummary, exitCode: 2));
+            FakeProcessRunner.WritingScanLog(ClamAvFixtures.ErrorNoSummary, exitCode: 2));
 
         await fx.Service.QuickScanAsync();
 

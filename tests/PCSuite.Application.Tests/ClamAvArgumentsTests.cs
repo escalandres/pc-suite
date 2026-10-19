@@ -47,4 +47,19 @@ public sealed class ClamAvArgumentsTests
         Assert.Equal("--verbose", args[1]);
         Assert.Equal(@"C:\safe\file & calc.exe", args[2]);
     }
+
+    [Fact]
+    public void WithScanLog_AppendsLogAsLastElement()
+    {
+        // 2026-10-18: los escaneos van elevados (runas) — sin pipes, el
+        // reporte vive en el --log que el padre taila en vivo.
+        var args = ClamAvArguments.WithScanLog(
+            ["--recursive", @"C:\target"],
+            @"C:\Users\ana\AppData\Local\Temp\scan.log");
+
+        Assert.Equal(3, args.Length);
+        Assert.Equal("--recursive", args[0]);
+        Assert.Equal(@"C:\target", args[1]); // los objetivos NO se tocan
+        Assert.Equal(@"--log=C:\Users\ana\AppData\Local\Temp\scan.log", args[^1]);
+    }
 }

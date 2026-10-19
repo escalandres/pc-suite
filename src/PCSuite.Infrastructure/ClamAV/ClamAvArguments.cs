@@ -31,6 +31,16 @@ internal static class ClamAvArguments
     public static string[] CustomScan(string fullPath) => [.. VerboseScanFlags, fullPath];
 
     /// <summary>
+    /// Inyecta la ruta del log de escaneo en el argv. Los escaneos corren
+    /// elevados (decisión del autor 2026-10-18: leer también los archivos del
+    /// sistema) y ShellExecute("runas") no permite redirigir stdout: el
+    /// reporte de clamscan vive en este archivo, que el padre taila en vivo
+    /// para mantener el progreso por archivo.
+    /// </summary>
+    public static string[] WithScanLog(string[] arguments, string logPath) =>
+        [.. arguments, "--log=" + logPath];
+
+    /// <summary>
     /// Escaneo rápido: escritorio, Descargas y temp del usuario. Descargas se
     /// resuelve por Known Folder (no existe SpecialFolder.Downloads y el nombre
     /// de carpeta está localizado: "Downloads"/"Descargas"/.); si no se puede

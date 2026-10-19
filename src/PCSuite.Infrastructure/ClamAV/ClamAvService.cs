@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using PCSuite.Contracts;
@@ -23,8 +24,12 @@ namespace PCSuite.Infrastructure.ClamAV;
 ///   la elevación por operación del Task 006; freshclam reintenta elevado SOLO
 ///   si falla por permisos y no es ya administrador (allow-list + UAC generado
 ///   por Windows, nunca simulado).
-/// - Los escaneos NUNCA elevan (ponytail): clamscan lee lo que pueda y los
-///   archivos protegidos aparecen como errores parciales en el resumen.
+/// - Los escaneos corren ELEVADOS (decisión del autor 2026-10-18, antes
+///   "nunca elevan"): un UAC puntual por escaneo para leer también los
+///   archivos del sistema. Como ShellExecute("runas") no redirige stdout, el
+///   reporte vive en un log temporal (--log) que el padre taila en vivo:
+///   mismo progreso por archivo que con pipes, y el contenido del log se
+///   devuelve como StandardOutput para que el parser no cambie.
 /// - Los fallos controlados vuelven como outcomes estructurados o como
 ///   ClamAvException (código + mensaje aptos para la UI), jamás stack traces.
 /// </summary>
@@ -44,12 +49,23 @@ public sealed class ClamAvService : IClamAvService
     /// <summary>
 /// Mensaje informativo para escaneo parcial (exit code 2 con resumen).
 /// No es un error: el escaneo completó pero algunos archivos no fueron accesibles.
+/// Desde 2026-10-18 los escaneos corren ELEVADOS: lo que queda sin leer son
+/// archivos bloqueados en exclusiva (pagefile, hives en uso), no falta de permisos.
 /// </summary>
     private const string PartialScanDetail =
         "Escaneo completado con accesos limitados: algunos archivos no se pudieron leer " +
-        "(archivos en uso, sin permisos, cifrados o puntos de reanálisis). " +
-        "Esto es normal en escaneos de sistema. " +
-        "Para mayor cobertura, cierre aplicaciones y reintente, o ejecute como administrador (requiere elevación manual de clamscan).";
+        "(bloqueados en exclusiva por otro proceso, cifrados o puntos de reanálisis). " +
+        "Esto es normal en escaneos de disco. Para mayor cobertura, cierre aplicaciones y reintente.";
+
+    /// <summary>Mensaje cuando el usuario descarta el prompt UAC del escaneo.</summary>
+    private const string UacDeclinedMessage =
+        "Se rechazó el permiso de administrador (UAC): el escaneo no se ejecutó.";
+
+    /// <summary>
+    /// Intervalo de poll del tail del log de escaneo. 400 ms: progreso
+    /// perceptible sin bombardear el disco (el log se escribe en ráfagas).
+    /// </summary>
+    private static readonly TimeSpan ScanLogPollInterval = TimeSpan.FromMilliseconds(400);
 
     private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
 
@@ -482,7 +498,7 @@ public sealed class ClamAvService : IClamAvService
                 throw new ClamAvException(BridgeErrorCodes.NotInstalled, NotInstalledMessage);
             }
 
-            var result = await RunScanWithProgressAsync(
+            var result = await RunScanElevatedWithProgressAsync(
                 clamscan,
                 arguments,
                 timeout,
@@ -538,9 +554,19 @@ public sealed class ClamAvService : IClamAvService
     }
 
     /// <summary>
-    /// Ejecuta clamscan con streaming de progreso para reportar archivos/directorios en tiempo real.
+    /// Ejecuta clamscan ELEVADO (decisión del autor 2026-10-18: los tres modos
+    /// de escaneo piden UAC — con permisos se leen también los archivos del
+    /// sistema y desaparecen los "Can't fstat"/"Access denied" de archivos
+    /// protegidos). Un solo prompt UAC por escaneo, generado por Windows vía
+    /// ShellExecute("runas").
+    ///
+    /// "runas" no permite redirigir stdout, así que el reporte de clamscan se
+    /// dirige a un log temporal (--log) que el padre TAILA en vivo: el
+    /// progreso por archivo llega igual que con pipes. Al terminar, el
+    /// contenido del log se devuelve COMO StandardOutput: el parser y el
+    /// caller no cambian en nada.
     /// </summary>
-    private async Task<ProcessResult?> RunScanWithProgressAsync(
+    private async Task<ProcessResult?> RunScanElevatedWithProgressAsync(
         string clamscanPath,
         string[] arguments,
         TimeSpan timeout,
@@ -550,18 +576,66 @@ public sealed class ClamAvService : IClamAvService
         IProgress<ClamAvScanProgress>? progress)
     {
         var progressReporter = new ClamScanProgressReporter(progress, _events, scanKind);
+        var logPath = Path.Combine(
+            Path.GetTempPath(),
+            $"pcsuite-clamav-scan-{Guid.NewGuid():N}.log");
         try
         {
-            return await _processRunner.ExecuteAsync(
+            var executeTask = _processRunner.ExecuteAsync(
                 new ProcessRequest
                 {
                     FileName = clamscanPath,
-                    Arguments = arguments,
+                    Arguments = ClamAvArguments.WithScanLog(arguments, logPath),
                     Timeout = timeout,
-                    OnStandardOutput = line => progressReporter.OnOutputLine(line),
-                    OnStandardError = line => progressReporter.OnErrorLine(line),
+                    RequiresElevation = true,
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
+
+            // Tail en vivo del log: mientras clamscan corre (y UAC pendiente),
+            // cada ciclo entrega solo las líneas NUEVAS al mismo reporter que
+            // usaban los pipes — el progreso por archivo es idéntico.
+            var offset = 0L;
+            var partialLine = new StringBuilder();
+            while (!executeTask.IsCompleted)
+            {
+                await Task.Delay(ScanLogPollInterval, cancellationToken).ConfigureAwait(false);
+                foreach (var line in ClamAvScanLogTail.ReadNewLines(logPath, ref offset, partialLine))
+                {
+                    progressReporter.OnOutputLine(line);
+                }
+            }
+
+            var result = await executeTask.ConfigureAwait(false);
+
+            // Desagüe final: lo que quedó escrito entre el último ciclo y la
+            // salida del proceso.
+            foreach (var line in ClamAvScanLogTail.ReadNewLines(logPath, ref offset, partialLine))
+            {
+                progressReporter.OnOutputLine(line);
+            }
+            if (partialLine.Length > 0)
+            {
+                progressReporter.OnOutputLine(partialLine.ToString());
+            }
+
+            // El contenido del log ES la salida del escaneo: el caller parsea
+            // result.StandardOutput exactamente igual que con pipes.
+            var logContent = File.Exists(logPath)
+                ? await File.ReadAllTextAsync(logPath, cancellationToken).ConfigureAwait(false)
+                : string.Empty;
+
+            return new ProcessResult
+            {
+                ExitCode = result.ExitCode,
+                StandardOutput = logContent,
+                StandardError = string.Empty,
+            };
+        }
+        catch (ElevationDeclinedException)
+        {
+            // El usuario descartó el prompt UAC: resultado controlado, sin
+            // drama y sin escaneo a medias.
+            throw new ClamAvException(BridgeErrorCodes.ElevationCancelled, UacDeclinedMessage);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -573,12 +647,27 @@ public sealed class ClamAvService : IClamAvService
         }
         catch (Exception exception)
         {
-            _logger?.LogWarning(exception, "No se pudo ejecutar clamscan.");
+            _logger?.LogWarning(exception, "No se pudo ejecutar clamscan elevado.");
             return null;
         }
         finally
         {
             progressReporter.Complete();
+            try
+            {
+                if (File.Exists(logPath))
+                {
+                    File.Delete(logPath);
+                }
+            }
+            catch (IOException)
+            {
+                // best-effort: el temporal queda en %TEMP% a lo sumo hasta la
+                // limpieza del sistema.
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 

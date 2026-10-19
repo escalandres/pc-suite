@@ -72,8 +72,10 @@ public sealed class JobOperationsTests
     [Fact]
     public async Task JobGet_ReturnsSnapshot_CamelCase_WithResult()
     {
+        // Los escaneos van elevados (2026-10-18): el resultado se parsea del
+        // --log, así que el fake debe escribirlo (WritingScanLog).
         var (router, jobs, _) = Create(
-            FakeProcessRunner.Returning(ClamAvFixtures.CleanScan));
+            FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
 
         var start = await Send(router, "j1", OperationIds.ClamavQuickScan);
         var jobId = start.Result!.Value.GetProperty("jobId").GetString()!;

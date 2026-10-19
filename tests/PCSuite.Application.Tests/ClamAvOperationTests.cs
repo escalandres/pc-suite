@@ -43,7 +43,7 @@ public sealed class ClamAvOperationTests
     public async Task QuickScan_StartsJob_RespondsJobIdAtOnce_ResultCarriesOutcome()
     {
         using var fx = ClamAvFixture.Create(
-            FakeProcessRunner.Returning(ClamAvFixtures.InfectedScan, exitCode: 1));
+            FakeProcessRunner.WritingScanLog(ClamAvFixtures.InfectedScan, exitCode: 1));
 
         var response = await Send(fx.Router, "q1", OperationIds.ClamavQuickScan);
 
@@ -109,7 +109,7 @@ public sealed class ClamAvOperationTests
     [Fact]
     public async Task History_ReturnsEntries_NewestFirst_CamelCase()
     {
-        using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(ClamAvFixtures.CleanScan));
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
         await fx.Service.QuickScanAsync();
 
         var response = await Send(fx.Router, "h1", OperationIds.ClamavHistory);
@@ -131,7 +131,7 @@ public sealed class ClamAvOperationTests
     [Fact]
     public async Task CustomScan_WithValidPayload_ScansThatPath()
     {
-        using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(ClamAvFixtures.CleanScan));
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
         var payloadJson = JsonSerializer.Serialize(new { path = fx.ClamScanPath });
 
         var response = await Send(fx.Router, "c1", OperationIds.ClamavCustomScan, payloadJson);
@@ -141,12 +141,14 @@ public sealed class ClamAvOperationTests
         await WaitForJobAsync(fx.Jobs, jobId);
 
         // El argv fijo viaja como lista: la ruta validada es el único dato
-        // que la UI aporta y va SIEMPRE como elemento final.
+        // que la UI aporta; el --log del escaneo elevado va SIEMPRE al final.
         var request = Assert.Single(fx.Runner.Requests);
+        Assert.True(request.RequiresElevation); // UAC por escaneo (decisión 2026-10-18)
         Assert.Equal("--recursive", request.Arguments[0]);
         Assert.Equal("--verbose", request.Arguments[1]);
         Assert.Equal(fx.ClamScanPath, request.Arguments[2]);
-        Assert.Equal(3, request.Arguments.Count);
+        Assert.StartsWith("--log=", request.Arguments[3]);
+        Assert.Equal(4, request.Arguments.Count);
     }
 
     [Fact]

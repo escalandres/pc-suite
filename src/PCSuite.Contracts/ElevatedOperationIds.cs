@@ -28,10 +28,10 @@ public static class ElevatedOperationIds
     // shutdown/start jamás elevan. Nunca un shell.
     public const string WslUpdate = "elevated.wsl.update";
 
-    // freshclam (Task 008): la ÚNICA mutación ClamAV que puede necesitar
-    // privilegios (escribir las definiciones en Program Files). argv fijo
-    // dentro del proceso elevado y payload ignorado; los escaneos jamás
-    // elevan. Nunca un shell.
+    // freshclam (Task 008): la ÚNICA mutación ClamAV que usa este helper
+    // (escribir las definiciones en Program Files). Los escaneos corren
+    // elevados desde 2026-10-18 por runas DIRECTO de clamscan con --log
+    // temporal (tail en vivo) — no pasan por este helper. Nunca un shell.
     public const string ClamavUpdateDefinitions = "elevated.clamav.updateDefinitions";
 
     // Regla de firewall de Local Share (Task 016.6): la ÚNICA mutación de
