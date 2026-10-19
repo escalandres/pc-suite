@@ -24,8 +24,8 @@ import {
   registerShortcut,
   toggleHelp,
 } from './shortcuts';
-import type { AppReadyEvent } from './types/bridge';
-import { EventIds } from './types/bridge';
+import type { AppReadyEvent, SystemInfoResult } from './types/bridge';
+import { EventIds, OperationIds } from './types/bridge';
 import { usePreference, PREF_DENSITY } from './prefs';
 
 /** Parsea el hash de la URL: #/page o #/tools/tool-id */
@@ -117,6 +117,23 @@ export default function App() {
     const unsubscribe = bridge.on<AppReadyEvent>(EventIds.appReady, (payload) => {
       setReadyNotice(`PCSuite ${payload?.appVersion ?? ''} listo.`);
     });
+
+    // Carrera de arranque: el host emite app.ready en NavigationCompleted,
+    // que puede llegar ANTES de que React monte y suscriba el handler de
+    // arriba → el evento one-shot se pierde y el pie de la sidebar quedaba
+    // "Cargando…" para siempre (por eso solo pasaba A VECES). Recuperación
+    // determinista: pedir la versión por system.info — el router del puente
+    // se conecta antes de navegar, así que esta llamada no se puede perder.
+    // Respeta un aviso ya puesto por app.ready (setReadyNotice funcional).
+    bridge
+      .call<SystemInfoResult>(OperationIds.systemInfo)
+      .then((info) => {
+        setReadyNotice((current) => current ?? `PCSuite ${info.appVersion} listo.`);
+      })
+      .catch(() => {
+        // Sin recuperación posible: si el call falló, app.ready tampoco
+        // llegará — el pie mantiene "Cargando…", que es cierto.
+      });
 
     return unsubscribe;
   }, []);
