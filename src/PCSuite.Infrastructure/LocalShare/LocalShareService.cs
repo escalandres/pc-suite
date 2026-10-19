@@ -404,14 +404,22 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         {
             if (_devices.TryGetValue(deviceId, out var existing))
             {
-                // Actualizar: añadir IP si no está, actualizar LastSeenAt
+                // Actualizar: LastSeenAt + MRU de direcciones.
                 existing.LastSeenAt = DateTimeOffset.UtcNow;
-                var addresses = existing.KnownAddresses.ToList();
-                if (!addresses.Contains(address, StringComparer.OrdinalIgnoreCase))
-                {
-                    addresses.Add(address);
-                    existing.KnownAddresses = addresses;
-                }
+
+                // MRU (bug 2026-10-19): la dirección que anuncia AHORA va al
+                // frente — las conexiones salientes prueban KnownAddresses[0]
+                // primero. Antes solo se AÑADÍAN al final: la IP del día del
+                // emparejamiento quedaba congelada arriba y, tras un cambio de
+                // IP (DHCP/otra interfaz), los envíos conectaban a una IP
+                // rancia y morían con "conexión rechazada" sin que el
+                // receptor llegara a enterarse.
+                var addresses = existing.KnownAddresses
+                    .Where(a => !a.Equals(address, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                addresses.Insert(0, address);
+                existing.KnownAddresses = addresses;
+
                 existing.Port = port;
                 existing.DisplayName = displayName;
                 existing.CertificateThumbprint ??= thumbprint;

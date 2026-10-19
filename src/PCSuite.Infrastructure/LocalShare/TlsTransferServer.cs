@@ -202,10 +202,31 @@ public sealed class TlsTransferServer : IDisposable
                     "busy",
                     "El receptor está ocupado con otras transferencias. Inténtalo de nuevo en unos segundos."),
                 ct).ConfigureAwait(false);
+
+            // Gracia anti-RST (bug 2026-10-19): el emisor tiene un HELLO en
+            // vuelo que aquí NO leeremos. Cerrar el socket con datos sin
+            // leer genera RST en vez de FIN, y el RST BORRA el frame busy
+            // del buffer del emisor → este veía un críptico "Unable to read
+            // data from the transport" en vez del aviso (según quién ganara
+            // la carrera). Drenar hasta EOF deja el cierre limpio: el busy
+            // llega SIEMPRE y el emisor se desconecta solo al verlo.
+            using var graceCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            graceCts.CancelAfter(TimeSpan.FromSeconds(2));
+            while (true)
+            {
+                _ = await ShareProtocol.ReadFrameAsync(sslStream, graceCts.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Tope de la gracia: el emisor no se fue en 2 s — cerramos igual
+            // (best-effort: el busy ya está escrito en el buffer TCP).
         }
         catch (Exception ex)
         {
-            _logger?.LogDebug(ex, "No se pudo enviar 'busy' a {Ip}", remoteIp);
+            // EOF del emisor (lo normal: se fue al ver el busy) o cierre
+            // abrupto: la gracia cumplió su cometido.
+            _logger?.LogDebug(ex, "Drain del 'busy' terminó para {Ip}", remoteIp);
         }
         finally
         {

@@ -16,6 +16,13 @@ namespace PCSuite.Infrastructure.LocalShare;
 /// </summary>
 public sealed class TransferClient
 {
+    /// <summary>
+    /// Timeout por dirección al conectar. El "connection refused" es
+    /// inmediato; una IP dormida o ya no asignada no puede bloquear el
+    /// envío entero: a los 3 s se prueba la siguiente dirección conocida.
+    /// </summary>
+    private static readonly TimeSpan ConnectTimeoutPerAddress = TimeSpan.FromSeconds(3);
+
     private readonly X509Certificate2 _clientCertificate;
     private readonly ILogger? _logger;
 
@@ -23,6 +30,114 @@ public sealed class TransferClient
     {
         _clientCertificate = clientCertificate;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Conecta al par probando sus direcciones conocidas EN ORDEN hasta que
+    /// una responde. Bug 2026-10-19: antes se conectaba SIEMPRE a
+    /// KnownAddresses[0]; si la IP del par cambió (DHCP, otra interfaz), la
+    /// primera quedaba rancia y el envío moría con "conexión rechazada"
+    /// sin que el receptor supiera nada. MRU (NoteDiscoveredDevice) + este
+    /// fallback hacen el envío tolerante a IPs rancias persistidas.
+    /// Internal para los tests E2E.
+    /// </summary>
+    internal async Task<(TcpClient Tcp, string Address)> ConnectToPeerAsync(
+        SharedDevice peer,
+        CancellationToken ct = default,
+        TimeSpan? perAddressTimeout = null)
+    {
+        var timeout = perAddressTimeout ?? ConnectTimeoutPerAddress;
+        Exception? lastError = null;
+        foreach (var address in peer.KnownAddresses)
+        {
+            ct.ThrowIfCancellationRequested();
+            var tcp = new TcpClient();
+            try
+            {
+                using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                attemptCts.CancelAfter(timeout);
+                await tcp.ConnectAsync(address, peer.Port, attemptCts.Token).ConfigureAwait(false);
+                _logger?.LogInformation(
+                    "Conexión con {Name} establecida por {Address}:{Port}",
+                    peer.DisplayName, address, peer.Port);
+                return (tcp, address);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // Timeout de ESTE intento: la dirección no responde.
+                tcp.Dispose();
+                _logger?.LogInformation(
+                    "Dirección {Address} de {Name} no respondió; probando la siguiente",
+                    address, peer.DisplayName);
+            }
+            catch (SocketException exception)
+            {
+                // Rechazada o inalcanzable: probar la siguiente dirección.
+                lastError = exception;
+                tcp.Dispose();
+                _logger?.LogInformation(
+                    "Dirección {Address} de {Name} rechazó la conexión ({Error}); probando la siguiente",
+                    address, peer.DisplayName, exception.SocketErrorCode);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"No se pudo conectar con {peer.DisplayName}: ninguna de sus " +
+            $"{peer.KnownAddresses.Count} dirección(es) conocidas respondió. " +
+            "Comprueba que el otro equipo está encendido con Local Share activo en la misma red.",
+            lastError);
+    }
+
+    /// <summary>
+    /// Conecta (con fallback de direcciones) y completa el handshake TLS, con
+    /// UN reintento. Motivo (bug 2026-10-19): SChannel con TLS 1.3 +
+    /// certificado de cliente falla de forma intermitente bajo handshakes
+    /// CONCURRENTES — IOException "Unable to read data from the transport"
+    /// DURANTE AuthenticateAsClientAsync (visto con 3 envíos simultáneos).
+    /// El reintento es solo de conexión/autenticación: un fallo del DIÁLOGO
+    /// de protocolo ya no se reintenta (sería re-ejecutar efectos).
+    /// Internal para los tests E2E.
+    /// </summary>
+    internal async Task<(SslStream Stream, string Address)> ConnectAuthenticatedAsync(
+        SharedDevice peer,
+        Func<X509Certificate?, bool> serverValidator,
+        CancellationToken ct = default)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var (tcp, address) = await ConnectToPeerAsync(peer, ct).ConfigureAwait(false);
+            var ssl = new SslStream(
+                tcp.GetStream(),
+                leaveInnerStreamOpen: false,
+                (_, cert, _, _) => serverValidator(cert));
+            try
+            {
+                var options = new SslClientAuthenticationOptions
+                {
+                    ClientCertificates = [_clientCertificate],
+                    TargetHost = "PCSuite Local Share",
+                    EnabledSslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                };
+                await ssl.AuthenticateAsClientAsync(options, ct).ConfigureAwait(false);
+                _logger?.LogInformation("TLS establecido con {Host}:{Port}", address, peer.Port);
+                return (ssl, address); // la propiedad del stream pasa al caller
+            }
+            catch (Exception exception)
+                when (attempt == 1
+                    && exception is IOException or AuthenticationException
+                    && !ct.IsCancellationRequested)
+            {
+                // Carrera conocida de SChannel: reintentar una vez con una
+                // conexión nueva. El servidor ve un handshake abortado y
+                // libera su slot sin daño (nada del diálogo llegó a pasar).
+                ssl.Dispose();
+                _logger?.LogInformation(
+                    "Handshake TLS con {Address} falló ({Message}); reintentando una vez",
+                    address, exception.Message);
+            }
+        }
     }
 
     /// <summary>
@@ -46,23 +161,15 @@ public sealed class TransferClient
         Action<long> onProgress,
         CancellationToken ct = default)
     {
-        using var tcp = new TcpClient();
-        await tcp.ConnectAsync(peer.KnownAddresses[0], peer.Port, ct).ConfigureAwait(false);
-        using var sslStream = new SslStream(
-            tcp.GetStream(),
-            leaveInnerStreamOpen: false,
-            (_, cert, _, _) => ValidateServerCertificate(cert, peer.CertificateThumbprint));
-
-        var sslOptions = new SslClientAuthenticationOptions
-        {
-            ClientCertificates = [_clientCertificate],
-            TargetHost = "PCSuite Local Share",
-            EnabledSslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12,
-            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-        };
-
-        await sslStream.AuthenticateAsClientAsync(sslOptions, ct).ConfigureAwait(false);
-        _logger?.LogInformation("TLS establecido con {Host}:{Port}", peer.KnownAddresses[0], peer.Port);
+        // Fallback de direcciones + reintento de handshake (bugs 2026-10-19):
+        // una IP rancia en KnownAddresses[0] ya no tumba el envío, y la
+        // carrera de SChannel con TLS 1.3 + certificado de cliente bajo
+        // handshakes concurrentes se reintenta una vez.
+        var (authenticatedStream, peerAddress) = await ConnectAuthenticatedAsync(
+            peer,
+            cert => ValidateServerCertificate(cert, peer.CertificateThumbprint),
+            ct).ConfigureAwait(false);
+        using var sslStream = authenticatedStream;
 
         // 1. HELLO
         await ShareProtocol.WriteControlAsync(
@@ -280,16 +387,13 @@ public sealed class TransferClient
                 "El dispositivo no tiene huella anunciada: no se puede verificar su identidad.");
         }
 
-        using var tcp = new TcpClient();
-        await tcp.ConnectAsync(peer.KnownAddresses[0], peer.Port, ct).ConfigureAwait(false);
-
-        // La huella del servidor tal y como se presentó en el handshake:
-        // material vivo para derivar el código (no el anuncio).
+        // Fallback de direcciones + reintento de handshake (bugs 2026-10-19).
+        // La huella VIVA del handshake: material para derivar el código
+        // (no el anuncio). El callback la captura de cada intento.
         string? liveServerThumbprint = null;
-        using var sslStream = new SslStream(
-            tcp.GetStream(),
-            leaveInnerStreamOpen: false,
-            (_, cert, _, _) =>
+        var (authenticatedStream, _) = await ConnectAuthenticatedAsync(
+            peer,
+            cert =>
             {
                 var thumb = TlsTransferServer.GetThumbprint(cert);
                 if (thumb is not null)
@@ -298,17 +402,9 @@ public sealed class TransferClient
                 }
 
                 return ValidateServerCertificate(cert, peer.CertificateThumbprint);
-            });
-
-        var sslOptions = new SslClientAuthenticationOptions
-        {
-            ClientCertificates = [_clientCertificate],
-            TargetHost = "PCSuite Local Share",
-            EnabledSslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12,
-            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-        };
-
-        await sslStream.AuthenticateAsClientAsync(sslOptions, ct).ConfigureAwait(false);
+            },
+            ct).ConfigureAwait(false);
+        using var sslStream = authenticatedStream;
 
         if (liveServerThumbprint is null)
         {

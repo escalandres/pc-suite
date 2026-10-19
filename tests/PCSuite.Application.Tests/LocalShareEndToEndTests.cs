@@ -801,4 +801,123 @@ public class LocalShareEndToEndTests : IDisposable
             Assert.Equal(content, File.ReadAllText(path));
         }
     }
+
+    // ------------------------------------------------------------------
+    // Bug 2026-10-19: IP rancia en KnownAddresses[0]
+    //
+    // El par cambió de IP (DHCP/otra interfaz); su dirección vieja quedó
+    // primera en devices.json. Antes: el envío conectaba SIEMPRE a [0],
+    // recibía "conexión rechazada" y el receptor jamás veía la solicitud
+    // (ni approval). Fix doble: MRU (la IP que anuncia va al frente) +
+    // fallback (probar el resto de direcciones conocidas).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void NoteDiscoveredDevice_MovesAnnouncingAddressToFront()
+    {
+        // La IP nueva anunciada por el par debe quedar [0]: es la viva.
+        _serviceA.NoteDiscoveredDevice("device-b", "Equipo B", "192.168.0.7", 45180, "huella-b");
+        _serviceA.NoteDiscoveredDevice("device-b", "Equipo B", "192.168.0.10", 45180, "huella-b");
+
+        var device = _serviceA.GetDevices().Single(d => d.DeviceId == "device-b");
+        Assert.Equal("192.168.0.10", device.KnownAddresses[0]);
+        Assert.Equal(2, device.KnownAddresses.Count);
+        Assert.Contains("192.168.0.7", device.KnownAddresses); // la vieja sigue de respaldo
+
+        // Re-anunciar la misma IP no duplica ni pierde el orden.
+        _serviceA.NoteDiscoveredDevice("device-b", "Equipo B", "192.168.0.10", 45180, "huella-b");
+        device = _serviceA.GetDevices().Single(d => d.DeviceId == "device-b");
+        Assert.Equal("192.168.0.10", device.KnownAddresses[0]);
+        Assert.Equal(2, device.KnownAddresses.Count);
+    }
+
+    [Fact]
+    public async Task ConnectToPeer_FallsBackWhenFirstAddressIsDead()
+    {
+        // Servidor REAL en loopback. La primera dirección es 192.0.2.1
+        // (TEST-NET-1, RFC 5737: no enrutable, nunca responde) — el
+        // escenario exacto del bug: una IP que ya no es del par.
+        // Nota: 127.0.0.2 NO sirve como "muerta" — el listener bindea a
+        // IPAddress.Any y Windows acepta TODO el rango 127.x en loopback.
+        await _serviceB.StartAsync();
+
+        var client = new TransferClient(new CertificateStore(_dirA).Certificate);
+        var peer = new SharedDevice
+        {
+            DeviceId = "device-b",
+            DisplayName = "Equipo B",
+            KnownAddresses = ["192.0.2.1", "127.0.0.1"],
+            Port = PortB,
+            Trust = DeviceTrust.Paired,
+            CertificateThumbprint = "huella",
+        };
+
+        var (_, address) = await client.ConnectToPeerAsync(
+            peer, perAddressTimeout: TimeSpan.FromMilliseconds(300));
+
+        Assert.Equal("127.0.0.1", address);
+    }
+
+    [Fact]
+    public async Task ConnectToPeer_AllAddressesDead_ThrowsClearMessage()
+    {
+        var client = new TransferClient(new CertificateStore(_dirA).Certificate);
+        var peer = new SharedDevice
+        {
+            DeviceId = "device-b",
+            DisplayName = "Equipo B",
+            KnownAddresses = ["192.0.2.1", "198.51.100.1"], // TEST-NET-1 y -2: nunca responden
+            Port = 45999,
+            Trust = DeviceTrust.Paired,
+            CertificateThumbprint = "huella",
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.ConnectToPeerAsync(peer, perAddressTimeout: TimeSpan.FromMilliseconds(300)));
+
+        Assert.Contains("ninguna", exception.Message);
+        Assert.Contains("2", exception.Message); // cuenta de direcciones probadas
+        Assert.DoesNotContain("   at ", exception.Message);
+    }
+
+    [Fact]
+    public async Task SendToPairedDeviceWithStaleFirstAddress_TransferCompletes()
+    {
+        // Escenario EXACTO del usuario: devices.json persistido con la IP
+        // vieja arriba (datos previos al fix) y el par vivo en la segunda.
+        // El fallback de TransferClient debe salvar el envío.
+        await StartAndPairAsync();
+
+        // Simular devices.json de antes del fix: [0] = IP muerta (no
+        // enrutable; 127.0.0.2 no valdría: Any acepta todo loopback).
+        await _serviceA.StopAsync();
+        var devicesPath = Path.Combine(_dirA, "LocalShare", "devices.json");
+        var json = File.ReadAllText(devicesPath);
+        // La entrada de B se emparejó contra 127.0.0.1: reescribir su lista.
+        json = json.Replace("[\"127.0.0.1\"]", "[\"192.0.2.1\",\"127.0.0.1\"]");
+        File.WriteAllText(devicesPath, json);
+        await _serviceA.StartAsync();
+
+        var fileToSend = Path.Combine(_dirA, "despues-de-cambio-ip.txt");
+        File.WriteAllText(fileToSend, "Contenido tras caer en la IP rancia.");
+
+        var incomingTcs = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceB.IncomingRequest += (t, _) => incomingTcs.TrySetResult(t);
+        var finishedTcs = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceB.TransferFinished += t => finishedTcs.TrySetResult(t);
+
+        var transfer = await _serviceA.SendAsync("device-b", [fileToSend]);
+
+        // La solicitud SÍ llega al receptor: el approval aparece.
+        var incoming = await incomingTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await _serviceB.AcceptAsync(incoming.TransferId);
+        var result = await finishedTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(TransferStatus.Completed, result.Status);
+        var expectedPath = Path.Combine(_dirB, "received", "despues-de-cambio-ip.txt");
+        Assert.True(File.Exists(expectedPath), "El archivo no llegó tras el fallback.");
+        Assert.Equal("Contenido tras caer en la IP rancia.", File.ReadAllText(expectedPath));
+    }
 }
