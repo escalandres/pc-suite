@@ -267,6 +267,7 @@ public partial class MainForm : Form
                 new LocalSharePairRejectOperation(localShareService),
                 new LocalSharePairCancelOperation(localShareService),
                 new LocalShareSendOperation(localShareService),
+                new LocalShareSendMessageOperation(localShareService),
                 new LocalShareAcceptOperation(localShareService),
                 new LocalShareRejectOperation(localShareService),
                 new LocalShareTransfersOperation(localShareService),

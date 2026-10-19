@@ -115,6 +115,16 @@ public interface ILocalShareService
         IReadOnlyList<string> localPaths,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Envía un mensaje de TEXTO a un par emparejado (Task 016.8): mismo
+    /// pipeline que los archivos (TLS, consentimiento, SHA-256), con un
+    /// único ítem marcado como mensaje.
+    /// </summary>
+    Task<ShareTransfer> SendMessageAsync(
+        string deviceId,
+        string text,
+        CancellationToken cancellationToken = default);
+
     // ------------------------------------------------------------------
     // Transferencias (entrantes)
     // ------------------------------------------------------------------

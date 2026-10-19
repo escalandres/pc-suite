@@ -76,7 +76,15 @@ public static class ShareProtocol
     public sealed record HelloPayload(string DeviceId, string DisplayName, string Thumbprint);
 
     /// <summary>Metadatos de un archivo en la solicitud de transferencia.</summary>
-    public sealed record ItemMeta(string ItemId, string RelativePath, long Size, string? Sha256);
+    public sealed record ItemMeta(
+    string ItemId,
+    string RelativePath,
+    long Size,
+    string? Sha256,
+    // Task 016.8: 0 = archivo (default, receptores viejos lo ignoran),
+    // 1 = mensaje de texto. Campo aditivo: JSON extra en un constructor
+    // posicional se ignora en versiones anteriores — degradación elegante.
+    int Kind = 0);
 
     public sealed record TransferRequestPayload(
         string TransferId,

@@ -109,6 +109,12 @@ public sealed class ShareTransferItemResult
     public string Status { get; init; } = "pendingApproval";
 
     public long TransferredBytes { get; init; }
+
+    /// <summary>Task 016.8: el ítem es un mensaje de texto, no un archivo.</summary>
+    public bool IsMessage { get; init; }
+
+    /// <summary>Contenido del mensaje (receptor, ítem completado). Null si aún no llegó o falló.</summary>
+    public string? MessageText { get; init; }
 }
 
 /// <summary>Resultado de localshare.transfers.</summary>
@@ -174,6 +180,15 @@ public sealed class LocalShareSendPayload
 public sealed class LocalSharePairPayload
 {
     public string DeviceId { get; init; } = "";
+}
+
+/// <summary>Payload de localshare.sendMessage (Task 016.8): { deviceId, text }.</summary>
+public sealed class LocalShareSendMessagePayload
+{
+    public string DeviceId { get; init; } = "";
+
+    /// <summary>Texto del mensaje (UTF-8, tope 16 KB; sin stack traces ni nada que recorrer).</summary>
+    public string Text { get; init; } = "";
 }
 
 /// <summary>Payload de localshare.pairAccept / localshare.pairReject.</summary>

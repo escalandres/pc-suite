@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Copy,
   FolderOpen,
   Globe,
   HardDrive,
+  MessageSquare,
   MonitorSmartphone,
   Play,
   RefreshCw,
@@ -214,6 +216,25 @@ export function LocalShare() {
     } catch (e) {
       setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo enviar.' });
     } finally { setSending(false); }
+  };
+
+  /** Task 016.8: mensaje de texto al par seleccionado — mismo pipeline y consentimiento. */
+  const [messageText, setMessageText] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  const sendMessage = async () => {
+    const text = messageText.trim();
+    if (!selectedDevice || text === '' || sendingMessage) return;
+    setSendingMessage(true);
+    setNotice(null);
+    try {
+      await bridge.call(OperationIds.localShareSendMessage, { deviceId: selectedDevice, text }, SEND_TIMEOUT);
+      setMessageText('');
+      setNotice({ kind: 'success', text: 'Mensaje enviado. Esperando aprobación del receptor.' });
+      await refresh();
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo enviar el mensaje.' });
+    } finally { setSendingMessage(false); }
   };
 
   /**
@@ -603,12 +624,12 @@ export function LocalShare() {
             Solicitud entrante de {incomingRequest.peerDisplayName}
           </h2>
           <p className="mb-3 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            {incomingRequest.itemCount} archivo(s) · {formatBytes(incomingRequest.totalBytes)}
+            {incomingRequest.itemCount} archivo(s){incomingRequest.items.some(i => i.isMessage) ? ' / mensaje(es)' : ''} · {formatBytes(incomingRequest.totalBytes)}
           </p>
           <div className="mb-3 max-h-40 overflow-y-auto">
             {incomingRequest.items.slice(0, 5).map((item) => (
               <p key={item.itemId} className="truncate text-xs font-mono" style={{ color: 'var(--pcs-text-muted)' }}>
-                {item.relativePath} · {formatBytes(item.expectedSize)}
+                {item.isMessage ? '💬 mensaje de texto' : item.relativePath} · {formatBytes(item.expectedSize)}
               </p>
             ))}
             {incomingRequest.items.length > 5 && (
@@ -747,6 +768,58 @@ export function LocalShare() {
             </button>
           </div>
         </section>
+
+        {/* Task 016.8: mensaje de texto al mismo par — mismo pipeline y consentimiento */}
+        <section
+          className="rounded-lg border p-4"
+          style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+          aria-label="Enviar mensaje"
+        >
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={16} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+              <h3 className="text-sm font-semibold">Mensaje de texto</h3>
+              <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                mismo pipeline cifrado y consentimiento que los archivos (tope 16 KB)
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <textarea
+                value={messageText}
+                onChange={(event) => setMessageText(event.target.value)}
+                onKeyDown={(event) => {
+                  // Ctrl+Enter envía; Enter solo es salto de línea natural en un textarea.
+                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                    event.preventDefault();
+                    void sendMessage();
+                  }
+                }}
+                placeholder={selectedDevice
+                  ? `Mensaje para ${devices.find(d => d.deviceId === selectedDevice)?.displayName ?? 'el par'}… (Ctrl+Enter para enviar)`
+                  : 'Selecciona un dispositivo emparejado arriba…'}
+                rows={2}
+                maxLength={16 * 1024}
+                disabled={!selectedDevice || sendingMessage}
+                className="w-full resize-y rounded-md border px-3 py-2 text-sm disabled:opacity-40"
+                style={{
+                  background: 'var(--pcs-bg)',
+                  color: 'var(--pcs-text)',
+                  borderColor: 'var(--pcs-border)',
+                }}
+              />
+              <button
+                type="button"
+                disabled={!selectedDevice || messageText.trim() === '' || sendingMessage}
+                onClick={() => void sendMessage()}
+                className="flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40"
+                style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+              >
+                <Send size={13} aria-hidden />
+                {sendingMessage ? 'Enviando…' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
 
       {/* Transferencias */}
@@ -825,6 +898,41 @@ export function LocalShare() {
                     <p className="mt-1 text-xs" style={{ color: 'var(--pcs-danger)' }}>
                       {t.errorMessage}
                     </p>
+                  )}
+                  {t.items?.some(i => i.isMessage) && (
+                    <div className="mt-2 space-y-1.5">
+                      {t.items.filter(i => i.isMessage).map(i => (
+                        <div key={i.itemId}>
+                          {i.messageText ? (
+                            <div
+                              className="flex items-start gap-2 rounded-md border px-3 py-2"
+                              style={{
+                                background: 'color-mix(in srgb, var(--pcs-accent) 8%, transparent)',
+                                borderColor: 'color-mix(in srgb, var(--pcs-accent) 35%, transparent)',
+                              }}
+                            >
+                              <MessageSquare size={13} aria-hidden className="mt-1 shrink-0" style={{ color: 'var(--pcs-accent)' }} />
+                              <p className="min-w-0 flex-1 break-words whitespace-pre-wrap text-sm" style={{ color: 'var(--pcs-text)' }}>
+                                {i.messageText}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => void navigator.clipboard.writeText(i.messageText ?? '')}
+                                className="shrink-0 cursor-pointer rounded border px-1.5 py-0.5 text-xs font-medium"
+                                style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text-muted)' }}
+                                title="Copiar mensaje al portapapeles"
+                              >
+                                <Copy size={12} aria-hidden />
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                              💬 mensaje de texto ({i.status === 'completed' ? 'en carpeta Mensajes' : formatBytes(i.expectedSize)})
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </li>
               );

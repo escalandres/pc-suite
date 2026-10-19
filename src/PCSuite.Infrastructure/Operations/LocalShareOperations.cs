@@ -291,7 +291,42 @@ public sealed class LocalShareTransfersOperation(ILocalShareService service) : I
         ExpectedHash = i.ExpectedHash,
         Status = i.Status.ToString().ToLowerInvariant(),
         TransferredBytes = i.TransferredBytes,
+        IsMessage = i.IsMessage,
+        MessageText = i.MessageText,
     };
+}
+
+/// <summary>
+/// localshare.sendMessage (Task 016.8) — mensaje de texto a un par
+/// emparejado: mismo pipeline que los archivos (consentimiento del
+/// receptor incluido); la UI lo muestra como mensaje al completarse.
+/// </summary>
+public sealed class LocalShareSendMessageOperation(ILocalShareService service) : IOperation
+{
+    public string Id => OperationIds.LocalShareSendMessage;
+    public bool RequiresElevation => false;
+
+    public async Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
+    {
+        if (!ToolMapper.TryParsePayload(context.Payload, out LocalShareSendMessagePayload payload)
+            || payload is null
+            || string.IsNullOrWhiteSpace(payload.DeviceId))
+        {
+            return OperationResult.Fail("error", "El payload debe ser { deviceId, text }.");
+        }
+
+        try
+        {
+            var transfer = await service.SendMessageAsync(
+                payload.DeviceId, payload.Text ?? string.Empty, ct).ConfigureAwait(false);
+            return OperationResult.Ok(BridgeJson.ToJson(
+                new LocalShareSendResult { TransferId = transfer.TransferId }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return OperationResult.Fail("message_failed", ex.Message);
+        }
+    }
 }
 
 /// <summary>localshare.cancelTransfer — cancelar (payload: { transferId }).</summary>

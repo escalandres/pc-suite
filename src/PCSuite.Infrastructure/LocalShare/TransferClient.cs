@@ -197,7 +197,8 @@ public sealed class TransferClient
                 i.ItemId,
                 i.RelativePath,
                 i.ExpectedSize,
-                i.ExpectedHash))]);
+                i.ExpectedHash,
+                i.IsMessage ? 1 : 0))]);
 
         await ShareProtocol.WriteControlAsync(
             sslStream,

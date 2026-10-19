@@ -95,6 +95,7 @@ export const OperationIds = {
   localShareDevices: 'localshare.devices',
   localSharePair: 'localshare.pair',
   localShareSend: 'localshare.send',
+  localShareSendMessage: 'localshare.sendMessage',
   localShareAccept: 'localshare.accept',
   localShareReject: 'localshare.reject',
   localShareTransfers: 'localshare.transfers',
@@ -639,6 +640,10 @@ export interface ShareTransferItemResult {
   expectedHash?: string | null;
   status: string;
   transferredBytes: number;
+  /** Task 016.8: el ítem es un mensaje de texto, no un archivo. */
+  isMessage?: boolean;
+  /** Contenido del mensaje (receptor, ítem completado). */
+  messageText?: string | null;
 }
 
 export interface ShareTransferResult {

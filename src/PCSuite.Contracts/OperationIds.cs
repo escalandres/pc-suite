@@ -250,6 +250,9 @@ public static class OperationIds
     /// <summary>Inicia un envío de archivos (payload: { deviceId, paths }).</summary>
     public const string LocalShareSend = "localshare.send";
 
+    /// <summary>Mensaje de texto a un par emparejado (Task 016.8): mismo pipeline que los archivos.</summary>
+    public const string LocalShareSendMessage = "localshare.sendMessage";
+
     /// <summary>Acepta una solicitud entrante (payload: { transferId }).</summary>
     public const string LocalShareAccept = "localshare.accept";
 

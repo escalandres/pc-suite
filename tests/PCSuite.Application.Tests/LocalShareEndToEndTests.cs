@@ -813,14 +813,68 @@ public class LocalShareEndToEndTests : IDisposable
     }
 
     // ------------------------------------------------------------------
-    // Bug 2026-10-19: IP rancia en KnownAddresses[0]
-    //
-    // El par cambió de IP (DHCP/otra interfaz); su dirección vieja quedó
-    // primera en devices.json. Antes: el envío conectaba SIEMPRE a [0],
-    // recibía "conexión rechazada" y el receptor jamás veía la solicitud
-    // (ni approval). Fix doble: MRU (la IP que anuncia va al frente) +
-    // fallback (probar el resto de direcciones conocidas).
+    // Task 016.8 — mensajes de texto: mismo pipeline, consentimiento y
+    // SHA-256 que los archivos; el receptor vive el ítem como texto.
     // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task Message_TextGoesFromAToB_ReceiverShowsItAsText()
+    {
+        await StartAndPairAsync();
+
+        var incomingTcs = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        IReadOnlyList<ShareTransferItem>? incomingItems = null;
+        _serviceB.IncomingRequest += (t, items) =>
+        {
+            incomingItems = items;
+            incomingTcs.TrySetResult(t);
+        };
+        var finishedTcs = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceB.TransferFinished += t => finishedTcs.TrySetResult(t);
+
+        await _serviceA.SendMessageAsync("device-b", "hola desde el test 😄\nsegunda línea");
+
+        // La solicitud entra como cualquier transferencia: consentimiento.
+        var incoming = await incomingTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var messageItem = Assert.Single(incomingItems ?? []);
+        Assert.True(messageItem.IsMessage);
+
+        await _serviceB.AcceptAsync(incoming.TransferId);
+        var finished = await finishedTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(TransferStatus.Completed, finished.Status);
+        Assert.True(messageItem.IsMessage);
+        Assert.Equal("hola desde el test 😄\nsegunda línea", messageItem.MessageText);
+
+        // Procedencia: también quedó en disco (la carpeta Mensajes del receptor).
+        Assert.True(messageItem.FinalPath?.Contains("Mensajes", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(
+            "hola desde el test 😄\nsegunda línea",
+            await File.ReadAllTextAsync(messageItem.FinalPath!));
+    }
+
+    [Fact]
+    public async Task Message_SenderEmptyText_ThrowsBeforeConnecting()
+    {
+        await StartAndPairAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _serviceA.SendMessageAsync("device-b", "   \n  "));
+    }
+
+    [Fact]
+    public async Task Message_SenderOversized_ThrowsBeforeConnecting()
+    {
+        await StartAndPairAsync();
+        var tooBig = new string('x', LocalShareService.MaxMessageBytes + 1);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _serviceA.SendMessageAsync("device-b", tooBig));
+
+        Assert.Contains("límite", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 
     [Fact]
     public void NoteDiscoveredDevice_MovesAnnouncingAddressToFront()

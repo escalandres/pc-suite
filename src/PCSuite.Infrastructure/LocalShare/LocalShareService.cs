@@ -854,6 +854,155 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         return Task.FromResult(transfer);
     }
 
+    /// <summary>
+    /// Envía un mensaje de TEXTO a un dispositivo emparejado (Task 016.8).
+    /// Reusa el pipeline completo de transferencias — TLS, consentimiento
+    /// del receptor, SHA-256, progreso, cancelación — con un único ítem
+    /// marcado como mensaje. El texto viaja por el canal como el cuerpo del
+    /// "archivo" (temporal del emisor, encriptado en tránsito igual que
+    /// cualquier archivo); el receptor lo muestra como mensaje.
+    /// </summary>
+    public Task<ShareTransfer> SendMessageAsync(
+        string deviceId, string text, CancellationToken ct = default)
+    {
+        if (Status != LocalShareServiceStatus.Running)
+        {
+            throw new InvalidOperationException("El servicio Local Share no está activo.");
+        }
+
+        var normalized = (text ?? string.Empty).Replace("\r\n", "\n").Trim();
+        var textBytes = Encoding.UTF8.GetByteCount(normalized);
+        if (textBytes == 0)
+        {
+            throw new InvalidOperationException("El mensaje está vacío.");
+        }
+
+        if (textBytes > MaxMessageBytes)
+        {
+            throw new InvalidOperationException(
+                $"El mensaje ({textBytes / 1024} KB) supera el límite de {MaxMessageBytes / 1024} KB.");
+        }
+
+        SharedDevice device;
+        lock (_lock)
+        {
+            if (!_devices.TryGetValue(deviceId, out device!) || !device.IsPaired)
+            {
+                throw new InvalidOperationException($"El dispositivo {deviceId} no está emparejado.");
+            }
+        }
+
+        var transferId = Guid.NewGuid().ToString("D");
+        var timestamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss");
+
+        // Carpeta propia para que los mensajes no se mezclen con descargas.
+        var relativePath = $"Mensajes/mensaje-{timestamp}-{transferId[..8]}.txt";
+
+        var tempPath = Path.Combine(Path.GetTempPath(), $"pcsuite-msg-{transferId}.txt");
+        File.WriteAllText(tempPath, normalized, Encoding.UTF8);
+
+        var items = new List<ShareTransferItem>
+        {
+            new()
+            {
+                ItemId = Guid.NewGuid().ToString("D"),
+                TransferId = transferId,
+                RelativePath = relativePath,
+                ExpectedSize = new FileInfo(tempPath).Length,
+                LocalSourcePath = tempPath,
+                IsMessage = true,
+            },
+        };
+
+        var transfer = new ShareTransfer
+        {
+            TransferId = transferId,
+            Direction = TransferDirection.Sending,
+            PeerDeviceId = deviceId,
+            PeerDisplayName = device.DisplayName,
+            TotalBytes = items[0].ExpectedSize,
+            ItemCount = 1,
+            Status = TransferStatus.PendingApproval,
+        };
+
+        lock (_lock)
+        {
+            _transfers[transferId] = (transfer, items);
+        }
+
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        lock (_lock)
+        {
+            _transferCts[transferId] = linkedCts;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var client = new TransferClient(_certificateStore.Certificate, _logger);
+                await client.SendFilesAsync(
+                    device,
+                    transfer,
+                    items,
+                    _settings.DeviceId,
+                    _settings.DisplayName,
+                    _settings.CertificateThumbprint ?? _certificateStore.Thumbprint,
+                    _settings.MaxBandwidthBytesPerSecond,
+                    () => IsTransferPaused(transferId),
+                    bytes => { /* Un mensaje es un chunk: sin progreso intermedio. */ },
+                    linkedCts.Token).ConfigureAwait(false);
+
+                transfer.Status = TransferStatus.Completed;
+                transfer.CompletedAt = DateTimeOffset.UtcNow;
+                RaiseTransferFinished(transfer);
+            }
+            catch (OperationCanceledException)
+            {
+                transfer.Status = TransferStatus.Cancelled;
+                transfer.CompletedAt = DateTimeOffset.UtcNow;
+                RaiseTransferFinished(transfer);
+            }
+            catch (Exception ex)
+            {
+                transfer.Status = TransferStatus.Failed;
+                transfer.ErrorMessage = ex.Message;
+                transfer.CompletedAt = DateTimeOffset.UtcNow;
+                RaiseTransferFinished(transfer);
+            }
+            finally
+            {
+                CancellationTokenSource? toDispose;
+                lock (_lock)
+                {
+                    _transferCts.Remove(transferId, out toDispose);
+                    _pausedTransfers.Remove(transferId);
+                }
+
+                toDispose?.Dispose();
+
+                // El temporal del mensaje es desechable: el texto ya viajó
+                // (o no) y el original vive en el input de la UI.
+                try
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch
+                {
+                    // best-effort: queda en %TEMP% hasta la limpieza del SO.
+                }
+            }
+        }, linkedCts.Token);
+
+        return Task.FromResult(transfer);
+    }
+
+    /// <summary>Tope de un mensaje de texto (16 KB: un mensaje, no un archivo).</summary>
+    public const int MaxMessageBytes = 16 * 1024;
+
     // ------------------------------------------------------------------
     // Transferencias (entrantes)
     // ------------------------------------------------------------------
@@ -1294,6 +1443,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             RelativePath = i.RelativePath,
             ExpectedSize = i.Size,
             ExpectedHash = i.Sha256,
+            IsMessage = i.Kind == 1,
         }).ToList();
 
         lock (_lock)
@@ -1572,6 +1722,26 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     item.ExpectedSize,
                     item.ExpectedHash);
                 item.Status = TransferStatus.Completed;
+
+                // Task 016.8: un mensaje llega por el mismo pipeline de
+                // archivos (SHA-256, atómico, reanudable) pero se VIVE como
+                // texto: leerlo tras publicar para que la UI lo muestre
+                // como mensaje con botón de copiar. El archivo queda igual
+                // en disco (procedencia).
+                if (item.IsMessage)
+                {
+                    try
+                    {
+                        item.MessageText = await File.ReadAllTextAsync(
+                            item.FinalPath!).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // best-effort: el archivo está publicado e íntegro;
+                        // la UI muestra "ver en carpeta" aunque falte el texto.
+                    }
+                }
+
                 if (weClaimed)
                 {
                     _partials.Remove(hello.DeviceId, item.RelativePath);

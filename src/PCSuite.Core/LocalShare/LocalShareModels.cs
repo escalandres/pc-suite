@@ -190,6 +190,16 @@ public sealed class ShareTransferItem
     /// <summary>Ruta absoluta local del archivo (solo el emisor la conoce; nunca viaja por la red).</summary>
     public string? LocalSourcePath { get; set; }
 
+    /// <summary>
+    /// ¿Es un mensaje de texto y no un archivo del disco? (Task 016.8): viaja
+    /// por el MISMO pipeline de transferencias — TLS, emparejamiento,
+    /// consentimiento, SHA-256 — pero el receptor lo muestra como mensaje.
+    /// </summary>
+    public bool IsMessage { get; init; }
+
+    /// <summary>Contenido del mensaje: lo llena el RECEPTOR al completar el ítem.</summary>
+    public string? MessageText { get; set; }
+
     /// <summary>Ruta absoluta del archivo temporal del receptor (asignada al aceptar).</summary>
     public string? TempPath { get; set; }
 
