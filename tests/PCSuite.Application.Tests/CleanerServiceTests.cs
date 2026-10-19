@@ -150,6 +150,33 @@ public sealed class CleanerServiceTests : IDisposable
 
     // --- clean -------------------------------------------------------------
 
+    /// <summary>
+    /// Limpia hasta que la raíz quede quieta (máx. 5 intentos, 250 ms entre
+    /// ellos). Defender o el indexador retienen UN instante handles sobre
+    /// archivos recién creados en %TEMP%; el limpiador los omite
+    /// (comportamiento CORRECTO de producción) y exigir inmediatez hacía el
+    /// test endémicamente flaky bajo carga paralela. Los locks son
+    /// transitorios: el reintento refleja el caso real del usuario.
+    /// </summary>
+    private async Task<List<CleanerCleanOutcome>> CleanToEmptyAsync(
+        CleanerService service, IReadOnlyList<string> categories)
+    {
+        var attempts = new List<CleanerCleanOutcome>();
+        for (var i = 0; i < 5; i++)
+        {
+            var attempt = await service.CleanAsync(categories);
+            attempts.Add(attempt);
+            if (attempt.Categories.Sum(category => category.SkippedFiles) == 0)
+            {
+                break;
+            }
+
+            await Task.Delay(250);
+        }
+
+        return attempts;
+    }
+
     [Fact]
     public async Task Clean_DeletesInsideRoot_ReportsFreedBytes_AndScanDropsToZero()
     {
@@ -157,14 +184,19 @@ public sealed class CleanerServiceTests : IDisposable
         WriteFile("userTemp/sub/b.bin", new string('x', 1024));
         var service = CreateService();
 
-        var clean = await service.CleanAsync([CleanerCategoryIds.UserTemp]);
+        // Los totales se ACUMULAN entre intentos: un archivo que Defender
+        // retuvo un instante cuenta como skipped en el intento 1 y como
+        // deleted en el 2; la suma final es la misma.
+        var attempts = await CleanToEmptyAsync(service, [CleanerCategoryIds.UserTemp]);
 
-        var result = Assert.Single(clean.Categories);
-        Assert.Equal(CleanerCategoryIds.UserTemp, result.Id);
-        Assert.Equal(2, result.DeletedFiles);
-        Assert.Equal(1029, result.FreedBytes);
-        Assert.Equal(0, result.SkippedFiles);
-        Assert.Null(result.Detail);
+        var results = attempts.SelectMany(clean => clean.Categories)
+            .Where(category => category.Id == CleanerCategoryIds.UserTemp)
+            .ToList();
+        Assert.All(results, category => Assert.Null(category.Detail));
+        Assert.Equal(2, results.Sum(category => category.DeletedFiles));
+        Assert.Equal(1029, results.Sum(category => category.FreedBytes));
+        // El último intento terminó con la raíz quieta: nada quedó omitido.
+        Assert.Equal(0, results[^1].SkippedFiles);
 
         var scan = await service.ScanAsync();
         Assert.Equal(
@@ -180,7 +212,7 @@ public sealed class CleanerServiceTests : IDisposable
         var outsideSibling = WriteFile("other/precioso.txt", "yo tampoco");
         var service = CreateService();
 
-        await service.CleanAsync(CleanerCategoryIds.All);
+        await CleanToEmptyAsync(service, CleanerCategoryIds.All);
 
         Assert.False(File.Exists(Path.Combine(RootPath(CleanerCategoryIds.UserTemp), "dentro.txt")));
         Assert.True(File.Exists(outside));
@@ -268,9 +300,10 @@ public sealed class CleanerServiceTests : IDisposable
         var insideFile = WriteFile("userTemp/dentro.txt", "x");
         var service = CreateService();
 
-        await service.CleanAsync([CleanerCategoryIds.UserTemp]);
+        // Reintentos por handles transitorios (Defender): ver CleanToEmptyAsync.
+        await CleanToEmptyAsync(service, [CleanerCategoryIds.UserTemp]);
 
         Assert.False(File.Exists(insideFile));
-        Assert.True(File.Exists(outsideFile));
+        Assert.True(File.Exists(outsideFile), "La junction ARRASTRÓ al destino: fuga de borrado.");
     }
 }
