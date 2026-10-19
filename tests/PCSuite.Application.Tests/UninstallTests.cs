@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.Win32;
 using PCSuite.Contracts;
 using PCSuite.Core.Elevation;
@@ -10,17 +10,17 @@ using PCSuite.Infrastructure.Operations;
 namespace PCSuite.Application.Tests;
 
 /// <summary>
-/// Tests del desinstalador forzado (Task 020): catÃ¡logo del registro de
-/// desinstalaciÃ³n, validador de rutas/identificadores, split del comando
+/// Tests del desinstalador forzado (Task 020): catálogo del registro de
+/// desinstalación, validador de rutas/identificadores, split del comando
 /// oficial y las operaciones por el puente. Con entrada REAL de HKCU
-/// (creada y limpia por el propio test) y elevaciÃ³n falsa (el UAC jamÃ¡s
+/// (creada y limpia por el propio test) y elevación falsa (el UAC jamás
 /// se simula).
 /// </summary>
 public sealed class UninstallTests : IDisposable
 {
     private const string TestKeyName = "PCSuiteUninstallTestEntry";
 
-    /// <summary>RaÃ­z HKCU de desinstalaciÃ³n â€” escribible sin elevaciÃ³n.</summary>
+    /// <summary>Raíz HKCU de desinstalación — escribible sin elevación.</summary>
     private static readonly string HkcuUninstall =
         @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall";
 
@@ -32,7 +32,7 @@ public sealed class UninstallTests : IDisposable
     }
 
     // ------------------------------------------------------------------
-    // CatÃ¡logo
+    // Catálogo
     // ------------------------------------------------------------------
 
     [Fact]
@@ -45,9 +45,9 @@ public sealed class UninstallTests : IDisposable
         {
             Assert.False(string.IsNullOrWhiteSpace(app.DisplayName));
             Assert.True(UninstallCatalog.IsAllowedKeyPath(app.RegistryKeyPath),
-                $"Ruta fuera de las raÃ­ces permitidas: {app.RegistryKeyPath}");
+                $"Ruta fuera de las raíces permitidas: {app.RegistryKeyPath}");
         });
-        // Orden alfabÃ©tico estable.
+        // Orden alfabético estable.
         var sorted = apps.Select(a => a.DisplayName).OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
         Assert.Equal(sorted, apps.Select(a => a.DisplayName));
     }
@@ -122,7 +122,7 @@ public sealed class UninstallTests : IDisposable
     {
         Assert.True(UninstallValidator.IsSafeRegistryKey($@"{HkcuUninstall}\App"));
         Assert.True(UninstallValidator.IsSafeRegistryKey(@"HKEY_LOCAL_MACHINE\SOFTWARE\App"));
-        Assert.False(UninstallValidator.IsSafeRegistryKey(@"HKEY_LOCAL_MACHINE\SOFTWARE")); // la raÃ­z JAMÃS
+        Assert.False(UninstallValidator.IsSafeRegistryKey(@"HKEY_LOCAL_MACHINE\SOFTWARE")); // la raíz JAMÁS
         Assert.False(UninstallValidator.IsSafeRegistryKey(@"HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\X"));
         Assert.False(UninstallValidator.IsSafeRegistryKey(@"HKEY_CURRENT_USER\Software\X\..\Y"));
         Assert.False(UninstallValidator.IsSafeRegistryKey(""));
@@ -267,15 +267,15 @@ public sealed class UninstallTests : IDisposable
         var result = await operation.ExecuteAsync(
             new OperationContext { Payload = payload }, CancellationToken.None);
 
-        Assert.True(result.Success); // la operaciÃ³n completa; los Ã­tems fallan
+        Assert.True(result.Success); // la operación completa; los ítems fallan
         var dto = JsonSerializer.Deserialize<RemovalOutcomeDto>(result.Data!.Value.GetRawText(), BridgeJson.Options);
         Assert.NotNull(dto);
-        Assert.All(dto!.Results, item => Assert.False(item.Succeeded, $"{item.Identifier} NO debÃ­a tocarse"));
+        Assert.All(dto!.Results, item => Assert.False(item.Succeeded, $"{item.Identifier} NO debía tocarse"));
         Assert.All(dto.Results, item => Assert.False(string.IsNullOrWhiteSpace(item.Detail)));
     }
 
     // ------------------------------------------------------------------
-    // Operaciones por el puente (router + elevaciÃ³n falsa)
+    // Operaciones por el puente (router + elevación falsa)
     // ------------------------------------------------------------------
 
     [Fact]
@@ -337,8 +337,8 @@ public sealed class UninstallTests : IDisposable
     [Fact]
     public async Task RunOfficial_MissingEntry_NoUacRequested()
     {
-        // La clave no existe: NUNCA debe abrirse el prompt (validaciÃ³n
-        // previa a la elevaciÃ³n).
+        // La clave no existe: NUNCA debe abrirse el prompt (validación
+        // previa a la elevación).
         var router = CreateRouter(elevation: new FakeElevationManager());
 
         var response = await Send(
@@ -364,10 +364,10 @@ public sealed class UninstallTests : IDisposable
             OperationIds.UninstallRunOfficial,
             JsonSerializer.Serialize(new { registryKeyPath = $@"{HkcuUninstall}\{TestKeyName}" }));
 
-        Assert.True(response.Success); // la elevaciÃ³n falsa acepta
+        Assert.True(response.Success); // la elevación falsa acepta
         var request = Assert.Single(elevation.Requests);
         Assert.Equal(ElevatedOperationIds.UninstallRunOfficial, request.OperationId);
-        // El payload solo porta la clave â€” el comando NUNCA viaja.
+        // El payload solo porta la clave — el comando NUNCA viaja.
         var payload = JsonSerializer.Deserialize<UninstallKeyPayload>(
             request.Payload!.Value.GetRawText(), BridgeJson.Options);
         Assert.Equal($@"{HkcuUninstall}\{TestKeyName}", payload!.RegistryKeyPath);
@@ -391,7 +391,7 @@ public sealed class UninstallTests : IDisposable
                 },
             }));
 
-        // Todo invÃ¡lido â†’ error controlado SIN pedir UAC.
+        // Todo inválido → error controlado SIN pedir UAC.
         Assert.False(response.Success);
         Assert.Equal(BridgeErrorCodes.UninstallFailed, response.Error!.Code);
         Assert.Empty(elevation.Requests);
@@ -421,7 +421,7 @@ public sealed class UninstallTests : IDisposable
         Assert.Equal(ElevatedOperationIds.UninstallCleanup, request.OperationId);
         var payload = JsonSerializer.Deserialize<CleanupPayload>(
             request.Payload!.Value.GetRawText(), BridgeJson.Options);
-        var item = Assert.Single(payload!.Items); // solo el vÃ¡lido cruzÃ³
+        var item = Assert.Single(payload!.Items); // solo el válido cruzó
         Assert.Equal("registrykey", item.Kind);
     }
 
@@ -445,7 +445,7 @@ public sealed class UninstallTests : IDisposable
     {
         var router = CreateRouter();
 
-        // Las 4 ops declaran RequiresElevation=false: la elevaciÃ³n es UAC
+        // Las 4 ops declaran RequiresElevation=false: la elevación es UAC
         // puntual dentro del servicio, no del puente.
         var operations = new IOperation[]
         {

@@ -1,9 +1,9 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 namespace PCSuite.Contracts;
 
 // DTOs del bridge para localshare.* (Task 016).
-// El mapeo enum â†’ string vive en las operaciones, no en BridgeJson.
+// El mapeo enum → string vive en las operaciones, no en BridgeJson.
 
 /// <summary>Resultado de localshare.status.</summary>
 public sealed class LocalShareStatusResult
@@ -34,15 +34,15 @@ public sealed class SharedDeviceResult
     /// <summary>unknown | paired | revoked.</summary>
     public string Trust { get; init; } = "unknown";
 
-    /// <summary>Primera IP conocida (para display, la conexiÃ³n usa la del emparejamiento).</summary>
+    /// <summary>Primera IP conocida (para display, la conexión usa la del emparejamiento).</summary>
     public string? Address { get; init; }
 
     public int Port { get; init; }
 
     /// <summary>
-    /// Â¿Se anunciÃ³ en los Ãºltimos 45 s? (Los anuncios van cada 15 s: dos
-    /// perdidos seguidos pueden ser ruido; tres, apagado.) SeÃ±al heurÃ­stica
-    /// para la UI â€” la verdad para transferir es la conexiÃ³n TCP.
+    /// ¿Se anunció en los últimos 45 s? (Los anuncios van cada 15 s: dos
+    /// perdidos seguidos pueden ser ruido; tres, apagado.) Señal heurística
+    /// para la UI — la verdad para transferir es la conexión TCP.
     /// </summary>
     public bool Online { get; init; }
 
@@ -117,7 +117,7 @@ public sealed class ShareTransferCollectionResult
     public IReadOnlyList<ShareTransferResult> Transfers { get; init; } = [];
 }
 
-/// <summary>ConfiguraciÃ³n del mÃ³dulo (resultado de localshare.config con payload null).</summary>
+/// <summary>Configuración del módulo (resultado de localshare.config con payload null).</summary>
 public sealed class LocalShareConfigResult
 {
     public string DisplayName { get; init; } = "";
@@ -182,13 +182,13 @@ public sealed class LocalSharePairDecisionPayload
     public string RequestId { get; init; } = "";
 }
 
-/// <summary>Resultado de localshare.pair: el cÃ³digo ya estÃ¡ disponible.</summary>
+/// <summary>Resultado de localshare.pair: el código ya está disponible.</summary>
 public sealed class LocalSharePairInitiationResult
 {
     /// <summary>Identificador de este intento (correlaciona con el evento pair-finished).</summary>
     public string RequestId { get; init; } = "";
 
-    /// <summary>CÃ³digo de comparaciÃ³n: DEBE coincidir con el del otro equipo.</summary>
+    /// <summary>Código de comparación: DEBE coincidir con el del otro equipo.</summary>
     public string Code { get; init; } = "";
 
     public string PeerDisplayName { get; init; } = "";
@@ -203,7 +203,7 @@ public sealed class LocalSharePairRequestedPayload
 
     public string PeerDisplayName { get; init; } = "";
 
-    /// <summary>CÃ³digo derivado de las dos huellas TLS vivas: el usuario lo compara con la pantalla del otro equipo.</summary>
+    /// <summary>Código derivado de las dos huellas TLS vivas: el usuario lo compara con la pantalla del otro equipo.</summary>
     public string Code { get; init; } = "";
 }
 
@@ -222,7 +222,7 @@ public sealed class LocalSharePairFinishedPayload
     public string? ErrorMessage { get; init; }
 }
 
-/// <summary>Payload genÃ©rico de localshare.accept / localshare.reject / localshare.cancel.</summary>
+/// <summary>Payload genérico de localshare.accept / localshare.reject / localshare.cancel.</summary>
 public sealed class LocalShareTransferPayload
 {
     public string TransferId { get; init; } = "";
@@ -284,7 +284,7 @@ public sealed class LocalShareFirewallStatusResult
     /// <summary>La regla TCP existente cubre el puerto actual del servicio.</summary>
     public bool PortMatches { get; init; }
 
-    /// <summary>La regla UDP de detecciÃ³n (multicast 5354) existe.</summary>
+    /// <summary>La regla UDP de detección (multicast 5354) existe.</summary>
     public bool DiscoveryPortMatches { get; init; }
 
     /// <summary>Puerto TCP del servicio en este momento.</summary>

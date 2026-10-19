@@ -306,7 +306,7 @@ $json = @"
   "channel": "stable",
   "version": "$Version",
   "releasedAt": "$relDate",
-  "releaseNotesUrl": "https://aes-studio.dev/notes/$Version.html",
+  "releaseNotesUrl": "https://aes-studio.dev/pcsuite/notes/$Version.html",
   "artifacts": [
     {
       "id": "setup-win64",

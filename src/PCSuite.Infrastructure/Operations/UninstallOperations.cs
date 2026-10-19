@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Text.Json;
 using PCSuite.Contracts;
 using PCSuite.Core.Elevation;
@@ -65,6 +66,7 @@ public sealed class UninstallCleanupResultDto
 /// uninstall.list — apps instaladas según el registro de desinstalación de
 /// Windows. VE lo que winget no ve. Solo lectura, sin elevación.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class UninstallListOperation : IOperation
 {
     private readonly UninstallCatalog _catalog;
@@ -105,6 +107,7 @@ public sealed class UninstallListOperation : IOperation
 /// registro validada). Solo lectura, sin elevación: el usuario revisa el
 /// plan ANTES de que exista UAC alguno.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class UninstallDiscoverOperation(UninstallCatalog? catalog = null, UninstallPlanner? planner = null) : IOperation
 {
     private readonly UninstallCatalog _catalog = catalog ?? new UninstallCatalog();
@@ -153,6 +156,7 @@ public sealed class UninstallDiscoverOperation(UninstallCatalog? catalog = null,
 /// registro; el comando se RELEE allí (jamás viaja por el puente).
 /// La app NO espera al asistente: el usuario lo completa y vuelve.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class UninstallRunOfficialOperation(IElevationManager elevation) : IOperation
 {
     public string Id => OperationIds.UninstallRunOfficial;
@@ -197,6 +201,7 @@ public sealed class UninstallRunOfficialOperation(IElevationManager elevation) :
 /// uninstall.cleanup — aplica la limpieza sobre los ítems aprobados por el
 /// usuario. El proceso elevado REVALIDA cada ítem (segunda barrera).
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class UninstallCleanupOperation(IElevationManager elevation) : IOperation
 {
     public string Id => OperationIds.UninstallCleanup;

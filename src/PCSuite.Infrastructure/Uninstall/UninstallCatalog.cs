@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using Microsoft.Win32;
 using PCSuite.Core.Uninstall;
 
@@ -11,7 +12,9 @@ namespace PCSuite.Infrastructure.Uninstall;
 /// apps heredadas y mal registradas.
 ///
 /// Solo lectura, sin elevación: HKLM se lee con derechos de usuario.
+/// Windows-only por naturaleza (el registro de Windows ES el dominio).
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class UninstallCatalog
 {
     /// <summary>Raíces canónicas de entradas de desinstalación.</summary>

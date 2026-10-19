@@ -1,12 +1,12 @@
-﻿/**
+/**
  * Contratos del protocolo puente (espejo de PCSuite.Contracts).
  * Mantener sincronizados con src/PCSuite.Contracts.
  */
 
 /* =====================================================================
-   OperationIds â€” Identificadores de operaciones permitidas para el puente.
-   El frontend SOLO puede invocar operaciones registradas aquÃ­.
-   EjecuciÃ³n arbitraria de comandos NUNCA estÃ¡ expuesta.
+   OperationIds — Identificadores de operaciones permitidas para el puente.
+   El frontend SOLO puede invocar operaciones registradas aquí.
+   Ejecución arbitraria de comandos NUNCA está expuesta.
    ===================================================================== */
 
 export interface BridgeRequest {
@@ -43,7 +43,7 @@ export interface AppReadyEvent {
 }
 
 /* =====================================================================
-   OperationIds â€” Constantes string para los identificadores de operaciÃ³n.
+   OperationIds — Constantes string para los identificadores de operación.
    ===================================================================== */
 
 export const OperationIds = {
@@ -141,7 +141,7 @@ export const EventIds = {
   localSharePairFinished: 'localshare.pair-finished',
 } as const;
 
-/** Resultado de system.pickFiles: rutas absolutas del diÃ¡logo nativo de Windows. */
+/** Resultado de system.pickFiles: rutas absolutas del diálogo nativo de Windows. */
 export interface SystemPickFilesResult {
   paths: string[];
   cancelled: boolean;
@@ -151,7 +151,7 @@ export interface SystemPickFilesResult {
    Tool metadata
    ===================================================================== */
 
-/** ParÃ¡metro de una tool: la UI genera el formulario desde esta lista. */
+/** Parámetro de una tool: la UI genera el formulario desde esta lista. */
 export interface ToolParameter {
   /** Clave del payload JSON que rellena el campo. */
   name: string;
@@ -163,7 +163,7 @@ export interface ToolParameter {
   helpText?: string | null;
   /** Valores admitidos (solo select). */
   options: string[];
-  /** LÃ­mites (solo number). */
+  /** Límites (solo number). */
   min?: number | null;
   max?: number | null;
 }
@@ -175,9 +175,9 @@ export interface ToolInfo {
   name: string;
   description: string;
   keywords: string[];
-  /** Ejemplo de payload para precargar la UI genÃ©rica. */
+  /** Ejemplo de payload para precargar la UI genérica. */
   exampleInput?: unknown;
-  /** Formulario de configuraciÃ³n de la tool (vacÃ­o â†’ editor JSON genÃ©rico). */
+  /** Formulario de configuración de la tool (vacío → editor JSON genérico). */
   parameters: ToolParameter[];
 }
 
@@ -208,7 +208,7 @@ export interface DeveloperToolInfo {
   isInstalled: boolean;
   /** Ausente si es desconocida (WhenWritingNull del puente). */
   version?: string | null;
-  /** Ausente si no estÃ¡ instalada. */
+  /** Ausente si no está instalada. */
   path?: string | null;
 }
 
@@ -221,10 +221,10 @@ export interface DeveloperCollectionResult {
 export interface UpdateCheckResult {
   toolId: string;
   currentVersion?: string | null;
-  /** Ausente si la comprobaciÃ³n degradÃ³ (sin red / sin fuente). */
+  /** Ausente si la comprobación degradó (sin red / sin fuente). */
   latestVersion?: string | null;
   updateAvailable: boolean;
-  /** false: sin fuente de updates conocida o comprobaciÃ³n degradada. */
+  /** false: sin fuente de updates conocida o comprobación degradada. */
   supported: boolean;
 }
 
@@ -258,7 +258,7 @@ export interface WinGetMutationResult {
   succeeded: boolean;
   exitCode: number;
   elevated: boolean;
-  /** Ãšltima lÃ­nea saneada de winget; ausente si no hay salida. */
+  /** Última línea saneada de winget; ausente si no hay salida. */
   detail?: string | null;
 }
 
@@ -268,19 +268,19 @@ export interface WinGetDetectResult {
   packageId: string;
   /** Nombre del paquete. */
   name: string;
-  /** VersiÃ³n actual. */
+  /** Versión actual. */
   version: string;
-  /** Â¿Hay actualizaciÃ³n disponible? */
+  /** ¿Hay actualización disponible? */
   updateAvailable: boolean;
-  /** VersiÃ³n disponible. */
+  /** Versión disponible. */
   latestVersion?: string | null;
-  /** Fuente de la detecciÃ³n. */
+  /** Fuente de la detección. */
   source?: string | null;
-  /** Â¿EstÃ¡ winget instalado en el sistema. */
+  /** ¿Está winget instalado en el sistema. */
   installed: boolean;
-  /** Ruta de instalaciÃ³n del App Installer / winget. */
+  /** Ruta de instalación del App Installer / winget. */
   path?: string | null;
-  /** Â¿El proceso tiene privilegios de administrador. */
+  /** ¿El proceso tiene privilegios de administrador. */
   isAdministrator: boolean;
 }
 
@@ -298,7 +298,7 @@ export interface WslStatusResult {
   defaultDistro?: string | null;
 }
 
-/** Una distribuciÃ³n en wsl.list. */
+/** Una distribución en wsl.list. */
 export interface WslDistroResult {
   name: string;
   /** Estado en crudo (Running / Stopped). */
@@ -330,13 +330,13 @@ export interface WslMutationResult {
 /** Resultado de clamav.status. */
 export interface ClamAvStatusResult {
   installed: boolean;
-  /** Ruta resolvida de clamscan.exe; ausente si no estÃ¡ instalado. */
+  /** Ruta resolvida de clamscan.exe; ausente si no está instalado. */
   path?: string | null;
-  /** VersiÃ³n del motor (clamscan --version); ausente si es desconocida. */
+  /** Versión del motor (clamscan --version); ausente si es desconocida. */
   version?: string | null;
   /** Build de definiciones conocidas; ausente si es desconocido. */
   definitions?: string | null;
-  /** false: falta freshclam.exe junto a clamscan (sin actualizaciÃ³n de BD). */
+  /** false: falta freshclam.exe junto a clamscan (sin actualización de BD). */
   canUpdateDefinitions: boolean;
 }
 
@@ -347,7 +347,7 @@ export interface ClamAvStatusResult {
 export interface ClamAvMutationResult {
   succeeded: boolean;
   exitCode: number;
-  /** true: corriÃ³ en el proceso elevado (UAC aceptado). */
+  /** true: corrió en el proceso elevado (UAC aceptado). */
   elevated: boolean;
   detail?: string | null;
 }
@@ -374,7 +374,7 @@ export interface JobEventPayload {
   /** 0..1 (en progress). */
   progress?: number | null;
   error?: string | null;
-  /** Resultado estructurado al completarse (segÃºn el tipo de job). */
+  /** Resultado estructurado al completarse (según el tipo de job). */
   result?: ClamAvScanResult | UpdateDownloadJobResult | null;
 }
 
@@ -397,19 +397,19 @@ export interface JobCancelResult {
 }
 
 /* =====================================================================
-   Task 017 â€” Actualizaciones
+   Task 017 — Actualizaciones
    ===================================================================== */
 
 /** Resultado de update.check (app). */
 export interface AppUpdateCheckResult {
-  /** Â¿Hay versiÃ³n mayor que la instalada? Un fallo de red = false (sin drama). */
+  /** ¿Hay versión mayor que la instalada? Un fallo de red = false (sin drama). */
   available: boolean;
   currentVersion: string;
   latestVersion: string;
-  /** TamaÃ±o del instalador a descargar (bytes). */
+  /** Tamaño del instalador a descargar (bytes). */
   sizeBytes: number;
   releaseNotesUrl?: string | null;
-  /** Mensaje humano si el check fallÃ³; null si todo fue bien. */
+  /** Mensaje humano si el check falló; null si todo fue bien. */
   error?: string | null;
   /**
    * Aviso TOFU (Task 17.6): la clave de firma del manifiesto CAMBIÓ desde la
@@ -612,7 +612,7 @@ export interface SharedDeviceResult {
   address?: string | null;
   port: number;
   lastSeenAt?: string | null;
-  /** Â¿Se anunciÃ³ en los Ãºltimos 45 s? HeurÃ­stica de la UI. */
+  /** ¿Se anunció en los últimos 45 s? Heurística de la UI. */
   online: boolean;
 }
 
@@ -623,7 +623,7 @@ export interface SharedDeviceCollectionResult {
 export interface LocalSharePairResult {
   /** Identificador del intento (correlaciona con el evento pair-finished). */
   requestId: string;
-  /** CÃ³digo de comparaciÃ³n: DEBE coincidir con el del otro equipo. */
+  /** Código de comparación: DEBE coincidir con el del otro equipo. */
   code: string;
   peerDisplayName: string;
 }
@@ -712,7 +712,7 @@ export interface LocalSharePairRequestedPayload {
   requestId: string;
   peerDeviceId: string;
   peerDisplayName: string;
-  /** CÃ³digo derivado de las dos huellas TLS: comparar con la otra pantalla. */
+  /** Código derivado de las dos huellas TLS: comparar con la otra pantalla. */
   code: string;
 }
 
@@ -754,13 +754,13 @@ export interface ClamAvScanResult {
   /** Detalle controlado (parcial/fallo); ausente si no hay. */
   detail?: string | null;
   threats: ClamAvThreatResult[];
-  /** DuraciÃ³n del escaneo en segundos. */
+  /** Duración del escaneo en segundos. */
   duration?: number | null;
   /** Ruta al archivo de log generado. */
   logFile?: string | null;
 }
 
-/** Una entrada de clamav.history (la mÃ¡s reciente primero). */
+/** Una entrada de clamav.history (la más reciente primero). */
 export interface ClamAvHistoryEntryResult {
   /** Marca de tiempo UTC en ISO 8601. */
   timestamp: string;
@@ -780,9 +780,9 @@ export interface ClamAvHistoryResult {
   entries: ClamAvHistoryEntryResult[];
 }
 
-/** Progreso de actualizaciÃ³n de definiciones ClamAV (freshclam). */
+/** Progreso de actualización de definiciones ClamAV (freshclam). */
 export interface ClamAvFreshclamProgressPayload {
-  /** Archivo actual que se estÃ¡ descargando/procesando (p. ej. "main.cvd", "daily.cvd"). */
+  /** Archivo actual que se está descargando/procesando (p. ej. "main.cvd", "daily.cvd"). */
   currentFile?: string | null;
   /** Porcentaje de descarga del archivo actual (0-100). null si no aplica. */
   percent?: number | null;
@@ -794,11 +794,11 @@ export interface ClamAvFreshclamProgressPayload {
   bytesPerSecond?: number | null;
   /** Mensaje de estado legible (p. ej. "Descargando main.cvd...", "Verificando firmas..."). */
   statusText?: string | null;
-  /** Indica si la operaciÃ³n ha finalizado (Ã©xito o fallo). */
+  /** Indica si la operación ha finalizado (éxito o fallo). */
   isComplete: boolean;
-  /** Si isComplete=true, indica si la actualizaciÃ³n tuvo Ã©xito. */
+  /** Si isComplete=true, indica si la actualización tuvo éxito. */
   succeeded?: boolean | null;
-  /** Mensaje de detalle si fallÃ³ o terminÃ³. */
+  /** Mensaje de detalle si falló o terminó. */
   detail?: string | null;
 }
 
@@ -816,11 +816,11 @@ export interface ClamAvScanProgressPayload {
   infectedFiles: number;
   /** Mensaje de estado legible (p. ej. "Escaneando C:\Users\X\Downloads\..."). */
   statusText?: string | null;
-  /** Indica si la operaciÃ³n ha finalizado (Ã©xito o fallo). */
+  /** Indica si la operación ha finalizado (éxito o fallo). */
   isComplete: boolean;
-  /** Si isComplete=true, indica si el escaneo tuvo Ã©xito. */
+  /** Si isComplete=true, indica si el escaneo tuvo éxito. */
   succeeded?: boolean | null;
-  /** Mensaje de detalle si fallÃ³ o terminÃ³. */
+  /** Mensaje de detalle si falló o terminó. */
   detail?: string | null;
   /** Tipo de escaneo (quick, full, custom). */
   scanKind?: string | null;
@@ -832,17 +832,17 @@ export interface ClamAvScanProgressPayload {
    Cleaner
    ===================================================================== */
 
-/** CategorÃ­a escaneada por cleaner.scan (raÃ­z fija resuelta en .NET). */
+/** Categoría escaneada por cleaner.scan (raíz fija resuelta en .NET). */
 export interface CleanerCategoryScanResult {
   /** Id fijo (userTemp / windowsTemp / updateCache). */
   id: string;
   /** Etiqueta visible. */
   label: string;
-  /** RaÃ­z fija resuelta por el backend (solo transparencia). */
+  /** Raíz fija resuelta por el backend (solo transparencia). */
   path: string;
   fileCount: number;
   sizeBytes: number;
-  /** false: la raÃ­z no se pudo leer (ACL) â€” la UI lo muestra como "sin permisos". */
+  /** false: la raíz no se pudo leer (ACL) — la UI lo muestra como "sin permisos". */
   accessible: boolean;
 }
 
@@ -851,9 +851,9 @@ export interface CleanerScanResult {
   categories: CleanerCategoryScanResult[];
 }
 
-/** Resultado de limpieza de una categorÃ­a (cleaner.clean). */
+/** Resultado de limpieza de una categoría (cleaner.clean). */
 export interface CleanerCategoryCleanResult {
-  /** Id fijo de la categorÃ­a. */
+  /** Id fijo de la categoría. */
   id: string;
   deletedFiles: number;
   freedBytes: number;
@@ -869,21 +869,21 @@ export interface CleanerCleanResult {
 }
 
 /* =====================================================================
-   Security Center (Â§14: solo lectura)
+   Security Center (§14: solo lectura)
    ===================================================================== */
 
 /** Tarjeta de Windows Defender en security.getStatus. */
 export interface DefenderStatusResult {
   /** good | poor | notMonitored | snoozed | unknown. */
   status: string;
-  /** Ausente si WMI no respondiÃ³ â€” no significa "desactivado". */
+  /** Ausente si WMI no respondió — no significa "desactivado". */
   antivirusEnabled?: boolean | null;
   realTimeProtection?: boolean | null;
   /** Ausente si Defender no expuso la fecha. */
   signatureLastUpdated?: string | null;
 }
 
-/** Tarjeta de firewall con un semÃ¡foro por perfil. */
+/** Tarjeta de firewall con un semáforo por perfil. */
 export interface FirewallStatusResult {
   /** good | poor | notMonitored | snoozed | unknown. */
   status: string;
@@ -897,7 +897,7 @@ export interface FirewallStatusResult {
 export interface AntivirusStatusResult {
   /** good | poor | notMonitored | snoozed | unknown. */
   status: string;
-  /** VacÃ­o si WMI no respondiÃ³. */
+  /** Vacío si WMI no respondió. */
   products: string[];
 }
 
@@ -912,7 +912,7 @@ export interface PortResult {
   process?: string | null;
 }
 
-/** Una lÃ­nea de diagnÃ³stico de security.getStatus. */
+/** Una línea de diagnóstico de security.getStatus. */
 export interface SecurityCheckResult {
   /** uac | rdp | realtime | signatures. */
   id: string;
@@ -923,7 +923,7 @@ export interface SecurityCheckResult {
   detail?: string | null;
 }
 
-/** Resultado de security.getStatus (Â§14: Security Center de solo lectura). */
+/** Resultado de security.getStatus (§14: Security Center de solo lectura). */
 export interface SecurityStatusResult {
   defender: DefenderStatusResult;
   firewall: FirewallStatusResult;
@@ -950,26 +950,26 @@ export interface SystemInfoResult {
 }
 
 /* =====================================================================
-   Plugins (Task 013 / Â§17)
+   Plugins (Task 013 / §17)
    ===================================================================== */
 
 /** Tarjeta de plugin en plugin.list. */
 export interface PluginMetadata {
-  /** Id Ãºnico del plugin (clave). */
+  /** Id único del plugin (clave). */
   id: string;
   /** Nombre visible del plugin. */
   name: string;
-  /** VersiÃ³n actual del plugin. */
+  /** Versión actual del plugin. */
   version: string;
   /** Estado del plugin. */
   status: string;
-  /** Indica si hay actualizaciÃ³n disponible. */
+  /** Indica si hay actualización disponible. */
   updateAvailable: boolean;
-  /** VersiÃ³n disponible (si hay update). */
+  /** Versión disponible (si hay update). */
   availableVersion?: string | null;
 }
 
-/** Resultado de la operaciÃ³n plugin.list: colecciÃ³n de plugins instalados. */
+/** Resultado de la operación plugin.list: colección de plugins instalados. */
 export interface PluginCollectionResult {
   /** Lista de plugins instalados. */
   plugins: PluginMetadata[];
@@ -979,13 +979,13 @@ export interface PluginCollectionResult {
 
 /** Resultado de checkUpdate o launch de plugin. */
 export interface PluginOperationResult {
-  /** Indica si la operaciÃ³n succeeded. */
+  /** Indica si la operación succeeded. */
   succeeded: boolean;
   /** Mensaje descriptivo para la UI (toast, etc.). */
   detail?: string | null;
-  /** VersiÃ³n actual despuÃ©s de la operaciÃ³n. */
+  /** Versión actual después de la operación. */
   currentVersion?: string | null;
-  /** VersiÃ³n mÃ¡s reciente disponible. */
+  /** Versión más reciente disponible. */
   latestVersion?: string | null;
 }
 

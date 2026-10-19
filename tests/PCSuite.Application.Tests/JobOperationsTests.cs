@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using PCSuite.Application.Jobs;
 using PCSuite.Contracts;
@@ -15,7 +15,7 @@ namespace PCSuite.Application.Tests;
 
 /// <summary>
 /// job.get / job.cancel por el puente: snapshot camelCase con el resultado
-/// del escaneo, 404 controlado para jobs desconocidos y cancelaciÃ³n real
+/// del escaneo, 404 controlado para jobs desconocidos y cancelación real
 /// de un escaneo en curso (el token del job mata el proceso).
 /// </summary>
 public sealed class JobOperationsTests
@@ -33,7 +33,7 @@ public sealed class JobOperationsTests
     private static (CommandRouter Router, IJobManager Jobs, TempExecutablePath Temp) Create(FakeProcessRunner runner)
     {
         var temp = new TempExecutablePath();
-        temp.Add("clamscan.exe"); // sin Ã©l el servicio responde NOT_INSTALLED
+        temp.Add("clamscan.exe"); // sin él el servicio responde NOT_INSTALLED
         var service = new ClamAvService(
             new ExecutableLocator(temp.DirectoryPath),
             runner,
@@ -58,7 +58,7 @@ public sealed class JobOperationsTests
             await Task.Delay(10);
         }
 
-        throw new TimeoutException($"El job '{jobId}' no terminÃ³ en el plazo de prueba.");
+        throw new TimeoutException($"El job '{jobId}' no terminó en el plazo de prueba.");
     }
 
     private static async Task<BridgeResponse> Send(
@@ -138,7 +138,7 @@ public sealed class JobOperationsTests
         var start = await Send(router, "j5", OperationIds.ClamavQuickScan);
         var jobId = start.Result!.Value.GetProperty("jobId").GetString()!;
 
-        // El job estÃ¡ corriendo cuando se pide la cancelaciÃ³n.
+        // El job está corriendo cuando se pide la cancelación.
         Assert.Equal(JobStatus.Running, jobs.Get(jobId)!.Status);
 
         var cancel = await Send(router, "j6", OperationIds.JobCancel, $$"""{"jobId":"{{jobId}}"}""");

@@ -1,4 +1,4 @@
-﻿namespace PCSuite.Core.Plugins;
+namespace PCSuite.Core.Plugins;
 
 using PCSuite.Contracts;
 
@@ -9,26 +9,26 @@ using PCSuite.Contracts;
 /// </summary>
 public interface IPlugin
 {
-    /// <summary>Id Ãºnico del plugin (clave de registro).</summary>
+    /// <summary>Id único del plugin (clave de registro).</summary>
     string Id { get; }
 
     /// <summary>Nombre visible del plugin.</summary>
     string Name { get; }
 
-    /// <summary>VersiÃ³n actual del plugin.</summary>
+    /// <summary>Versión actual del plugin.</summary>
     string Version { get; }
 
     /// <summary>Estado actual del plugin.</summary>
     PluginStatus Status { get; }
 
-    /// <summary>Indica si hay actualizaciÃ³n disponible.</summary>
+    /// <summary>Indica si hay actualización disponible.</summary>
     bool UpdateAvailable { get; }
 
-    /// <summary>VersiÃ³n disponible (si hay update).</summary>
+    /// <summary>Versión disponible (si hay update).</summary>
     string? AvailableVersion { get; }
 
-    /// <summary>Obtiene el payload tipo para la operaciÃ³n correspondiente al plugin.</summary>
-    /// <param name="operationId">Identificador de la operaciÃ³n (plugin.list, plugin.checkUpdate, plugin.launch).</summary>
-    /// <returns>Payload tipado para la operaciÃ³n solicitada, o null si no estÃ¡ soportado.</returns>
+    /// <summary>Obtiene el payload tipo para la operación correspondiente al plugin.</summary>
+    /// <param name="operationId">Identificador de la operación (plugin.list, plugin.checkUpdate, plugin.launch).</summary>
+    /// <returns>Payload tipado para la operación solicitada, o null si no está soportado.</returns>
     object? GetPayload(string operationId);
 }

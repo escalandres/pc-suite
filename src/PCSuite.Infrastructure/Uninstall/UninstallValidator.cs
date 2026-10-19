@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using PCSuite.Core.Uninstall;
 
 namespace PCSuite.Infrastructure.Uninstall;
@@ -11,7 +12,9 @@ namespace PCSuite.Infrastructure.Uninstall;
 /// Principios: rutas absolutas, nunca raíces del sistema, carpetas SIEMPRE
 /// subcarpetas (jamás la raíz de Program Files o del perfil), claves solo en
 /// raíces permitidas y servicios identificados por nombre seguro.
+/// Lógica de rutas de Windows: el desinstalador es Windows-only de raíz.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public static class UninstallValidator
 {
     /// <summary>Raíces permitidas para claves de registro del plan.</summary>

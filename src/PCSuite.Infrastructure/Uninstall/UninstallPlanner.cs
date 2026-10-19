@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using PCSuite.Core.Uninstall;
 
@@ -15,8 +16,10 @@ namespace PCSuite.Infrastructure.Uninstall;
 /// - Carpetas de datos con el nombre de la app: solo CANDIDATOS sin marcar
 ///   (heurística benigna: el usuario decide).
 ///
-/// Solo lectura, sin elevación.
+/// Solo lectura, sin elevación. Windows-only: servicios, tareas
+/// programadas y registro de Windows.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class UninstallPlanner
 {
     private readonly ILogger? _logger;

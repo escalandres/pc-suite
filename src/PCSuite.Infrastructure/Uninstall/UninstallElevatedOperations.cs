@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using Microsoft.Win32;
 using PCSuite.Contracts;
 using PCSuite.Core.Elevation;
@@ -19,6 +20,7 @@ namespace PCSuite.Infrastructure.Uninstall;
 /// No espera al desinstalador: el asistente habla con el usuario y la app
 /// re-descubre los residuos después.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class UninstallRunOfficialElevatedOperation : IElevatedOperation
 {
     private readonly UninstallCatalog _catalog = new();
@@ -118,6 +120,7 @@ public sealed class UninstallRunOfficialElevatedOperation : IElevatedOperation
 /// servicios re-verificados por contención de ruta contra las carpetas del
 /// plan). Orden: procesos → servicios → tareas → carpetas → registro.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class UninstallCleanupElevatedOperation : IElevatedOperation
 {
     public string Id => ElevatedOperationIds.UninstallCleanup;

@@ -14,14 +14,34 @@
 `publicar.bat` genera todo en `site\`. La copia al repo del sitio es manual:
 
 ```
-DE (pc-suite, generado)              →  A (repo Astro, public/)
+DE (pc-suite, generado)                      →  A (repo Astro, public/)
 ────────────────────────────────────────────────────────────
-site\pcsuite\latest.json             →  public\pcsuite\latest.json          (sobrescribir)
-site\archive\<versión>\manifest.json →  public\pcsuite\archive\<versión>\   (carpeta nueva, inmutable)
-site\assets\logo.svg  (solo si cambió)→  public\pcsuite\assets\logo.svg
+site\pcsuite\latest.json                     →  public\pcsuite\latest.json          (sobrescribir)
+site\pcsuite\latest.json.sig  ⚠ CRÍTICO      →  public\pcsuite\latest.json.sig
+site\pcsuite\latest.json.pub                 →  public\pcsuite\latest.json.pub
+site\archive\<versión>\  (todo el contenido)→  public\pcsuite\archive\<versión>\   (carpeta nueva, inmutable)
+site\notes\<versión>.html                    →  public\pcsuite\notes\<versión>.html
+site\assets\logo.svg  (solo si cambió)      →  public\pcsuite\assets\logo.svg
 ```
 
 Después: commit + push (a `dev`; producción se despliega desde `master`).
+
+## ⚠ Obligatorio desde 0.5.2
+
+- **`latest.json.sig`**: los updaters con firma (Task 17.6) rechazan EN
+  SILENCIO un manifiesto sin `.sig` — la app se quedaría "actualizada para
+  siempre" sin ver nada. Si copias un archivo, copia el otro.
+- **`notes\<versión>.html`** debe casar EXACTO con el `releaseNotesUrl` del
+  manifiesto: `https://aes-studio.dev/pcsuite/notes/<versión>.html`
+  (producto-escopado; contrato permanente del dominio).
+
+## Verificación post-deploy (2 minutos)
+
+```
+curl -s https://aes-studio.dev/pcsuite/latest.json | head -5
+curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/pcsuite/latest.json.sig    → 200
+curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/pcsuite/notes/0.5.2.html  → 200
+```
 
 ## Qué NUNCA se copia
 
