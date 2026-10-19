@@ -331,7 +331,12 @@ export function Winget() {
         </div>
         <button
           type="button"
-          onClick={() => void load(mode, query.trim())}
+          onClick={() => {
+            // Re-chequear la lista = empezar limpio: los avisos de la tanda
+            // anterior ("2 actualizado(s), 1 fallido(s)…") no deben persistir.
+            clearAllNotices();
+            void load(mode, query.trim());
+          }}
           disabled={loadingDetect || loading || !installed}
           className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
           style={{ background: 'var(--pcs-accent)', color: '#fff' }}
