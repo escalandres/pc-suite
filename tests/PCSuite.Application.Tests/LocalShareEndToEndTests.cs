@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PCSuite.Core.LocalShare;
 using PCSuite.Infrastructure.LocalShare;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -681,16 +682,25 @@ public class LocalShareEndToEndTests : IDisposable
     [Fact]
     public async Task StartPrunesStaleDiscoveredDevices()
     {
-        // Descubrir, envejecer la marca LastSeenAt y arrancar: poda.
+        // Descubrir, envejecer la marca LastSeenAt PERSISTIDA y arrancar:
+        // poda. Desde 2026-10-19 StartAsync relee devices.json (fuente de
+        // verdad), así que el envejecimiento va al archivo — que es
+        // exactamente el escenario real: la app murió sin pasar por Stop y
+        // el archivo quedó con marcas viejas.
         await _serviceA.StartAsync();
         await _serviceA.StopAsync();
 
         _serviceA.NoteDiscoveredDevice("device-b", "Equipo B", "127.0.0.1", PortB, "huella-b");
 
-        // Envejecer artificialmente el registro (GetDevices devuelve los
-        // objetos vivos, no copias).
-        var device = _serviceA.GetDevices().Single(d => d.DeviceId == "device-b");
-        device.LastSeenAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+        // Envejecer el registro persistido (deserializar → tocar → guardar).
+        var devicesPath = Path.Combine(_dirA, "LocalShare", "devices.json");
+        var json = await File.ReadAllTextAsync(devicesPath);
+        var devices = JsonSerializer.Deserialize<List<SharedDevice>>(json, LocalShareJson.Options) ?? [];
+        devices.Single(d => d.DeviceId == "device-b").LastSeenAt =
+            DateTimeOffset.UtcNow.AddMinutes(-10);
+        await File.WriteAllTextAsync(
+            devicesPath,
+            JsonSerializer.Serialize(devices, LocalShareJson.Options));
 
         await _serviceA.StartAsync();
 
@@ -834,46 +844,58 @@ public class LocalShareEndToEndTests : IDisposable
     [Fact]
     public async Task ConnectToPeer_FallsBackWhenFirstAddressIsDead()
     {
-        // Servidor REAL en loopback. La primera dirección es 192.0.2.1
-        // (TEST-NET-1, RFC 5737: no enrutable, nunca responde) — el
-        // escenario exacto del bug: una IP que ya no es del par.
-        // Nota: 127.0.0.2 NO sirve como "muerta" — el listener bindea a
-        // IPAddress.Any y Windows acepta TODO el rango 127.x en loopback.
-        await _serviceB.StartAsync();
+        // Determinista SIN red: el servidor escucha SOLO en 127.0.0.7; la
+        // primera dirección del par (127.0.0.1) recibe un rechazo inmediato
+        // de loopback y el fallback debe probar la segunda. TEST-NET
+        // (192.0.2.1) NO sirve como "muerta": según la red del equipo
+        // (VPN/proxy/ISP) puede responder — se comprobó con un falso verde
+        // que se volvió rojo al cambiar de red.
+        using var server = new TlsTransferServer(
+            new CertificateStore(_dirA).Certificate,
+            logger: null,
+            maxConnections: 1);
+        server.Start(0, System.Net.IPAddress.Parse("127.0.0.7"));
 
         var client = new TransferClient(new CertificateStore(_dirA).Certificate);
         var peer = new SharedDevice
         {
             DeviceId = "device-b",
             DisplayName = "Equipo B",
-            KnownAddresses = ["192.0.2.1", "127.0.0.1"],
-            Port = PortB,
+            KnownAddresses = ["127.0.0.1", "127.0.0.7"],
+            Port = server.Port,
             Trust = DeviceTrust.Paired,
             CertificateThumbprint = "huella",
         };
 
-        var (_, address) = await client.ConnectToPeerAsync(
-            peer, perAddressTimeout: TimeSpan.FromMilliseconds(300));
+        var (_, address) = await client.ConnectToPeerAsync(peer);
 
-        Assert.Equal("127.0.0.1", address);
+        Assert.Equal("127.0.0.7", address);
     }
 
     [Fact]
     public async Task ConnectToPeer_AllAddressesDead_ThrowsClearMessage()
     {
+        // Puerto libre real (bind + release): nada escucha → rechazo
+        // inmediato en loopback, en ambas direcciones.
+        int deadPort;
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        deadPort = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+
         var client = new TransferClient(new CertificateStore(_dirA).Certificate);
         var peer = new SharedDevice
         {
             DeviceId = "device-b",
             DisplayName = "Equipo B",
-            KnownAddresses = ["192.0.2.1", "198.51.100.1"], // TEST-NET-1 y -2: nunca responden
-            Port = 45999,
+            KnownAddresses = ["127.0.0.1", "127.0.0.2"],
+            Port = deadPort,
             Trust = DeviceTrust.Paired,
             CertificateThumbprint = "huella",
         };
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => client.ConnectToPeerAsync(peer, perAddressTimeout: TimeSpan.FromMilliseconds(300)));
+            () => client.ConnectToPeerAsync(peer, perAddressTimeout: TimeSpan.FromSeconds(5)));
 
         Assert.Contains("ninguna", exception.Message);
         Assert.Contains("2", exception.Message); // cuenta de direcciones probadas
@@ -885,17 +907,27 @@ public class LocalShareEndToEndTests : IDisposable
     {
         // Escenario EXACTO del usuario: devices.json persistido con la IP
         // vieja arriba (datos previos al fix) y el par vivo en la segunda.
-        // El fallback de TransferClient debe salvar el envío.
+        // Determinista: B escucha SOLO en 127.0.0.7 — la 127.0.0.1 del
+        // [0] rechaza al instante y el fallback salva el envío.
         await StartAndPairAsync();
 
-        // Simular devices.json de antes del fix: [0] = IP muerta (no
-        // enrutable; 127.0.0.2 no valdría: Any acepta todo loopback).
+        // B pasa a escuchar solo en 127.0.0.7 (conserva par y puerto).
+        await _serviceB.StopAsync();
+        var settingsB = _serviceB.Settings;
+        settingsB.BindAddress = "127.0.0.7";
+        await _serviceB.UpdateSettingsAsync(settingsB);
+        await _serviceB.StartAsync();
+
+        // A: devices.json previo al fix con [0] = dirección muerta.
         await _serviceA.StopAsync();
         var devicesPath = Path.Combine(_dirA, "LocalShare", "devices.json");
-        var json = File.ReadAllText(devicesPath);
-        // La entrada de B se emparejó contra 127.0.0.1: reescribir su lista.
-        json = json.Replace("[\"127.0.0.1\"]", "[\"192.0.2.1\",\"127.0.0.1\"]");
-        File.WriteAllText(devicesPath, json);
+        var json = await File.ReadAllTextAsync(devicesPath);
+        var devices = JsonSerializer.Deserialize<List<SharedDevice>>(json, LocalShareJson.Options) ?? [];
+        var entryB = devices.Single(d => d.DeviceId == "device-b");
+        entryB.KnownAddresses = ["127.0.0.1", "127.0.0.7"]; // la muerta primera
+        await File.WriteAllTextAsync(
+            devicesPath,
+            JsonSerializer.Serialize(devices, LocalShareJson.Options));
         await _serviceA.StartAsync();
 
         var fileToSend = Path.Combine(_dirA, "despues-de-cambio-ip.txt");

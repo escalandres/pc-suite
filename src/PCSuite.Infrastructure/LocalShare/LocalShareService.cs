@@ -128,6 +128,18 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         Status = LocalShareServiceStatus.Starting;
         try
         {
+            // El archivo es la fuente de verdad (cada mutación persiste):
+            // releer al arrancar. Cubre el caso real del bug 2026-10-19 —
+            // un devices.json con la IP rancia arriba, escrito por una
+            // sesión anterior, debe entrar en memoria tal cual para que
+            // el fallback de TransferClient lo salve.
+            lock (_lock)
+            {
+                _devices.Clear();
+            }
+
+            LoadDevices();
+
             _fileWriter = new SafeFileWriter(_settings.DownloadDirectory);
 
             // Descubiertos rancios (app muerta sin pasar por Stop): los
@@ -190,7 +202,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 }
             };
 
-            _server.Start(_settings.Port);
+            _server.Start(_settings.Port, ParseBindAddress(_settings.BindAddress));
 
             _settings.CertificateThumbprint = _certificateStore.Thumbprint;
             SaveSettings();
@@ -1731,6 +1743,23 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     // ------------------------------------------------------------------
     // Persistencia
     // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Dirección de bind del receptor desde settings: null/vacía/inválida →
+    /// todas las interfaces (comportamiento por defecto).
+    /// </summary>
+    private static System.Net.IPAddress? ParseBindAddress(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return System.Net.IPAddress.TryParse(value.Trim(), out var address)
+            && address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+            ? address
+            : null;
+    }
 
     private LocalShareSettings LoadSettings()
     {

@@ -256,6 +256,14 @@ public sealed class LocalShareSettings
 
     /// <summary>Huella del certificado TLS propio (generado al primer arranque).</summary>
     public string? CertificateThumbprint { get; set; }
+
+    /// <summary>
+    /// Dirección IP local donde escucha el receptor (null/vacía = todas las
+    /// interfaces). Se persiste como string; los valores inválidos se
+    /// ignoran y se escucha en todas. Uso principal: tests deterministas y
+    /// restringir Local Share a una interfaz concreta.
+    /// </summary>
+    public string? BindAddress { get; set; }
 }
 
 /// <summary>

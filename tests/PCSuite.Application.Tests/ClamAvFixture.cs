@@ -100,6 +100,7 @@ internal sealed class ClamAvFixture : IDisposable
                 new ClamAvInstallOperation(service),
                 new ClamAvUpdateDefinitionsOperation(service),
                 new ClamAvQuickScanOperation(service, jobs),
+                new ClamAvQuickTargetsOperation(),
                 new ClamAvFullScanOperation(service, jobs),
                 new ClamAvCustomScanOperation(service, jobs),
                 new ClamAvHistoryOperation(service),

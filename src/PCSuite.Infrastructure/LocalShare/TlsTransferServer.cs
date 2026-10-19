@@ -52,7 +52,7 @@ public sealed class TlsTransferServer : IDisposable
         _connectionGate = new SemaphoreSlim(maxConnections, maxConnections);
     }
 
-    public void Start(int preferredPort)
+    public void Start(int preferredPort, IPAddress? bindAddress = null)
     {
         if (IsRunning)
         {
@@ -60,11 +60,13 @@ public sealed class TlsTransferServer : IDisposable
         }
 
         _cts = new CancellationTokenSource();
-        _listener = new TcpListener(IPAddress.Any, preferredPort);
+        _listener = new TcpListener(bindAddress ?? IPAddress.Any, preferredPort);
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _acceptTask = Task.Run(() => AcceptLoopAsync(_cts.Token));
-        _logger?.LogInformation("TlsTransferServer escuchando en el puerto {Port}", Port);
+        _logger?.LogInformation(
+            "TlsTransferServer escuchando en {Bind}:{Port}",
+            bindAddress ?? IPAddress.Any, Port);
     }
 
     public void Stop()

@@ -23,6 +23,14 @@ internal static class ClamAvArguments
 
     public static string[] QuickScan() => [.. VerboseScanFlags, .. QuickTargets()];
 
+    /// <summary>
+    /// Carpetas del escaneo rápido resueltas y EXISTENTES: para que la UI
+    /// pueda mostrar exactamente lo que se va a escanear ANTES de pedir el
+    /// UAC (la lista vive aquí porque Descargas se resuelve con la Known
+    /// Folder API — "Downloads"/"Descargas"/… según el idioma de Windows).
+    /// </summary>
+    public static IReadOnlyList<string> QuickScanTargets() => QuickTargets();
+
     /// <summary>Escaneo completo SIN --verbose para evitar millones de líneas de salida
     /// al escanear discos enteros. El parser usa el SCAN SUMMARY para contadores exactos.
     /// </summary>

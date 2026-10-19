@@ -40,8 +40,7 @@ public sealed class ClamAvOperationTests
     }
 
     [Fact]
-    public async Task QuickScan_StartsJob_RespondsJobIdAtOnce_ResultCarriesOutcome()
-    {
+    public async Task QuickScan_StartsJob_RespondsJobIdAtOnce_ResultCarriesOutcome()    {
         using var fx = ClamAvFixture.Create(
             FakeProcessRunner.WritingScanLog(ClamAvFixtures.InfectedScan, exitCode: 1));
 
@@ -70,6 +69,26 @@ public sealed class ClamAvOperationTests
         Assert.Equal(2, threats.Length);
         Assert.Equal(@"C:\Users\test\Downloads\evil.com", threats[0].GetProperty("file").GetString());
         Assert.Equal("Win.Trojan.FakeMS-123", threats[0].GetProperty("threat").GetString());
+    }
+
+    [Fact]
+    public async Task QuickTargets_ReturnsExistingRootedFolders_CamelCase_NoElevation()
+    {
+        // El modal de consentimiento de la UI pinta esta lista: el nativo
+        // resuelve las carpetas (Descargas cambia de nombre por idioma).
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(""));
+
+        var response = await Send(fx.Router, "t1", OperationIds.ClamavQuickTargets);
+
+        Assert.True(response.Success);
+        var targets = response.Result!.Value.GetProperty("targets").EnumerateArray().ToList();
+        Assert.NotEmpty(targets);
+        Assert.All(targets, target =>
+            Assert.True(Path.IsPathRooted(target.GetString() ?? "")));
+
+        // Solo lectura: jamás ejecuta nada.
+        Assert.Empty(fx.Runner.Requests);
+        Assert.False(new ClamAvQuickTargetsOperation().RequiresElevation);
     }
 
     [Fact]

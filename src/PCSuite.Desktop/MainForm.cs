@@ -232,6 +232,7 @@ public partial class MainForm : Form
                 new ClamAvInstallOperation(clamAvService),
                 new ClamAvUpdateDefinitionsOperation(clamAvService),
                 new ClamAvQuickScanOperation(clamAvService, jobManager),
+                new ClamAvQuickTargetsOperation(),
                 new ClamAvFullScanOperation(clamAvService, jobManager),
                 new ClamAvCustomScanOperation(clamAvService, jobManager),
                 new ClamAvHistoryOperation(clamAvService),

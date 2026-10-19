@@ -3,6 +3,7 @@ using PCSuite.Contracts;
 using PCSuite.Core.ClamAV;
 using PCSuite.Core.Jobs;
 using PCSuite.Core.Operations;
+using PCSuite.Infrastructure.ClamAV;
 
 namespace PCSuite.Infrastructure.Operations;
 
@@ -216,6 +217,30 @@ public sealed class ClamAvUpdateDefinitionsOperation : ClamAvOperation
 
     protected override async Task<JsonElement?> ExecuteCoreAsync(OperationContext context, CancellationToken cancellationToken) =>
         ToMutation(await Service.UpdateDefinitionsAsync(cancellationToken).ConfigureAwait(false));
+}
+
+/// <summary>Resultado de clamav.quickTargets: las carpetas del escaneo rápido.</summary>
+public sealed class ClamAvQuickTargetsResult
+{
+    public List<string> Targets { get; init; } = [];
+}
+
+/// <summary>
+/// clamav.quickTargets — carpetas que escaneará el escaneo rápido, resueltas
+/// y existentes. Solo lectura y sin elevación: la UI la usa para mostrar el
+/// EXACTO alcance del escaneo en un modal ANTES de pedir el UAC.
+/// </summary>
+public sealed class ClamAvQuickTargetsOperation : IOperation
+{
+    public string Id => OperationIds.ClamavQuickTargets;
+
+    public bool RequiresElevation => false;
+
+    public Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken cancellationToken) =>
+        Task.FromResult(OperationResult.Ok(BridgeJson.ToJson(new ClamAvQuickTargetsResult
+        {
+            Targets = [.. ClamAvArguments.QuickScanTargets()],
+        })));
 }
 
 public sealed class ClamAvQuickScanOperation : ClamAvScanJobOperation

@@ -21,6 +21,7 @@ import type {
   ClamAvHistoryEntryResult,
   ClamAvHistoryResult,
   ClamAvMutationResult,
+  ClamAvQuickTargetsResult,
   ClamAvScanResult,
   ClamAvScanStartResult,
   ClamAvStatusResult,
@@ -327,6 +328,40 @@ export function Clamav() {
     });
   };
 
+  // ------------------------------------------------------------------
+  // Modal de escaneo rápido: las carpetas EXACTAS que se van a escanear,
+  // resueltas por el nativo (Descargas cambia de nombre según el idioma
+  // de Windows — la UI no puede adivinarla). El modal ES el consentimiento:
+  // se ve el alcance ANTES de que exista UAC alguno.
+  // ------------------------------------------------------------------
+  const [quickModalOpen, setQuickModalOpen] = useState(false);
+  const [quickTargets, setQuickTargets] = useState<string[] | null>(null);
+  const [quickTargetsError, setQuickTargetsError] = useState<string | null>(null);
+
+  const openQuickModal = () => {
+    if (busy !== null || quickModalOpen) return;
+    setQuickTargets(null);
+    setQuickTargetsError(null);
+    setQuickModalOpen(true);
+    bridge
+      .call<ClamAvQuickTargetsResult>(
+        OperationIds.clamavQuickTargets,
+        undefined,
+        READ_TIMEOUT_MS,
+      )
+      .then((result) => setQuickTargets(result.targets ?? []))
+      .catch((error) =>
+        setQuickTargetsError(
+          errorMessage(error, 'No se pudieron leer las carpetas del escaneo rápido.'),
+        ),
+      );
+  };
+
+  const confirmQuickScan = () => {
+    setQuickModalOpen(false);
+    void runScan('quick', OperationIds.clamavQuickScan);
+  };
+
   // 14.3.5 —" Atajos de teclado para acciones principales (Q=quick, F=full, C=custom, D=definiciones)
   useEffect(() => {
     if (loading || !status?.installed) return;
@@ -339,7 +374,7 @@ export function Clamav() {
 
       switch (event.key.toLowerCase()) {
         case 'q':
-          if (!busy) void runScan('quick', OperationIds.clamavQuickScan);
+          if (!busy) openQuickModal();
           break;
         case 'f':
           if (!busy) {
@@ -365,7 +400,7 @@ export function Clamav() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [loading, status, busy, customPath, refresh, runScan, runMutation, runCustomScan]);
+  }, [loading, status, busy, customPath, quickModalOpen, refresh, runScan, runMutation, runCustomScan, openQuickModal]);
 
   const installed = status?.installed ?? false;
   const busyAny = busy !== null;
@@ -519,9 +554,7 @@ export function Clamav() {
               label={busy === 'quick' ? 'Escaneando…' : 'Escaneo rápido'}
               icon={<Zap size={14} aria-hidden />}
               shortcut="Q"
-              onClick={() =>
-                void runScan('quick', OperationIds.clamavQuickScan)
-              }
+              onClick={openQuickModal}
             />
             <ActionButton
               busy={busy === 'full'}
@@ -1061,6 +1094,137 @@ export function Clamav() {
           )}
         </section>
       )}
+
+      {/* Modal de escaneo rápido: alcance EXACTO antes del UAC */}
+      {quickModalOpen && (
+        <QuickScanModal
+          targets={quickTargets}
+          error={quickTargetsError}
+          onCancel={() => setQuickModalOpen(false)}
+          onConfirm={confirmQuickScan}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Modal de consentimiento del escaneo rápido: muestra las carpetas EXACTAS
+ * (resueltas por el nativo) antes de lanzar el escaneo. Escape y clic en el
+ * fondo cierran sin escanear; el UAC llega solo con "Escanear ahora".
+ */
+function QuickScanModal(props: {
+  targets: string[] | null;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { targets, error, onCancel, onConfirm } = props;
+
+  // Escape cierra el modal (el atajo global 'q' ya no dispara dos veces:
+  // openQuickModal es idempotente mientras esté abierto).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.5)', zIndex: 400 }}
+      role="presentation"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-scan-modal-title"
+        className="w-full max-w-lg space-y-4 rounded-lg border p-5"
+        style={{
+          background: 'var(--pcs-surface)',
+          borderColor: 'var(--pcs-border)',
+          boxShadow: 'var(--pcs-elevation-4)',
+          zIndex: 500,
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-2">
+          <Zap size={16} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+          <h2 id="quick-scan-modal-title" className="text-base font-semibold">
+            Escaneo rápido
+          </h2>
+        </div>
+
+        <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+          Se revisarán <strong>exactamente</strong> estas carpetas (las resuelve
+          Windows — incluye tus Descargas):
+        </p>
+
+        {error && (
+          <p className="text-sm" style={{ color: 'var(--pcs-danger)' }} role="alert">
+            {error}
+          </p>
+        )}
+
+        <ul className="space-y-1.5">
+          {targets === null && !error && (
+            <li className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+              Cargando carpetas…
+            </li>
+          )}
+          {targets?.map((target) => (
+            <li key={target} className="flex items-center gap-2 text-sm">
+              <Folder size={14} aria-hidden className="shrink-0" style={{ color: 'var(--pcs-accent)' }} />
+              <code
+                className="min-w-0 break-all font-mono text-xs"
+                title={target}
+              >
+                {target}
+              </code>
+            </li>
+          ))}
+          {targets?.length === 0 && !error && (
+            <li className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+              No hay carpetas accesibles que escanear.
+            </li>
+          )}
+        </ul>
+
+        <p className="rounded-md border px-3 py-2 text-xs" style={{
+          borderColor: 'color-mix(in srgb, var(--pcs-warning) 45%, transparent)',
+          color: 'var(--pcs-warning)',
+        }}>
+          Windows pedirá permiso de administrador (UAC) para leer también los
+          archivos del sistema de esas carpetas. Puede tardar varios minutos.
+        </p>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border px-4 py-2 text-sm font-medium transition-colors"
+            style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            autoFocus
+            className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+            style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+          >
+            <Zap size={14} aria-hidden />
+            Escanear ahora
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

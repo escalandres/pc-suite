@@ -62,4 +62,29 @@ public sealed class ClamAvArgumentsTests
         Assert.Equal(@"C:\target", args[1]); // los objetivos NO se tocan
         Assert.Equal(@"--log=C:\Users\ana\AppData\Local\Temp\scan.log", args[^1]);
     }
+
+    [Fact]
+    public void QuickScanTargets_ExistingRootedFoldersOnly()
+    {
+        // La UI muestra esta lista en el modal de consentimiento: cada
+        // elemento debe ser una carpeta REAL y absoluta.
+        var targets = ClamAvArguments.QuickScanTargets();
+
+        Assert.NotEmpty(targets);
+        Assert.All(targets, target =>
+        {
+            Assert.True(Path.IsPathRooted(target), $"Relativa: {target}");
+            Assert.True(Directory.Exists(target), $"No existe: {target}");
+        });
+        // Escritorio y Temp del usuario SIEMPRE existen en un perfil vivo.
+        Assert.Contains(
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            targets);
+        Assert.Contains(Path.GetTempPath(), targets);
+        // Y QuickScan() escanea exactamente lo que QuickScanTargets() lista.
+        var scanTargets = ClamAvArguments.QuickScan().Skip(2);
+        Assert.Equal(
+            targets.OrderBy(t => t, StringComparer.OrdinalIgnoreCase),
+            scanTargets.OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+    }
 }

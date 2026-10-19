@@ -73,6 +73,7 @@ export const OperationIds = {
   clamavInstall: 'clamav.install',
   clamavUpdateDefinitions: 'clamav.updateDefinitions',
   clamavQuickScan: 'clamav.quickScan',
+  clamavQuickTargets: 'clamav.quickTargets',
   clamavFullScan: 'clamav.fullScan',
   clamavCustomScan: 'clamav.customScan',
   clamavHistory: 'clamav.history',
@@ -582,6 +583,12 @@ export interface RemovalItemResult {
 export interface UninstallCleanupResult {
   results: RemovalItemResult[];
   requiresRestart: boolean;
+}
+
+/** Resultado de clamav.quickTargets: carpetas del escaneo rápido (resueltas
+ * por el nativo — Descargas cambia de nombre según el idioma de Windows). */
+export interface ClamAvQuickTargetsResult {
+  targets: string[];
 }
 
 /* =====================================================================

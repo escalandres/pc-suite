@@ -99,6 +99,9 @@ public static class OperationIds
     /// <summary>Escaneo rápido de ubicaciones comunes del usuario.</summary>
     public const string ClamavQuickScan = "clamav.quickScan";
 
+    /// <summary>Carpetas que escaneará el escaneo rápido (solo lectura; el modal de la UI las muestra antes del UAC).</summary>
+    public const string ClamavQuickTargets = "clamav.quickTargets";
+
     /// <summary>Escaneo completo de los discos fijos.</summary>
     public const string ClamavFullScan = "clamav.fullScan";
 
