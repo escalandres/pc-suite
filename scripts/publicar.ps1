@@ -138,8 +138,18 @@ function Get-SigningFingerprint {
     # Fingerprint de la clave de firma SIN firmar nada (Task 19.6): se
     # inyecta en latest.json antes de que la firma cubra el contenido final.
     if (-not $UseGpg) {
-        $signTool = Join-Path $PSScriptRoot "..\src\Tools\SignRelease\SignRelease.csproj"
-        $result = & dotnet run --project $signTool -- --fingerprint-only --email $GpgKey 2>&1
+    # Ruta del tool: el DLL directo (dotnet exec) — NO el apphost exe ni
+    # 'dotnet run'. El exe recien compilado dispara Access Denied
+    # intermitente (Defender sobre binarios sin firmar que tocan
+    # criptografia); el DLL via 'dotnet <dll>' es estable y ademas evita
+    # el restore+build de cada llamada.
+    $signCsproj = Join-Path $PSScriptRoot "..\src\Tools\SignRelease\SignRelease.csproj"
+    $signDll = Join-Path $PSScriptRoot "..\src\Tools\SignRelease\bin\Debug\net10.0\SignRelease.dll"
+    if (-not (Test-Path $signDll))
+    {
+        & dotnet build $signCsproj --nologo -v quiet | Out-Null
+    }
+    $result = & dotnet $signDll --fingerprint-only --email $GpgKey 2>&1
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  ⚠ SignRelease no pudo leer el fingerprint: $result"
             return $null
@@ -176,8 +186,13 @@ function Sign-Manifest {
     # así que la firma generada aquí es la que el updater acepta.
     if (-not $UseGpg) {
         Write-Host "  Firmando manifiesto con SignRelease (PgpService, sin gpg)..."
-        $signTool = Join-Path $PSScriptRoot "..\src\Tools\SignRelease\SignRelease.csproj"
-        $signResult = & dotnet run --project $signTool -- $ManifestPath --email $GpgKey 2>&1
+        $signCsproj = Join-Path $PSScriptRoot "..\src\Tools\SignRelease\SignRelease.csproj"
+        $signDll = Join-Path $PSScriptRoot "..\src\Tools\SignRelease\bin\Debug\net10.0\SignRelease.dll"
+        if (-not (Test-Path $signDll))
+        {
+            & dotnet build $signCsproj --nologo -v quiet | Out-Null
+        }
+        $signResult = & dotnet $signDll $ManifestPath --email $GpgKey 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Error firmando con SignRelease: $signResult (gpg legacy: -UseGpg)"
         }
@@ -187,7 +202,7 @@ function Sign-Manifest {
         # Sanity check ANTES de publicar: la firma debe verificar contra la
         # clave EMBEBIDA del updater — si falla, el release se detiene aquí
         # en vez de producir un latest.json que ningún updater aceptaría.
-        $verifyResult = & dotnet run --project $signTool -- $ManifestPath --verify 2>&1
+        $verifyResult = & dotnet $signDll $ManifestPath --verify 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "La firma NO verifica contra la clave embebida: $verifyResult"
         }
@@ -306,7 +321,7 @@ $json = @"
   "channel": "stable",
   "version": "$Version",
   "releasedAt": "$relDate",
-  "releaseNotesUrl": "https://aes-studio.dev/pcsuite/notes/$Version.html",
+  "releaseNotesUrl": "https://aes-studio.dev/notes/$Version.html",
   "artifacts": [
     {
       "id": "setup-win64",

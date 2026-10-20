@@ -20,7 +20,7 @@ site\pcsuite\latest.json                     →  public\pcsuite\latest.json    
 site\pcsuite\latest.json.sig  ⚠ CRÍTICO      →  public\pcsuite\latest.json.sig
 site\pcsuite\latest.json.pub                 →  public\pcsuite\latest.json.pub
 site\archive\<versión>\  (todo el contenido)→  public\pcsuite\archive\<versión>\   (carpeta nueva, inmutable)
-site\notes\<versión>.html                    →  public\pcsuite\notes\<versión>.html
+site\notes\<versión>.html                    →  public\notes\<versión>.html
 site\assets\logo.svg  (solo si cambió)      →  public\pcsuite\assets\logo.svg
 ```
 
@@ -32,15 +32,16 @@ Después: commit + push (a `dev`; producción se despliega desde `master`).
   SILENCIO un manifiesto sin `.sig` — la app se quedaría "actualizada para
   siempre" sin ver nada. Si copias un archivo, copia el otro.
 - **`notes\<versión>.html`** debe casar EXACTO con el `releaseNotesUrl` del
-  manifiesto: `https://aes-studio.dev/pcsuite/notes/<versión>.html`
-  (producto-escopado; contrato permanente del dominio).
+  manifiesto: `https://aes-studio.dev/notes/<versión>.html` (la raíz del
+  sitio — así las copia también el workflow de CI, que vuelca `site\*` en
+  `public\`).
 
 ## Verificación post-deploy (2 minutos)
 
 ```
 curl -s https://aes-studio.dev/pcsuite/latest.json | head -5
 curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/pcsuite/latest.json.sig    → 200
-curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/pcsuite/notes/0.6.0.html  → 200
+curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/notes/0.6.0.html            → 200
 ```
 
 ## Qué NUNCA se copia
