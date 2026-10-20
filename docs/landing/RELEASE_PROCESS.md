@@ -13,8 +13,8 @@
             escribe docs\landing\notas\<vers>.md
 2. Local:   .\publicar.bat
             → SHA-256 de los binarios EXACTOS
-            → latest.json + archive\<vers>\ (inmutables)
-            → notas HTML en site\notes\<vers>.html
+            → releases\<vers>\ (carpeta autocontenida e inmutable, Task 022)
+            → notas HTML en releases\<vers>\<vers>.html
             → inyecta signingKeyFingerprint ANTES de firmar
             → firma con SignRelease (PgpService en proceso — SIN gpg)
               → latest.json.sig + latest.json.pub
@@ -22,7 +22,7 @@
               updater; si no cuadra, ABORTA (jamás se publica un
               manifiesto que ningún updater aceptaría)
 3. GitHub:  release pcsuite-v<vers> (web UI) con ESOS binarios exactos
-4. Vercel:  copia al repo Astro (ver site\COPIAR-A-ASTRO.md):
+4. Vercel:  copia al repo Astro (ver releases\COPIAR-A-ASTRO.md):
               latest.json + latest.json.sig + .pub + archive\ + notes\
             → push a dev → merge a master → deploy
 5. Verificar (curl): latest.json / .sig (200) / notes (200)
@@ -67,7 +67,7 @@ instalados.
 - [ ] **Notas** escritas: `docs\landing\notas\X.Y.Z.md` (el pipeline las
       convierte a HTML; sin el .md, el release sale sin notas y el
       `releaseNotesUrl` da 404)
-- [ ] **Suite verde** en tu rama (923/923, 0 warnings)
+- [ ] **Suite verde** en tu rama (la suite completa, 0 warnings)
 
 ## Ejecución
 
@@ -75,7 +75,7 @@ instalados.
 .\publicar.bat          # firma + verifica + imprime los hashes
 ```
 
-- **Inmutabilidad**: si la versión ya existe en `site\archive`, ABORTA.
+- **Inmutabilidad**: si la versión ya existe en `releases\<vers>\`, ABORTA.
 - Si `gh` CLI está autenticado crea el release solo; si no (lo normal),
   imprime el comando exacto para la web UI.
 - **Sube a GitHub los binarios EXACTOS que acabas de firmar**: si
@@ -84,7 +84,7 @@ instalados.
 
 ## Despliegue del sitio
 
-`site\COPIAR-A-ASTRO.md` es el mapa exacto (incluye `.sig` — obligatorio
+`releases\COPIAR-A-ASTRO.md` es el mapa exacto (incluye `.sig` — obligatorio
 desde 0.5.2). Verificación:
 
 ```

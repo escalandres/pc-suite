@@ -139,16 +139,49 @@ jobs:
           $skip = "${{ github.event.inputs.skip_sign }}"
           $version = "${{ steps.set_version.outputs.version }}"
           Write-Host "Publicando v$version (SkipSign=$skip)..."
-          .\publicar.ps1 -Version $version -SkipSign:$([bool]::Parse($skip))
+          # -UseGpg: en CI la clave privada se importa al keyring de GPG
+          # (paso "Import PGP private key"); el keyring de SignRelease
+          # (%APPDATA%\PCSuite\pgp) está VACÍO en el agente. Firmar con
+          # gpg CLI produce la misma firma: es la MISMA clave.
+          .\publicar.ps1 -Version $version -UseGpg:$(-not [bool]::Parse($skip)) -SkipSign:$([bool]::Parse($skip))
 
       # -----------------------------------------------------------------------
-      # Copiar site/ generado al repo del sitio (aes-studio)
+      # Task 022: copiar los artefactos del release (releases\<versión>\) al
+      # repo del sitio (aes-studio). Mapeo archivo por archivo: los nombres
+      # fuente SON los nombres desplegados. El viejo "Copy-Item site\*" ya no
+      # sirve (los artefactos no viven en site\) y además arrastraba el
+      # index.html del espejo local, que choca con el build de Astro.
       # -----------------------------------------------------------------------
-      - name: "Copy site to aes-studio repo"
+      - name: "Copy release artifacts to aes-studio repo"
         shell: pwsh
         run: |
-          Copy-Item -Recurse -Force pc-suite\site\* aes-studio\public\
-          Write-Host "✓ site/* copiado a aes-studio/public/"
+          $version = "${{ steps.set_version.outputs.version }}"
+          $rel = "pc-suite\releases\$version"
+          $pub = "aes-studio\public"
+
+          # Live: la versión recién publicada es el nuevo latest (URL pineada
+          # por los updaters instalados — jamás moverla).
+          New-Item -ItemType Directory -Force -Path "$pub\pcsuite" | Out-Null
+          Copy-Item -Force "$rel\latest.json"     "$pub\pcsuite\latest.json"
+          Copy-Item -Force "$rel\latest.json.sig" "$pub\pcsuite\latest.json.sig"
+          Copy-Item -Force "$rel\latest.json.pub" "$pub\pcsuite\latest.json.pub"
+
+          # Historial inmutable (misma firma y clave, segundo destino).
+          $arch = "$pub\pcsuite\archive\$version"
+          New-Item -ItemType Directory -Force -Path $arch | Out-Null
+          Copy-Item -Force "$rel\manifest.json"   "$arch\manifest.json"
+          Copy-Item -Force "$rel\latest.json.sig" "$arch\latest.json.sig"
+          Copy-Item -Force "$rel\latest.json.pub" "$arch\latest.json.pub"
+
+          # Notas: URL pineada por el releaseNotesUrl del manifiesto.
+          New-Item -ItemType Directory -Force -Path "$pub\notes" | Out-Null
+          Copy-Item -Force "$rel\$version.html" "$pub\notes\$version.html"
+
+          # Logo (idempotente con -Force).
+          New-Item -ItemType Directory -Force -Path "$pub\pcsuite\assets" | Out-Null
+          Copy-Item -Force "pc-suite\site\assets\logo.svg" "$pub\pcsuite\assets\logo.svg"
+
+          Write-Host "✓ releases/$version/* copiado a aes-studio/public/"
 
       # -----------------------------------------------------------------------
       # Commit y push al repo del sitio (trigger Vercel deploy)

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCSuite 0.6.0 — Notas de versión</title>
+  <link rel="stylesheet" href="/pcsuite/assets/styles.css">
+  <link rel="icon" type="image/svg+xml" href="/pcsuite/assets/logo.svg">
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/pcsuite/">
+      <img src="/pcsuite/assets/logo.svg" alt="PCSuite" width="28" height="28">
+      <span>PCSuite</span>
+    </a>
+    <div class="nav-links">
+      <a href="/pcsuite/#descarga">Descarga</a>
+      <a href="/pcsuite/#actualizar">Actualizar</a>
+    </div>
+    <span class="nav-studio">AES Studio</span>
+  </nav>
+  <main class="section">
+    <h1>PCSuite 0.6.0</h1>
+    <p class="section-sub">Publicado el 20 de octubre de 2026</p>
+
+    <article class="notes-content">
+      <blockquote>
+        <p>Tag: <code>pcsuite-v0.6.0</code></p>
+        <p>SHA-256: instalador <code>52a3b63eb682a234cfac01ac2762b51e92e3f8214752868a241073676327ef77</code> · portable <code>150a5d406d9eb6b0358c24435141502a82e4d46b616cc4f87a69d97ff7ebec98</code></p>
+      </blockquote>
+
+      <hr>
+
+      <h2>🔐 Nuevo módulo "Certificados"</h2>
+
+      <p>Una sola página para todo tu material criptográfico — 100% en proceso (BouncyCastle, sin gpg ni OpenSSL instalados), sin elevación y con tu clave privada <strong>siempre</strong> en tu equipo:</p>
+
+      <ul>
+        <li><strong>X.509 autofirmados</strong>: RSA 2048/4096, ECDSA P-256/P-384 y Ed25519; Subject Alternative Names (DNS, IP, email), validez configurable y exportación opcional a PFX/PKCS#12 para importar en el almacén de Windows</li>
+        <li><strong>CSR (PKCS#10)</strong>: genera clave + solicitud lista para enviar a una CA real (Let's Encrypt, DigiCert…) — los SANs viajan en el atributo estándar <code>extensionRequest</code>, lo único que las CA honran hoy</li>
+        <li><strong>Inspección universal</strong>: arrastra cualquier archivo — X.509 (PEM/DER), CSR, claves privadas, claves PGP, claves SSH — y ves qué es, su fingerprint y sus detalles</li>
+        <li><strong>Conversión de formatos</strong>: PEM↔DER, PEM(bundle fullchain)↔PFX, PFX→PEM, y claves OpenSSH→PEM (PKCS#8)</li>
+        <li><strong>Ciclo PGP completo en la app</strong>: crea tu clave de firma (ed25519), exporta tu pública, firma archivos (detached .sig verificable con gpg), <strong>importa la clave pública de quien te firmó</strong> y verifica sus firmas sin salir de PCSuite</li>
+      </ul>
+
+      <h2>🧨 Desinstalador forzado (Paquetes → "Registro")</h2>
+
+      <p>Para esas apps que winget no puede quitar — o que <strong>ni siquiera aparecen</strong> en winget:</p>
+
+      <ul>
+        <li>Nueva pestaña <strong>"Registro"</strong>: todas las apps con entrada de desinstalación en Windows (la fuente de "Aplicaciones y características"), incluidas las que winget no ve</li>
+        <li>Al pedir eliminar, PCSuite construye un <strong>plan exacto</strong> de lo que se va a borrar: procesos, servicios y tareas programadas que ejecutan binarios de la carpeta de la app (por contención de ruta, jamás por nombre), carpetas, claves de registro — lo revisas con checkboxes ANTES de que exista UAC alguno</li>
+        <li><strong>Paso 1</strong>: lanza el desinstalador oficial con elevación (UAC); <strong>Paso 2</strong>: limpia los residuos que dejó</li>
+        <li>Doble barrera de seguridad: lo que apruebas se revalida dentro del proceso elevado (jamás raíces del sistema, servicios re-verificados por ruta)</li>
+      </ul>
+
+      <h2>🛡️ ClamAV con alcance real</h2>
+
+      <ul>
+        <li>Los tres modos de escaneo (rápido, completo, personalizado) ahora piden <strong>UAC puntual</strong>: leen también los archivos del sistema — desaparecen los "Can't fstat" y "Access denied" de archivos protegidos. El progreso por archivo se mantiene igual</li>
+        <li>El botón de <strong>Escaneo rápido abre un modal con las carpetas EXACTAS</strong> que va a revisar (Escritorio, Descargas, Temp del usuario, resueltas por Windows) antes de pedir permiso</li>
+      </ul>
+
+      <h2>💬 Local Share: mensajes de texto</h2>
+
+      <p>Además de archivos, ahora puedes <strong>enviar mensajes de texto</strong> a tus equipos emparejados — por el mismo canal cifrado (TLS), con el mismo consentimiento del receptor y verificación SHA-256. Se muestran como burbuja con botón de copiar y quedan en la carpeta <code>Mensajes/</code> como procedencia.</p>
+
+      <h2>🛠️ Correcciones destacadas</h2>
+
+      <ul>
+        <li><strong>Local Share tras cambio de IP</strong>: si el otro equipo cambió de dirección (DHCP, otra interfaz), el envío ahora prueba sus direcciones conocidas en orden — antes fallaba con "conexión rechazada" sin que el receptor supiera nada</li>
+        <li><strong>Actualización de paquetes (WinGet)</strong>: los avisos de la tanda anterior desaparecen al iniciar una nueva</li>
+        <li><strong>Barra lateral</strong>: la versión de la app ya no se queda en "Cargando…" cuando el arranque gana la carrera al host nativo</li>
+        <li><strong>Pipeline de actualizaciones firmado</strong>: el manifiesto <code>latest.json</code> lleva ahora una firma PGP (Ed25519) verificada contra la clave embebida en la app — un atacante con control del hosting no puede sustituir ni el manifiesto ni la clave de validación. Si la clave de firma cambiara algún día, PCSuite lo avisa y bloquea la descarga hasta verificación manual</li>
+      </ul>
+
+      <h2>Nota de compatibilidad</h2>
+
+      <p>Los mensajes de texto funcionan hacia atrás: un PCSuite 0.5.1 que reciba un mensaje de un 0.6.0 lo verá como un archivo de texto en su carpeta de descargas (degradación elegante, sin errores).</p>
+
+      <hr>
+
+      <p><em>Los checksums de esta versión coinciden con el manifiesto público de actualizaciones: <a href="https://aes-studio.dev/pcsuite/latest.json">https://aes-studio.dev/pcsuite/latest.json</a></em></p>
+    </article>
+  </main>
+  <footer>
+    <p>Requiere Windows 10/11 x64 · WebView2 Runtime (preinstalado con Edge)</p>
+    <p>Sin telemetría: PCSuite no envía nada a ningún servidor salvo la consulta de actualizaciones (y con tu consentimiento para instalar).</p>
+    <p class="copyright">© 2026 AES Studio · sha256 por versión publicado en el manifiesto</p>
+  </footer>
+</body>
+</html>

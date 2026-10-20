@@ -8,12 +8,19 @@
 #   2. SHA-256 del archivo EXACTO que se sube (fuente de verdad del updater).
 #   3. Manifiestos con URLs de GitHub Releases (los binarios viven ahí,
 #      no en el sitio: el deploy de Vercel queda en KBs).
-#   4. Notas de versión: markdown → HTML (site\notes\<vers>.html).
+#   4. Notas de versión: markdown → HTML (releases\<vers>\<vers>.html).
 #   5. Firma PGP: latest.json → latest.json.sig + latest.json.pub.
 #   6. Si gh CLI está autenticado: crea el release con ambos assets.
 #      Si no: imprime el comando exacto para copiar.
 #
-# Inmutabilidad: si la versión ya está en site\archive, aborta. El historial
+# Task 022 (2026-10-20): TODO lo que hay que subir a aes-studio.dev/pcsuite
+# vive en UNA carpeta autocontenida releases\<vers>\ — manifiesto live
+# (latest.json), copia del historial (manifest.json), firma (.sig), clave
+# pública (.pub) y notas HTML (<vers>.html). Los nombres de archivo SON los
+# nombres desplegados: la copia al repo Astro no requiere renombres. El mapa
+# exacto está en releases\COPIAR-A-ASTRO.md.
+#
+# Inmutabilidad: si la versión ya está en releases\<vers>\, aborta. El historial
 # jamás se reescribe — las apps instaladas pinnean la URL del manifiesto.
 # ============================================================================
 param(
@@ -125,7 +132,10 @@ $html
 </html>
 "@
 
-    $notesDir = "site\notes"
+    # Task 022: las notas viven en la carpeta autocontenida del release, con
+    # el MISMO nombre de archivo que su destino desplegado
+    # (public\notes\<vers>.html) — copia sin renombres.
+    $notesDir = "releases\$Version"
     New-Item -ItemType Directory -Force -Path $notesDir | Out-Null
     $outFile = Join-Path $notesDir "$Version.html"
     [IO.File]::WriteAllText($outFile, $fullHtml, [Text.UTF8Encoding]::new($false))
@@ -281,10 +291,11 @@ if (-not (Test-Path $zipRel)) {
 }
 
 # ---------- 2. Inmutabilidad ----------
-$archiveDir = "site\archive\$Version"
-if (Test-Path (Join-Path $archiveDir "manifest.json")) {
+# Task 022: el guardián vive en la carpeta autocontenida del release.
+$releaseDir = "releases\$Version"
+if (Test-Path (Join-Path $releaseDir "manifest.json")) {
     throw @"
-La version $Version ya esta publicada (site\archive\$Version\manifest.json).
+La version $Version ya esta publicada (releases\$Version\manifest.json).
 El historial es inmutable: sube la version en Directory.Build.props
 para publicar una nueva.
 "@
@@ -307,8 +318,9 @@ Write-Host "        Portable  : $zipHash"
 Write-Host ""
 Write-Host "[2/6] Generando manifiestos (URLs de GitHub Releases)..."
 
-New-Item -ItemType Directory -Force -Path "site\pcsuite" | Out-Null
-New-Item -ItemType Directory -Force -Path $archiveDir | Out-Null
+# Task 022: UNA carpeta autocontenida por release — todo lo que se sube a
+# aes-studio.dev/pcsuite sale de aquí.
+New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
 
 $ghBase = "https://github.com/$ReleaseRepo/releases/download/$tag"
 
@@ -346,12 +358,17 @@ $json = @"
 # Validar el JSON ANTES de escribirlo a disco.
 $null = $json | ConvertFrom-Json
 
+# latest.json: bytes EXACTOS que se despliegan como live en
+# pcsuite\latest.json (la URL pineada por los updaters instalados).
+# manifest.json: la MISMA copia para el historial inmutable
+# (pcsuite\archive\<vers>\manifest.json). Task 022: ambas viven en la
+# misma carpeta autocontenida — copia sin renombres.
 [IO.File]::WriteAllText(
-    (Join-Path (Get-Location) "site\pcsuite\latest.json"),
+    (Join-Path (Get-Location) "$releaseDir\latest.json"),
     $json,
     [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText(
-    (Join-Path (Get-Location) "$archiveDir\manifest.json"),
+    (Join-Path (Get-Location) "$releaseDir\manifest.json"),
     $json,
     [Text.UTF8Encoding]::new($false))
 
@@ -364,7 +381,7 @@ Convert-MarkdownToHtml -MarkdownPath $notesMd -Version $Version -RelDate $relDat
 # ---------- 4. Firmar manifiesto con PGP (Task 17.6) ----------
 Write-Host ""
 Write-Host "[4/6] Inyectando signingKeyFingerprint en el manifiesto..."
-$manifestPath = Join-Path (Get-Location) "site\pcsuite\latest.json"
+$manifestPath = Join-Path (Get-Location) "$releaseDir\latest.json"
 
 # CRÍTICO: el fingerprint se inyecta ANTES de firmar. La firma PGP cubre el
 # contenido EXACTO del latest.json desplegado — si el JSON mutara después de
@@ -380,12 +397,12 @@ if ($fingerprint) {
     $replacement = '"signingKeyFingerprint": "' + $fingerprint + '"' + ",`n" + '  "artifacts":'
     $jsonWithFpr = $json.Replace('"artifacts":', $replacement)
     [IO.File]::WriteAllText(
-        (Join-Path (Get-Location) "site\pcsuite\latest.json"),
+        (Join-Path (Get-Location) "$releaseDir\latest.json"),
         $jsonWithFpr,
         [Text.UTF8Encoding]::new($false))
-    # Actualizar también el archivo en archive
+    # La copia del historial (manifest.json) lleva EXACTOS los mismos bytes.
     [IO.File]::WriteAllText(
-        (Join-Path (Get-Location) "$archiveDir\manifest.json"),
+        (Join-Path (Get-Location) "$releaseDir\manifest.json"),
         $jsonWithFpr,
         [Text.UTF8Encoding]::new($false))
     Write-Host "  ✓ latest.json actualizado con signingKeyFingerprint"
@@ -396,17 +413,10 @@ if ($fingerprint) {
 Write-Host "[5/6] Firmando manifiesto PGP (sobre el contenido FINAL)..."
 $null = Sign-Manifest -ManifestPath $manifestPath -GpgKey $GpgKey -SkipSign:$SkipSign -UseGpg:$UseGpg
 
-# Copiar .sig y .pub al directorio archive también
-$sigSrc = "$manifestPath.sig"
-$pubSrc = "$manifestPath.pub"
-if (Test-Path $sigSrc) {
-    Copy-Item $sigSrc (Join-Path $archiveDir "latest.json.sig") -Force
-    Write-Host "  ✓ Firma copiada a archive"
-}
-if (Test-Path $pubSrc) {
-    Copy-Item $pubSrc (Join-Path $archiveDir "latest.json.pub") -Force
-    Write-Host "  ✓ Clave pública copiada a archive"
-}
+# Task 022: ya NO hay copia al archive — .sig y .pub viven en la MISMA
+# carpeta autocontenida releases\<vers>\ que latest.json y manifest.json.
+# Quien copia al repo Astro sube cada archivo una vez a sus dos destinos
+# (live + archive); el mapa exacto está en releases\COPIAR-A-ASTRO.md.
 
 # ---------- 5. Release en GitHub (gh) ----------
 Write-Host ""
@@ -460,16 +470,18 @@ Write-Host ""
 Write-Host "============================================"
 Write-Host " $Product v$Version publicado"
 Write-Host "============================================"
-Write-Host ("  Manifiesto      : site\pcsuite\latest.json")
-Write-Host ("  Historial       : $archiveDir\manifest.json")
+Write-Host ("  Carpeta release : $releaseDir\  (todo lo que se sube al sitio)")
+Write-Host ("  Manifiesto      : $releaseDir\latest.json")
+Write-Host ("  Historial       : $releaseDir\manifest.json")
 Write-Host ("  Release         : https://github.com/$ReleaseRepo/releases/tag/$tag")
-Write-Host ("  Notas HTML      : site\notes\$Version.html")
-Write-Host ("  Firma PGP       : site\pcsuite\latest.json.sig")
-Write-Host ("  Clave pública   : site\pcsuite\latest.json.pub")
+Write-Host ("  Notas HTML      : $releaseDir\$Version.html")
+Write-Host ("  Firma PGP       : $releaseDir\latest.json.sig")
+Write-Host ("  Clave pública   : $releaseDir\latest.json.pub")
 Write-Host ("  Instalador      : $setupName  (~" + $mb.Invoke($setupSize) + " MB)")
 Write-Host ("                    sha256: $setupHash")
 Write-Host ("  Portable        : $zipName  (~" + $mb.Invoke($zipSize) + " MB)")
 Write-Host ("                    sha256: $zipHash")
 Write-Host ""
-Write-Host " Siguiente paso (manual): subir site\ al repo del sitio (Vercel)."
+Write-Host " Siguiente paso (manual): copiar $releaseDir\ al repo Astro (Vercel)."
+Write-Host " Mapa exacto: releases\COPIAR-A-ASTRO.md"
 Write-Host "============================================"

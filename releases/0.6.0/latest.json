@@ -1,0 +1,26 @@
+{
+  "product": "pcsuite",
+  "channel": "stable",
+  "version": "0.6.0",
+  "releasedAt": "2026-10-20T15:37:20Z",
+  "releaseNotesUrl": "https://aes-studio.dev/notes/0.6.0.html",
+  "signingKeyFingerprint": "79C6 BC2D 81EF 6F6E 3AE7 9E30 AB3C 1312 2F97 6179",
+  "artifacts": [
+    {
+      "id": "setup-win64",
+      "kind": "installer",
+      "label": "Instalador (recomendado)",
+      "url": "https://github.com/escalandres/pc-suite/releases/download/pcsuite-v0.6.0/PCSuite-Setup-0.6.0-win64.exe",
+      "size": 40753484,
+      "sha256": "52a3b63eb682a234cfac01ac2762b51e92e3f8214752868a241073676327ef77"
+    },
+    {
+      "id": "portable-win64",
+      "kind": "zip",
+      "label": "Portable (.zip)",
+      "url": "https://github.com/escalandres/pc-suite/releases/download/pcsuite-v0.6.0/PCSuite-0.6.0-win-x64.zip",
+      "size": 54885790,
+      "sha256": "150a5d406d9eb6b0358c24435141502a82e4d46b616cc4f87a69d97ff7ebec98"
+    }
+  ]
+}

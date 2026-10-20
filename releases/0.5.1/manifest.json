@@ -1,0 +1,25 @@
+{
+  "product": "pcsuite",
+  "channel": "stable",
+  "version": "0.5.1",
+  "releasedAt": "2026-10-15T21:21:46Z",
+  "releaseNotesUrl": "https://github.com/escalandres/pc-suite/releases/tag/pcsuite-v0.5.1",
+  "artifacts": [
+    {
+      "id": "setup-win64",
+      "kind": "installer",
+      "label": "Instalador (recomendado)",
+      "url": "https://github.com/escalandres/pc-suite/releases/download/pcsuite-v0.5.1/PCSuite-Setup-0.5.1-win64.exe",
+      "size": 40694157,
+      "sha256": "5b56b8a9d6e937a191a882bd90f99bd8884efabf4544c2e8c67c451b98483aad"
+    },
+    {
+      "id": "portable-win64",
+      "kind": "zip",
+      "label": "Portable (.zip)",
+      "url": "https://github.com/escalandres/pc-suite/releases/download/pcsuite-v0.5.1/PCSuite-0.5.1-win-x64.zip",
+      "size": 54779014,
+      "sha256": "0b6a178a18f9753392564e843b279ee4d63074f0ad3c033609539ffafaf0e16b"
+    }
+  ]
+}

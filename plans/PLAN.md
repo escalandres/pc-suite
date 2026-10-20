@@ -117,6 +117,24 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 21.2 - Renderer WinRT en Desktop: ToastContentBuilder del toolkit 7.1.3 (apps de escritorio SIN empaquetar; AUMID + atajo del Start Menu automáticos), clic en el toast → traer PCSuite al frente (des-minimiza + Activate) | ✅ Completado | Desktop pasa a net10.0-windows10.0.17763 (min 1809: proyecciones WinRT; WebView2 ya exige 1803+). Bump WebView.WindowsForms 9.0.108→9.0.110 (la 108 ya no existe en el feed: fin del NU1603 de cada build) |
 | ├ 21.3 - Eventos cableados: Local Share (solicitud entrante archivos/mensaje, emparejamiento, recibido archivos, mensaje RECIBIDO con el texto — llega en el transfer, sin cargar ítems), ClamAV amenazas (evento nuevo ScanCompleted en IClamAvService), update disponible al arrancar (check diferido 10 s) | ✅ Completado | ShareTransfer gana MessageText (se rellena al publicar el ítem del mensaje) para que el evento TransferFinished lo lleve. ClamAvService dispara ScanCompleted solo cuando el escaneo corrió (igual que el historial); testeado con igualdad por valor del record |
 
+### Task 022 - Reorganización de artefactos de release (releases\<versión>\)
+
+> Toda la información relacionada a un nuevo release vive en UNA carpeta
+> autocontenida `releases\<versión>\` en la raíz del proyecto (en lugar de
+> dispersa en site\pcsuite\ + site\archive\<v>\ + site\notes\). Los nombres
+> de archivo SON los nombres desplegados: copiar al repo Astro no requiere
+> renombres. Además, los artefactos ahora SÍ se versionan en git: el
+> historial completo de releases viaja con el repo (antes solo existía en
+> la máquina que publicó + el repo Astro desplegado).
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 022 - publicar.bat escribe TODO el release en releases\<versión>\ y las guías de agentes de IA apuntan ahí | ✅ Completado | 947/947, 0 warnings. Validado: 0.6.0 aborta por inmutabilidad con la ruta nueva; 0.7.0 aborta por binarios faltantes ANTES de crear nada; espejo local (serve-site.mjs) resuelve /pcsuite/latest.json(.sig/.pub) → releases\<máxima>\ y /notes/\<v>.html → releases\<v>\<v>.html (6 URLs en 200) |
+| ├ 22.1 - publicar.ps1: $releaseDir único (guardián de inmutabilidad + manifiesto live latest.json + copia archive manifest.json + firma + clave + notas <v>.html); fuera el paso de copia al archive (misma carpeta); .gitignore deja de ignorar la salida | ✅ Completado | publicar.bat (header) + RELEASE_PROCESS.md actualizados. Regla de oro documentada en releases\COPIAR-A-ASTRO.md: latest.json INMUTABLE tras publicar (la firma PGP cubre bytes exactos); re-publicar = borrar releases\<v>\ completa + re-ejecutar |
+| ├ 22.2 - Migración legacy: 0.5.0/0.5.1/0.6.0 a releases\<v>\ (latest.json+.sig+.pub+manifest.json+0.6.0.html); duplicados byte-idénticos del archive eliminados (verificados por hash); COPIAR-A-ASTRO.md mudado a releases\ con el mapa de copia vigente | ✅ Completado | site\ queda solo como espejo estático local (index.html + assets\) |
+| ├ 22.3 - CI publish.yml: mapeo archivo por archivo releases\<v>\ → public\ (live + archive + notes + logo); firma con -UseGpg en CI (la clave se importa al keyring de gpg; el keyring de SignRelease está vacío en el agente) | ✅ Completado | El viejo "Copy-Item site\*" además arrastraba index.html del espejo al build de Astro (bug latente, corregido) |
+| └ 22.4 - Guías para agentes de IA actualizadas: INTEGRACION-AES-STUDIO.md (mapa nuevo + banner landing-Astro), TASKS-17.5-17.6-PARA-AGENT.md (banner Task 022 + comandos gpg), CI_CD_PGP_KEY_MANAGEMENT.md (flujo CI), PCSuite_Landing_Propuesta.md (nota histórica) | ✅ Completado | PLAN.md fila 17.5 queda como registro histórico de su fecha; esta sección es el estado vigente |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |

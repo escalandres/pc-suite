@@ -10,6 +10,11 @@
   (auto-actualización con desinstalación previa), Task 009 (infraestructura
   PGP en proceso), Task 016 (jobs con progreso + eventos al bridge).
 
+> **Nota Task 022 (2026-10-20):** propuesta histórica — el pipeline vigente
+> escribe los artefactos del release en la carpeta autocontenida
+> `releases\<versión>\` (no en `site\`), siempre firmados con PGP (Task 17.6,
+> ya implementado). Ver `scripts\publicar.ps1` y `releases\COPIAR-A-ASTRO.md`.
+
 ---
 
 ## 1. Resumen y objetivos

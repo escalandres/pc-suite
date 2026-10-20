@@ -108,9 +108,12 @@ jobs:
           .\publicar.ps1 -SkipSign:$false
           # Si se pasa -SkipSign:$true omite la firma (solo testing)
 
-      - name: Copy site/ to aes-studio repo
+      - name: Copy release artifacts to aes-studio repo
         run: |
-          Copy-Item -Recurse -Force site\* ../aes-studio/public/
+          # Task 022: los artefactos viven en releases\<versión>\ y se
+          # copian archivo por archivo a sus destinos en public\ (live +
+          # archive + notes). El mapeo exacto vive en
+          # .github/workflows/publish.yml — fuente de verdad.
 
       - name: Commit & push aes-studio
         working-directory: ../aes-studio
@@ -170,16 +173,18 @@ En **Azure Key Vault** / **Variable Group**:
 │  3. publicar.ps1 ejecuta:                                       │
 │     a) SHA-256 artefactos (dist/)                               │
 │     b) Genera latest.json (con releaseNotesUrl → /notes/)       │
-│     c) Genera site/notes/<vers>.html (markdown → HTML)          │
+│     c) Genera releases/<vers>/<vers>.html (markdown → HTML)     │
 │     d) gpg --detach-sign --local-user releases@aes-studio.dev  │
 │        → latest.json.sig                                        │
 │     e) gpg --export --armor releases@aes-studio.dev             │
 │        → latest.json.pub                                        │
 │     f) Extrae fingerprint → actualiza latest.json               │
-│     g) Copia .sig + .pub a site/archive/<vers>/                 │
+│     g) Todo vive en releases/<vers>/ (Task 022: ya no hay      │
+│        copia al archive — misma carpeta autocontenida)           │
 │     h) gh release create (binarios a GitHub Releases)           │
 │                                                                 │
-│  4. Copia site/* → ../aes-studio/public/                        │
+│  4. Copia releases/<vers>/* → ../aes-studio/public/ (archivo    │
+│     por archivo: live + archive + notes)                        │
 │  5. Commit + push a aes-studio → Vercel deploy automático       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘

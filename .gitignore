@@ -54,7 +54,12 @@ graphify-out/
 CLAUDE.md
 AGENTS.md
 
-# Task 017 � sitio generado por publicar.bat (landing en site/index.html SI es fuente)
-site/pcsuite/
-site/archive/
-site/notes/
+# Task 022 (2026-10-20): la salida de publicar.bat vive en releases\<versión>\
+# (carpeta autocontenida por release) y YA NO se ignora — se commitea con cada
+# release a propósito: el historial completo de manifiestos firmados, firmas,
+# claves públicas y notas HTML viaja con el repo (antes solo existía en la
+# máquina que publicó + el repo Astro desplegado). Nada secreto aquí: la
+# clave PRIVADA vive en %APPDATA%\PCSuite\pgp y su respaldo .sec.asc FUERA
+# del repo (ver docs\landing\CI_CD_PGP_KEY_MANAGEMENT.md). El guardián de
+# inmutabilidad en publicar.ps1 protege los bytes firmados.
+# La landing espejo (site\index.html + site\assets\) sigue siendo fuente.

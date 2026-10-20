@@ -4,6 +4,16 @@
 > de notas de versión en el sitio de AES Studio (Astro/Vercel) y cablear el
 > generador de notas al pipeline de publicación de pc-suite.
 
+> **⚠ ACTUALIZADO 2026-10-20 (Task 022):** las rutas de salida de
+> `publicar.bat` cambiaron — los artefactos de release YA NO viven en
+> `site\pcsuite\` / `site\archive\<v>\` / `site\notes\` sino en la carpeta
+> autocontenida `releases\<versión>\` en la raíz del proyecto (manifiesto
+> live + copia archive + firma + clave pública + notas HTML, con los
+> nombres exactos de sus destinos desplegados). Este documento conserva las
+> decisiones de diseño de 17.5/17.6; donde menciona rutas de salida, aplica
+> la estructura vigente. El mapa de copia vigente al repo Astro es
+> `releases\COPIAR-A-ASTRO.md`.
+
 ## Contexto
 
 La landing de PCSuite (`https://aes-studio.dev/pcsuite/`) ya enlaza a las
@@ -47,7 +57,8 @@ El contenido fuente es el Markdown del repo pc-suite
 Extender `scripts/publicar.ps1` en pc-suite para que, además de generar
 el manifiesto, convierta el markdown a un HTML mínimo con el mismo
 wrapper visual de la landing (tokens `--pcs-*`) y lo escriba en
-`site/notes/<versión>.html`. Así el flujo `publicar.bat` lo produce todo
+`releases/<versión>/<versión>.html` (Task 022: carpeta autocontenida).
+Así el flujo `publicar.bat` lo produce todo
 junto y el agente de aes-studio solo copia.
 
 **Opción B: manual la primera vez**
@@ -107,7 +118,7 @@ Extender `scripts/publicar.ps1` para que en cada versión:
 
 1. Lea `docs/landing/notas/<versión>.md` (si existe)
 2. Lo convierta a HTML con el template de arriba
-3. Lo escriba en `site/notes/<versión>.html`
+3. Lo escriba en `releases/<versión>/<versión>.html` (Task 022)
 
 Así el flujo `publicar.bat` produce TODO: manifiesto + notas + la landing
 nunca se toca.
@@ -145,7 +156,8 @@ publicar.bat (pc-suite)
   3. genera latest.json.pub (clave pública ASCII-armored)
   4. escribe el fingerprint SHA-256 de la clave pública en latest.json
      → campo nuevo "signingKeyFingerprint"
-  5. copia latest.json + .sig + .pub a site\
+  5. escribe TODO en releases\<versión>\ (Task 022: carpeta autocontenida
+     — manifiesto live + copia archive + .sig + .pub + notas HTML)
 
 Updater (PcsuiteUpdateService.CheckAsync)
   1. descarga latest.json + latest.json.sig
@@ -177,10 +189,11 @@ Authenticode).
 Tras generar `latest.json`:
 
 ```powershell
-# Usar BouncyCastle vía un helper C# o gpg CLI:
+# Usar BouncyCastle vía un helper C# o gpg CLI (Task 022: los artefactos
+# viven en releases\<versión>\):
 gpg --detach-sign --armor --local-user releases@aes-studio.dev `
-  --output site\pcsuite\latest.json.sig site\pcsuite\latest.json
-gpg --export --armor releases@aes-studio.dev > site\pcsuite\latest.json.pub
+  --output releases\<versión>\latest.json.sig releases\<versión>\latest.json
+gpg --export --armor releases@aes-studio.dev > releases\<versión>\latest.json.pub
 ```
 
 Añadir al JSON un campo informativo:
@@ -241,7 +254,7 @@ empaquetar.bat → ISCC → publicar.bat
   ├─ hash de artefactos
   ├─ latest.json + latest.json.sig + latest.json.pub
   ├─ gh release create (binarios a GitHub)
-  └─ site\: manifiesto + firma + clave + notas + landing
+  └─ releases\<vers>\: manifiesto + firma + clave + notas (Task 022)
        → push del repo Astro → Vercel deploy
 ```
 
