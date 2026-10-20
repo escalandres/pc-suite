@@ -59,13 +59,22 @@
        dependencia (Core, Infrastructure…) — versiones ATRASADAS que
        sobrescribían los binarios recién compilados de la app →
        TypeLoadException al arrancar. Ahora la copia es QUIRÚRGICA: solo
-       los archivos propios del helper, jamás dependencias. -->
+       los archivos propios del helper, jamás dependencias.
+
+       BUG 2026-10-19b (empaquetar.bat fallaba en MSB3030): la ruta del
+       helper debe respetar el RID — sin RID (dotnet build / iniciar.bat)
+       el bin vive en net10.0-windows\; con -r win-x64 (dotnet publish /
+       empaquetar.bat) vive en net10.0-windows\win-x64\. -->
+  <PropertyGroup>
+    <_ElevatedHelperBin Condition="'$(RuntimeIdentifier)' == ''">..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\</_ElevatedHelperBin>
+    <_ElevatedHelperBin Condition="'$(RuntimeIdentifier)' != ''">..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\</_ElevatedHelperBin>
+  </PropertyGroup>
   <Target Name="CopyElevatedHelper" AfterTargets="Build">
     <ItemGroup>
-      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\PCSuite.Elevated.exe" />
-      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\PCSuite.Elevated.dll" />
-      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\PCSuite.Elevated.deps.json" />
-      <_ElevatedHelperFiles Include="..\PCSuite.Elevated\bin\$(Configuration)\net10.0-windows\PCSuite.Elevated.runtimeconfig.json" />
+      <_ElevatedHelperFiles Include="$(_ElevatedHelperBin)PCSuite.Elevated.exe" />
+      <_ElevatedHelperFiles Include="$(_ElevatedHelperBin)PCSuite.Elevated.dll" />
+      <_ElevatedHelperFiles Include="$(_ElevatedHelperBin)PCSuite.Elevated.deps.json" />
+      <_ElevatedHelperFiles Include="$(_ElevatedHelperBin)PCSuite.Elevated.runtimeconfig.json" />
     </ItemGroup>
     <Copy SourceFiles="@(_ElevatedHelperFiles)" DestinationFiles="@(_ElevatedHelperFiles->'$(OutDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
