@@ -40,7 +40,7 @@ Después: commit + push (a `dev`; producción se despliega desde `master`).
 ```
 curl -s https://aes-studio.dev/pcsuite/latest.json | head -5
 curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/pcsuite/latest.json.sig    → 200
-curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/pcsuite/notes/0.5.2.html  → 200
+curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/pcsuite/notes/0.6.0.html  → 200
 ```
 
 ## Qué NUNCA se copia
