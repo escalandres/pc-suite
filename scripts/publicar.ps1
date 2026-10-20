@@ -358,7 +358,12 @@ $manifestPath = Join-Path (Get-Location) "site\pcsuite\latest.json"
 $fingerprint = Get-SigningFingerprint -GpgKey $GpgKey -UseGpg:$UseGpg
 
 if ($fingerprint) {
-    $jsonWithFpr = $json -replace '"artifacts":', '"signingKeyFingerprint": "' + $fingerprint + '",`n  "artifacts":'
+    # Bug 2026-10-19: la concatenación con '+' a la derecha de -replace hace
+    # que PowerShell la parsee como ARRAY de argumentos ("solo dos elementos,
+    # no 4"). El reemplazo se construye PRIMERO en su propia variable; además
+    # es -ireplace literal: el fingerprint no es regex y el JSON es texto.
+    $replacement = '"signingKeyFingerprint": "' + $fingerprint + '"' + ",`n" + '  "artifacts":'
+    $jsonWithFpr = $json.Replace('"artifacts":', $replacement)
     [IO.File]::WriteAllText(
         (Join-Path (Get-Location) "site\pcsuite\latest.json"),
         $jsonWithFpr,
