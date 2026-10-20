@@ -73,7 +73,13 @@ if (importIndex >= 0)
 }
 
 var manifestPath = args.FirstOrDefault(a => !a.StartsWith("--"));
-if (string.IsNullOrWhiteSpace(manifestPath) || !File.Exists(manifestPath))
+
+// --fingerprint-only NO lleva manifiesto (publicar.ps1 solo quiere el
+// fingerprint para INYECTARLO en el JSON antes de firmar); los demás
+// modos sí exigen un latest.json existente. Bug 2026-10-19: este guard
+// se perdió en la reescritura que añadió --import/--verify y el paso
+// [4/6] de publicar.bat abortaba con el "Uso:".
+if (!fingerprintOnly && (string.IsNullOrWhiteSpace(manifestPath) || !File.Exists(manifestPath)))
 {
     Console.Error.WriteLine("Uso: SignRelease <latest.json> [--keyring <dir>] " +
         "[--email <id>] [--fingerprint <hex>] [--passphrase <pw>] | --import <asc> | --verify");
@@ -99,7 +105,7 @@ if (verify)
     // (ReadAllText elimina BOM igual que ReadAsStringAsync del HttpClient) y
     // re-codificado a UTF-8. Así --verify aprueba exactamente lo que aprobará
     // cada updater, ni más ni menos.
-    var manifestText = await File.ReadAllTextAsync(manifestPath);
+    var manifestText = await File.ReadAllTextAsync(manifestPath!);
     var result = await verifier.VerifyAsync(
         System.Text.Encoding.UTF8.GetBytes(manifestText),
         await File.ReadAllTextAsync(verifySigPath));
@@ -146,7 +152,7 @@ else
 }
 
 // ---------------- Modo fingerprint-only ----------------
-var manifestJson = fingerprintOnly ? "" : await File.ReadAllTextAsync(manifestPath);
+var manifestJson = fingerprintOnly ? "" : await File.ReadAllTextAsync(manifestPath!);
 if (fingerprintOnly)
 {
     Console.WriteLine(FormatFingerprint(signingKey.Fingerprint));
