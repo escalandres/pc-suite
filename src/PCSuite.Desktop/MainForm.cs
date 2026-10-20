@@ -11,6 +11,7 @@ using PCSuite.Application.Tools;
 using PCSuite.Contracts;
 using PCSuite.Core.Events;
 using PCSuite.Desktop.Bridge;
+using PCSuite.Infrastructure.Notifications;
 using PCSuite.Blazor;
 using PCSuite.Blazor.Components;
 using PCSuite.Infrastructure;
@@ -74,6 +75,7 @@ public partial class MainForm : Form
     private readonly ServiceProvider _blazorServices;
     private readonly ClamAvState _clamAvState;
     private readonly BlazorWebView _blazorWebView;
+    private readonly WindowsToastNotifier _toastNotifier;
 
     public MainForm()
     {
@@ -203,6 +205,110 @@ public partial class MainForm : Form
         // Actualizaciones (Task 017.3/17.4): manifiesto público + SHA-256 en
         // streaming. update.install cierra la app tras lanzar el Setup.
         var updateService = new PCSuite.Infrastructure.Updates.PcsuiteUpdateService();
+
+        // ------------------------------------------------------------------
+        // Task 021: notificaciones de Windows (Centro de Notificaciones).
+        // Regla de oro (ToastDecider): si la app tiene el foco, NADA de
+        // toasts — los banners internos ya cubren ese caso. El toast existe
+        // para lo que pasa cuando estás en otra cosa.
+        // ------------------------------------------------------------------
+        _toastNotifier = new WindowsToastNotifier(
+            isAppFocused: () => Focused || ContainsFocus || Form.ActiveForm == this,
+            bringToFront: () =>
+            {
+                BeginInvoke(() =>
+                {
+                    if (WindowState == FormWindowState.Minimized)
+                    {
+                        WindowState = FormWindowState.Normal;
+                    }
+
+                    Activate();
+                    BringToFront();
+                });
+            });
+
+        // Local Share: lo que llega cuando nadie está mirando la app.
+        localShareService.IncomingRequest += (transfer, items) =>
+        {
+            var isMessage = items.Any(item => item.IsMessage);
+            _toastNotifier.Show(new ToastInput(
+                Kind: isMessage ? ToastKind.IncomingMessage : ToastKind.IncomingFiles,
+                AppFocused: false, // lo decide Show() al momento del evento
+                PeerName: transfer.PeerDisplayName,
+                ItemCount: transfer.ItemCount,
+                TotalBytes: transfer.TotalBytes));
+        };
+
+        localShareService.PairRequested += request =>
+        {
+            _toastNotifier.Show(new ToastInput(
+                Kind: ToastKind.PairRequested,
+                AppFocused: false,
+                PeerName: request.PeerDisplayName));
+        };
+
+        localShareService.TransferFinished += transfer =>
+        {
+            // Solo el lado receptor: el emisor está por definición en la app.
+            if (transfer.Direction != PCSuite.Core.LocalShare.TransferDirection.Receiving
+                || transfer.Status != PCSuite.Core.LocalShare.TransferStatus.Completed)
+            {
+                return;
+            }
+
+            // Mensaje: el texto quedó en la transferencia (se leyó al publicar).
+            if (transfer.MessageText is not null)
+            {
+                _toastNotifier.Show(new ToastInput(
+                    Kind: ToastKind.MessageReceived,
+                    AppFocused: false,
+                    PeerName: transfer.PeerDisplayName,
+                    MessageText: transfer.MessageText));
+                return;
+            }
+
+            _toastNotifier.Show(new ToastInput(
+                Kind: ToastKind.FilesReceived,
+                AppFocused: false,
+                PeerName: transfer.PeerDisplayName,
+                ItemCount: transfer.ItemCount));
+        };
+
+        // ClamAV: amenazas halladas al terminar un escaneo.
+        clamAvService.ScanCompleted += (outcome, kind) =>
+        {
+            if (outcome.InfectedFiles > 0)
+            {
+                _toastNotifier.Show(new ToastInput(
+                    Kind: ToastKind.ThreatsFound,
+                    AppFocused: false,
+                    ThreatCount: outcome.InfectedFiles));
+            }
+        };
+
+        // Update disponible al arrancar: check diferido y silencioso (el
+        // frontend hace el suyo; este es el que puede toalear). Fire-and-forget.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                var check = await updateService.CheckAsync().ConfigureAwait(false);
+                if (check.Available)
+                {
+                    _toastNotifier.Show(new ToastInput(
+                        Kind: ToastKind.UpdateAvailable,
+                        AppFocused: false,
+                        Version: check.LatestVersion));
+                }
+            }
+            catch
+            {
+                // sin red / firma ausente: sin drama — el badge interno
+                // reportará lo suyo cuando el usuario abra la app.
+            }
+        });
 
         _router = new CommandRouter(
             [

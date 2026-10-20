@@ -145,6 +145,13 @@ public sealed class ShareTransfer
     /// <summary>Resumen legible del destino (solo receptor).</summary>
     public string? DestinationSummary { get; set; }
 
+    /// <summary>
+    /// Task 021: contenido del mensaje cuando la transferencia ES un
+    /// mensaje (lo rellena el receptor al publicar). Permite toasts del
+    /// sistema y eventos sin cargar la colección de ítems.
+    /// </summary>
+    public string? MessageText { get; set; }
+
     /// <summary>Código de error tipado cuando Status es Failed.</summary>
     public string? ErrorCode { get; set; }
 

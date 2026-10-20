@@ -102,6 +102,21 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | └ 16.7 — Mejoras post-MVP: reanudación por bloques, transferencias simultáneas, límites de ancho de banda, cliente temporal por navegador/QR, soporte Linux/macOS | ✅ Completado | 2026-10-12: 16.7.1 simultáneas (busy limpio) + 16.7.2 límites banda/tamaño/espacio + AutoAccept + ack fin-a-fin + 16.7.3 reanudación por offset (protocolo v2, manifiesto persistente) + 16.7.4 pausa/reanudar + cancelación real. Cliente navegador/QR DIFERIDO (requiere revisión de seguridad específica, §4.2); Linux/macOS fuera de alcance. 793/793 tests |
 | └ 16.8 — Mensajes de texto entre pares emparejados: `localshare.sendMessage` — reusa el pipeline completo (TLS, consentimiento, SHA-256, reanudación) con un ítem marcado `IsMessage` (Task 016.8) | ✅ Completado | 2026-10-19: campo `Kind` aditivo en ItemMeta (receptores viejos lo ignoran → degradación elegante a archivo); receptor extrae el texto tras publicar (procedencia: el archivo queda en `Mensajes/`); tope 16 KB con fail-fast del emisor; UI: textarea + Ctrl+Enter, ítems mensaje con burbuja de texto y botón Copiar, marca 💬 en la solicitud entrante. 926/926 |
 
+### Task 021 - Notificaciones de Windows (toasts del sistema)
+
+> Los banners internos (Task 10.6) cubren "el usuario está mirando la app";
+> los toasts cubren "el usuario está en OTRA cosa": llegó un archivo, llegó
+> un mensaje, ClamAV halló algo, hay versión nueva. El opt-out vive en
+> Windows (Configuración → Sistema → Notificaciones → PCSuite) — no
+> duplicamos el toggle del SO.
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 021 - Toasts del Centro de Notificaciones de Windows para los eventos que importan cuando la app NO tiene el foco | ✅ Completado | 947/947. ToastDecider (Infrastructure, puro y testeado) + WindowsToastNotifier (Desktop, WinRT) |
+| ├ 21.1 - Decisor puro: regla de oro (app con foco → NUNCA toast), textos SIEMPRE construidos por el decisor (sin contenido de eventos crudo), preview de mensajes a una línea truncado, bytes legibles | ✅ Completado | ToastDecider + 20 tests: supresión por foco (los 7 tipos), títulos/cuerpos por tipo, preview truncado, null-peer fallback, formatBytes |
+| ├ 21.2 - Renderer WinRT en Desktop: ToastContentBuilder del toolkit 7.1.3 (apps de escritorio SIN empaquetar; AUMID + atajo del Start Menu automáticos), clic en el toast → traer PCSuite al frente (des-minimiza + Activate) | ✅ Completado | Desktop pasa a net10.0-windows10.0.17763 (min 1809: proyecciones WinRT; WebView2 ya exige 1803+). Bump WebView.WindowsForms 9.0.108→9.0.110 (la 108 ya no existe en el feed: fin del NU1603 de cada build) |
+| ├ 21.3 - Eventos cableados: Local Share (solicitud entrante archivos/mensaje, emparejamiento, recibido archivos, mensaje RECIBIDO con el texto — llega en el transfer, sin cargar ítems), ClamAV amenazas (evento nuevo ScanCompleted en IClamAvService), update disponible al arrancar (check diferido 10 s) | ✅ Completado | ShareTransfer gana MessageText (se rellena al publicar el ítem del mensaje) para que el evento TransferFinished lo lleve. ClamAvService dispara ScanCompleted solo cuando el escaneo corrió (igual que el historial); testeado con igualdad por valor del record |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |

@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.WindowsForms" Version="9.0.108" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.WindowsForms" Version="9.0.110" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
   </ItemGroup>
 
@@ -41,7 +41,10 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- windows10.0.17763 (1809+): minimo para las proyecciones WinRT que usa
+         el sistema de toasts (ToastNotificationManagerCompat). WebView2 ya
+         exige 1803+; ClamAV/firewall corren bien en 1809+. -->
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -50,6 +53,14 @@
     <AssemblyName>PCSuite</AssemblyName>
     <ApplicationIcon>PCSuite.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Task 021: toasts del sistema (Centro de Notificaciones). El paquete
+         7.1.x funciona en apps de escritorio SIN empaquetar (WinForms puro):
+         registra el AUMID + atajo en el Start Menu automaticamente. La
+         linea 8.x (CommunityToolkit.WinUI) exige Windows App SDK — no. -->
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+  </ItemGroup>
 
   <!-- Task 005: PCSuite.Elevated.exe debe quedar al lado de la app para que
        ElevationManager pueda lanzarlo con runas (misma configuración).

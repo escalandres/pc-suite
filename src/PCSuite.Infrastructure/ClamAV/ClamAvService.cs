@@ -38,6 +38,9 @@ public sealed class ClamAvService : IClamAvService
     /// <summary>Paquete winget exacto: MSI de ámbito máquina que instala en %ProgramFiles%\ClamAV.</summary>
     private const string WingetPackageId = "Cisco.ClamAV";
 
+    /// <summary>Task 021: desenlace de escaneo para el host (toast de amenazas).</summary>
+    public event Action<ClamAvScanOutcome, string>? ScanCompleted;
+
     private const string NotInstalledMessage = "ClamAV no está instalado. Usa clamav.install para instalarlo.";
 
     private const string ReadTimeoutMessage = "ClamAV no respondió a tiempo. Inténtalo de nuevo.";
@@ -536,7 +539,7 @@ public sealed class ClamAvService : IClamAvService
                 parsed.Threats,
                 detail));
 
-            return new ClamAvScanOutcome(
+            var outcome = new ClamAvScanOutcome(
                 succeeded,
                 result.ExitCode,
                 parsed.Threats,
@@ -546,6 +549,12 @@ public sealed class ClamAvService : IClamAvService
                 parsed.EngineVersion,
                 parsed.KnownViruses,
                 detail);
+
+            // Task 021: desenlace estructurado para el host (toast de
+            // amenazas). Solo cuando el escaneo llegó a correr — igual
+            // que el historial.
+            ScanCompleted?.Invoke(outcome, kind);
+            return outcome;
         }
         finally
         {

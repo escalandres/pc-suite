@@ -1734,6 +1734,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     {
                         item.MessageText = await File.ReadAllTextAsync(
                             item.FinalPath!).ConfigureAwait(false);
+                        // Task 021: también sobre la transferencia — así el
+                        // evento TransferFinished (que solo pasa el registro)
+                        // puede toalear el mensaje sin cargar ítems.
+                        transfer.MessageText = item.MessageText;
                     }
                     catch
                     {

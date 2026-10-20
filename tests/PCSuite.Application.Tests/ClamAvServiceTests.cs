@@ -376,6 +376,12 @@ public sealed class ClamAvServiceTests
         using var fx = ClamAvFixture.Create(
             FakeProcessRunner.WritingScanLog(ClamAvFixtures.InfectedScan, exitCode: 1));
 
+        // Task 021: el desenlace estructurado también dispara el evento del
+        // host (toast de amenazas cuando el usuario no está mirando).
+        ClamAvScanOutcome? completed = null;
+        string? completedKind = null;
+        fx.Service.ScanCompleted += (outcome, kind) => { completed = outcome; completedKind = kind; };
+
         var outcome = await fx.Service.QuickScanAsync();
 
         Assert.True(outcome.Succeeded); // exit 1 = amenazas halladas, NO fallo
@@ -386,6 +392,12 @@ public sealed class ClamAvServiceTests
         Assert.Equal("Win.Trojan.FakeMS-123", outcome.Threats[0].Threat);
         Assert.Null(outcome.Detail);
         Assert.Empty(fx.Elevation.Requests);
+
+        // Task 021: el evento del host llegó con el desenlace exacto.
+        Assert.NotNull(completed);
+        Assert.Equal("quick", completedKind);
+        Assert.Equal(2, completed!.InfectedFiles);
+        Assert.Equal(outcome, completed); // record: igualdad por valor
     }
 
     [Fact]

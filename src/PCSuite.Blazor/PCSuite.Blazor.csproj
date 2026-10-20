@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Razor">
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -8,11 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.WindowsForms" Version="9.0.108" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.WindowsForms" Version="9.0.110" />
   </ItemGroup>
 
-  <!-- El paquete Blazor trae también el DLL WPF de WebView2 (lib_manual):
-       esta app es WinForms puro — se elimina para evitar el warning MSB3277
+  <!-- El paquete Blazor trae tambiÃ©n el DLL WPF de WebView2 (lib_manual):
+       esta app es WinForms puro â€” se elimina para evitar el warning MSB3277
        (WindowsBase 5.0.0.0 vs 4.0.0.0) y reducir el paquete. -->
   <Target Name="QuitarReferenciaWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
     <ItemGroup>

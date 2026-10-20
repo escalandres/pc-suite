@@ -10,6 +10,14 @@ namespace PCSuite.Core.ClamAV;
 /// </summary>
 public interface IClamAvService
 {
+    /// <summary>
+    /// Un escaneo terminó con resultado estructurado (Task 021: el host lo usa
+    /// para el toast de amenazas cuando el usuario no está mirando). Solo se
+    /// dispara cuando el escaneo llegó a correr (las excepciones de
+    /// instalación/timeout NO cuentan: no son escaneos). Args: (kind, outcome).
+    /// </summary>
+    event Action<ClamAvScanOutcome, string>? ScanCompleted;
+
     /// <summary>Detección: instalado/no, ruta, versión, definiciones y freshclam.</summary>
     Task<ClamAvStatus> GetStatusAsync(CancellationToken cancellationToken = default);
 
