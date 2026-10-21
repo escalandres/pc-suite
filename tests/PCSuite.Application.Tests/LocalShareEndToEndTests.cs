@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
+using PCSuite.Contracts;
+using PCSuite.Core.Events;
 using PCSuite.Core.LocalShare;
 using PCSuite.Infrastructure.LocalShare;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,6 +25,24 @@ public class LocalShareEndToEndTests : IDisposable
     private readonly string _dirB;
     private readonly LocalShareService _serviceA;
     private readonly LocalShareService _serviceB;
+
+    /// <summary>
+    /// Registra los payloads publicados al bridge por el servicio B (el
+    /// receptor). La UI vive de estos payloads — si adelgazan (un campo que
+    /// falta, un número que no viaja), las tarjetas mienten. Los tests
+    /// asertan los contratos aquí, no solo los registros internos.
+    /// </summary>
+    private readonly RecordingEvents _eventsB = new();
+
+    private sealed class RecordingEvents : IEventPublisher
+    {
+        public ConcurrentQueue<(string EventId, object? Payload)> Published { get; } = new();
+
+        public void SendEvent<TPayload>(string eventId, TPayload payload)
+        {
+            Published.Enqueue((eventId, payload));
+        }
+    }
     private const int PortA = 45001;
     private const int PortB = 45002;
 
@@ -34,7 +55,7 @@ public class LocalShareEndToEndTests : IDisposable
         Directory.CreateDirectory(_dirB);
 
         _serviceA = new LocalShareService(_dirA, NullLogger.Instance);
-        _serviceB = new LocalShareService(_dirB, NullLogger.Instance);
+        _serviceB = new LocalShareService(_dirB, NullLogger.Instance, events: _eventsB);
 
         _serviceA.UpdateSettingsAsync(new LocalShareSettings
         {
@@ -904,6 +925,26 @@ public class LocalShareEndToEndTests : IDisposable
         Assert.Equal(TransferStatus.Completed, senderFinished.Status);
         Assert.True(senderFinished.IsMessage);
         Assert.Equal(senderFinished.TotalBytes, senderFinished.TransferredBytes);
+
+        // Contratos del BRIDGE (lo que la UI consume — regresiones 023):
+        // la solicitud entrante lleva la marca 💬 (sin IsMessage en el
+        // payload, el banner del receptor nunca pudo decir "mensaje de
+        // texto") y el desenlace lleva los bytes finales (la carrera del
+        // "0 B / 7 B completado").
+        var incomingPayload = Assert.Single(
+            _eventsB.Published.Where(e => e.EventId == EventIds.LocalShareIncomingRequest)
+                .Select(e => (LocalShareIncomingRequestPayload?)e.Payload)
+                .OfType<LocalShareIncomingRequestPayload>()
+                .Where(p => p.TransferId == incoming.TransferId));
+        Assert.True(Assert.Single(incomingPayload.Items).IsMessage);
+
+        var finishedPayload = Assert.Single(
+            _eventsB.Published.Where(e => e.EventId == EventIds.LocalShareTransferFinished)
+                .Select(e => (LocalShareTransferFinishedPayload?)e.Payload)
+                .OfType<LocalShareTransferFinishedPayload>()
+                .Where(p => p.TransferId == incoming.TransferId));
+        Assert.True(finishedPayload.TransferredBytes > 0);
+        Assert.Equal(finishedPayload.TotalBytes, finishedPayload.TransferredBytes);
     }
 
     [Fact]

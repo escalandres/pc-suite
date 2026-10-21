@@ -162,11 +162,43 @@ export function LocalShare() {
   useEffect(() => {
     const unsubIncoming = bridge.on<IncomingRequest>(EventIds.localShareIncomingRequest, (payload) => {
       setIncomingRequest(payload);
+      // La tarjeta del receptor EXISTE desde la solicitud (regresión
+      // reportada 2026-10-21): antes el banner era lo único visible y al
+      // aceptar se cerraba — la transferencia entrante quedaba INVISIBLE
+      // todo el trayecto (los eventos de progreso no pueden CREAR entradas,
+      // y la tarjeta solo aparecía con el refresh del desenlace).
+      setTransfers((prev) => prev.some((t) => t.transferId === payload.transferId)
+        ? prev
+        : [...prev, {
+            transferId: payload.transferId,
+            direction: 'receiving',
+            peerDisplayName: payload.peerDisplayName,
+            status: 'pendingApproval',
+            createdAt: new Date().toISOString(),
+            totalBytes: payload.totalBytes,
+            transferredBytes: 0,
+            itemCount: payload.itemCount,
+            isMessage: payload.items.some((i) => i.isMessage),
+            items: payload.items,
+            errorCode: null,
+            errorMessage: null,
+          }]);
     });
     const unsubProgress = bridge.on<ProgressState>(EventIds.localShareTransferProgress, (payload) => {
       setTransfers((prev) => prev.map((t) =>
         t.transferId === payload.transferId
-          ? { ...t, transferredBytes: payload.transferredBytes, totalBytes: payload.totalBytes }
+          ? {
+              ...t,
+              transferredBytes: payload.transferredBytes,
+              totalBytes: payload.totalBytes,
+              // Bytes fluyendo = transfiriendo: promueve los estados
+              // pre-vuelo (una auto-aceptada entra como pendiente y ningún
+              // evento la corregía hasta el desenlace). Solo PROMUEVE —
+              // jamás degrada pausado/verificando/terminales.
+              status: t.status === 'pendingApproval' || t.status === 'approved'
+                ? 'transferring'
+                : t.status,
+            }
           : t));
     });
     const unsubFinished = bridge.on<FinishedState>(EventIds.localShareTransferFinished, (payload) => {

@@ -1247,6 +1247,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                 ExpectedHash = i.ExpectedHash,
                 Status = i.Status.ToString().ToLowerInvariant(),
                 TransferredBytes = i.TransferredBytes,
+                // Regresión 16.8 (reportada 2026-10-21): sin esto el banner
+                // del receptor nunca pudo decir "💬 mensaje de texto" — el
+                // payload no llevaba la marca.
+                IsMessage = i.IsMessage,
             })],
         });
     }

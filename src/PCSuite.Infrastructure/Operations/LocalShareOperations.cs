@@ -260,7 +260,11 @@ public sealed class LocalShareTransfersOperation(ILocalShareService service) : I
     {
         var dto = new ShareTransferCollectionResult
         {
-            Transfers = [.. service.GetTransfers().Select(t => ToTransferDto(t))],
+            // Los ítems viajan con la transferencia (16.8/023): la burbuja del
+            // mensaje y su botón Copiar viven de t.items — sin esto, la lista
+            // devolvía Items vacío y la burbuja jamás sobrevivía un refresh.
+            Transfers = [.. service.GetTransfers().Select(t =>
+                ToTransferDto(t, service.GetTransfer(t.TransferId)?.Items))],
         };
         return Task.FromResult(OperationResult.Ok(BridgeJson.ToJson(dto)));
     }
