@@ -19,12 +19,9 @@ public sealed class ClamAvServiceTests
     private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan UpdateTimeout = TimeSpan.FromSeconds(900);
 
-    // 1 h: el quick escanea las carpetas del usuario (Escritorio/Descargas/
-    // Temp), que crecen arbitrariamente. Medición 2026-10-08: ~5.300
-    // archivos con zips de ~1 GB a ~70 líneas/min ≈ 72 min. Este guard
-    // evita que el presupuesto vuelva a quedar en 20 min "por defecto".
-    private static readonly TimeSpan QuickScanTimeout = TimeSpan.FromSeconds(3600);
-    private static readonly TimeSpan CustomScanTimeout = TimeSpan.FromSeconds(3600);
+    // Task 024: SIN constantes de timeout de escaneo — los escaneos no
+    // llevan tope de reloj. El guard es el Assert.Null(request.Timeout) de
+    // los tests de escaneo: nadie vuelve a meterle un presupuesto fijo.
 
     // ------------------------------------------------------------------
     // clamav.status
@@ -310,7 +307,7 @@ public sealed class ClamAvServiceTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task QuickScan_Success_ElevatedUac_FixedArgvPlusLog_1HourTimeout()
+    public async Task QuickScan_Success_ElevatedUac_FixedArgvPlusLog_NoWallClockTimeout()
     {
         using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
 
@@ -339,7 +336,10 @@ public sealed class ClamAvServiceTests
         Assert.All(
             request.Arguments.Skip(2).Take(logIndex - 2),
             target => Assert.True(Path.IsPathRooted(target)));
-        Assert.Equal(QuickScanTimeout, request.Timeout);
+        // Task 024: SIN tope de reloj — un escaneo legítimo es largo por
+        // naturaleza (discos grandes, zips que ClamAV descomprime); el
+        // control es el botón Cancelar del job y la consola visible.
+        Assert.Null(request.Timeout);
     }
 
     [Fact]
@@ -469,7 +469,7 @@ public sealed class ClamAvServiceTests
         Assert.All(
             request.Arguments.Skip(1).Take(logIndex - 1),
             root => Assert.True(Path.IsPathRooted(root)));
-        Assert.Equal(TimeSpan.FromSeconds(7200), request.Timeout);
+        Assert.Null(request.Timeout); // Task 024: sin tope de reloj
     }
 
     [Fact]
@@ -512,15 +512,39 @@ public sealed class ClamAvServiceTests
     }
 
     [Fact]
-    public async Task Scan_Timeout_ThrowsClamAvTimeout_WithoutHistoryEntry()
+    public async Task Scan_RunnerCrash_FailsStructured_WithoutHistoryEntry()
     {
+        // Task 024: sin tope de reloj ya no existe el desenlace de timeout
+        // del escaneo; si el runner explota por cualquier otra causa, el
+        // desenlace es un fallo ESTRUCTURADO — sin excepciones crudas ni
+        // historial falso.
         using var fx = ClamAvFixture.Create(
-            FakeProcessRunner.Throwing(new ProcessTimeoutException(TimeSpan.FromSeconds(10))));
+            FakeProcessRunner.Throwing(new InvalidOperationException("boom")));
 
-        var exception = await Assert.ThrowsAsync<ClamAvException>(() => fx.Service.QuickScanAsync());
+        var outcome = await fx.Service.QuickScanAsync();
 
-        Assert.Equal(BridgeErrorCodes.ClamAvTimeout, exception.ErrorCode);
-        Assert.Equal("El escaneo superó el tiempo límite y fue terminado.", exception.ErrorMessage);
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(-1, outcome.ExitCode);
+        Assert.Empty(fx.History.Read());
+    }
+
+    [Fact]
+    public async Task Scan_Cancelled_StopsWithoutHistoryEntry()
+    {
+        // Task 024: con el tope de reloj fuera, Cancelar es la ÚNICA parada
+        // de un escaneo largo — la cancelación se propaga limpia y no
+        // registra historial (el job queda Cancelled en la UI).
+        using var cts = new CancellationTokenSource();
+        var runner = new FakeProcessRunner((_, ct) =>
+        {
+            cts.Cancel(); // el "proceso" honra la cancelación del job
+            return Task.FromException<ProcessResult>(new OperationCanceledException(ct));
+        });
+        using var fx = ClamAvFixture.Create(runner);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => fx.Service.QuickScanAsync(cts.Token));
+
         Assert.Empty(fx.History.Read());
     }
 
@@ -529,7 +553,7 @@ public sealed class ClamAvServiceTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task CustomScan_ValidFile_PassesPathAsSingleArgvElement_3600s()
+    public async Task CustomScan_ValidFile_PassesPathAsSingleArgvElement_NoWallClockTimeout()
     {
         using var fx = ClamAvFixture.Create(FakeProcessRunner.WritingScanLog(ClamAvFixtures.CleanScan));
 
@@ -543,7 +567,7 @@ public sealed class ClamAvServiceTests
         Assert.Equal("--verbose", request.Arguments[1]);
         Assert.Equal(fx.ClamScanPath, request.Arguments[2]);
         Assert.StartsWith("--log=", request.Arguments[3]);
-        Assert.Equal(CustomScanTimeout, request.Timeout);
+        Assert.Null(request.Timeout); // Task 024: sin tope de reloj
     }
 
     [Fact]

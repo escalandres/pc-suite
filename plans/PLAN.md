@@ -151,6 +151,22 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 23.4 - Regresión reportada (receptor sin tarjeta): el banner era lo ÚNICO visible al llegar una solicitud y acceptIncoming lo cerraba sin crear la entrada ni refrescar → la transferencia entrante era invisible TODO el trayecto (los eventos de progreso no pueden CREAR entradas). Fix: la tarjeta del receptor EXISTE desde la solicitud (upsert en el evento IncomingRequest, estado pendiente), el progreso PROMUEVE pre-vuelo a transfiriendo (auto-aceptadas), la lista del bridge lleva los ítems (la burbuja 💬 y su botón Copiar sobreviven los refresh) y el payload de solicitud lleva IsMessage (la marca 💬 del banner NUNCA funcionó — hueco silencioso de la 16.8) | ✅ Completado | Fixture E2E con RecordingEvents (IEventPublisher) en B: los tests asertan los PAYLOADS del bridge (marca 💬 en la solicitud, bytes finales en el desenlace), no solo los registros internos. 947/947, 0 warnings, tsc+vite OK |
 | └ 23.5 - Pedidos del usuario (2026-10-21): botón "Abrir carpeta" en las tarjetas del receptor completado (ícono FolderOpen → explorer.openPath con destinationSummary — la carpeta de descargas que fija el backend; reusa la op existente que valida la ruta, sin backend nuevo) y el botón "Copiar" del mensaje ARREGLADO — navigator.clipboard falla EN SILENCIO en WebView2 (permiso clipboard-write no concedido): nueva op system.writeClipboard en Desktop\Bridge (patrón system.pickFiles: WinForms Clipboard en el hilo UI + reintentos ante CLIPBRD_E_CANT_OPEN). Migrados también los otros 2 usos rotos (Copiar output de Tools, Copiar ruta de amenaza de ClamAV) + check de feedback 1.6 s en el botón | ✅ Completado | Tope defensivo 1 MB en el payload del clipboard. 947/947 (1 flake de loopback en un test del updater, re-verificado en aislado), 0 warnings, tsc+vite OK, app viva 15 s con la op registrada |
 
+### Task 024 - Escaneos de ClamAV sin tope de reloj
+
+> Reporte del usuario 2026-10-21: un escaneo largo (consola elevada visible
+> trabajando) "se rompía" tras mucho tiempo — el job moría con "se superó el
+> tiempo de espera". La historia del propio código demostraba el error del
+> modelo: 20 min originales → escaneos imposibles; luego 1 h → el quick con
+> zips grandes moría; luego 2 h → el full de un disco real tampoco llegaba.
+> Ningún número fijo cubre escaneos legítimos (ClamAV descomprime zips, los
+> discos crecen) sin matar trabajo válido.
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 024 - Los tres modos de escaneo corren SIN tope de reloj; el control es del usuario (botón Cancelar del job + consola elevada visible) | ✅ Completado | 948/948, 0 warnings. freshclam CONSERVA sus 900 s (operación de red que sí puede colgarse) y --version sus 30 s |
+| ├ 24.1 - ClamAvService: fuera QuickScanTimeout/CustomScanTimeout/FullScanTimeout (1 h/1 h/2 h) + ScanTimeoutMessage + el catch de ProcessTimeoutException del runner elevado; el ProcessRequest del escaneo viaja con Timeout = null (el ProcessRunner solo para por cancelación) | ✅ Completado | La cancelación (job.cancel) se propaga limpia: OCE sin historial. Limitación conocida: el padre NO elevado no puede matar un clamscan elevado (TryKill falla con Access Denied en silencio) — Cancelar detiene el job y la espera; la consola puede seguir hasta cerrarla o que el escaneo termine |
+| └ 24.2 - Tests: los asertos de timeout de los 3 modos pasan a verificar Timeout == null (guard contra futuros "presupuestos fijos"); el test del desenlace de timeout se reemplaza por runner-crash (fallo estructurado sin historial) + nuevo test de cancelación (OCE sin historial) | ✅ Completado | 948/948 (+1 neto) |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |

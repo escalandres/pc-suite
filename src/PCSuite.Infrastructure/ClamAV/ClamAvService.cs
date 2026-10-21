@@ -47,8 +47,6 @@ public sealed class ClamAvService : IClamAvService
 
     private const string UpdateTimeoutMessage = "La actualización de definiciones superó el tiempo límite y fue terminada.";
 
-    private const string ScanTimeoutMessage = "El escaneo superó el tiempo límite y fue terminado.";
-
     /// <summary>
 /// Mensaje informativo para escaneo parcial (exit code 2 con resumen).
 /// No es un error: el escaneo completó pero algunos archivos no fueron accesibles.
@@ -74,16 +72,15 @@ public sealed class ClamAvService : IClamAvService
 
     private static readonly TimeSpan UpdateTimeout = TimeSpan.FromSeconds(900);
 
-    // 1 h (medición empírica 2026-10-08): el "quick" escanea Escritorio,
-    // Descargas y Temp del usuario, que crecen arbitrariamente. Con zips de
-    // ~1 GB (ClamAV los descomprime) se midió un ritmo de ~70 líneas/min:
-    // ~5.300 archivos ≈ 72 min. Con los 20 min originales el escaneo era
-    // imposible de completar y moría en timeout.
-    private static readonly TimeSpan QuickScanTimeout = TimeSpan.FromSeconds(3600);
-
-    private static readonly TimeSpan CustomScanTimeout = TimeSpan.FromSeconds(3600);
-
-    private static readonly TimeSpan FullScanTimeout = TimeSpan.FromSeconds(7200);
+    // Task 024 (reporte 2026-10-21): los escaneos NO llevan tope de reloj.
+    // La historia de este archivo lo demuestra: 20 min originales → escaneos
+    // imposibles; 1 h → el quick con zips grandes moría; 2 h → el full de un
+    // disco real tampoco llegaba. Un escaneo legítimo es LARGO por naturaleza
+    // (ClamAV descomprime zips, los discos crecen) y ningún número fijo lo
+    // cubre sin matar trabajo válido. El control es el usuario: el job tiene
+    // botón Cancelar y la consola elevada de clamscan es VISIBLE (un cuelgue
+    // se ve y se cancela). freshclam SÍ conserva su tope: es una operación
+    // de RED que puede colgarse de verdad.
 
     /// <summary>
     /// Nombre del archivo de configuración de freshclam.
@@ -448,7 +445,7 @@ public sealed class ClamAvService : IClamAvService
     public Task<ClamAvScanOutcome> QuickScanAsync(
         CancellationToken cancellationToken = default,
         IProgress<ClamAvScanProgress>? progress = null) =>
-        ScanAsync(ClamAvScanKinds.Quick, null, ClamAvArguments.QuickScan(), QuickScanTimeout, cancellationToken, progress);
+        ScanAsync(ClamAvScanKinds.Quick, null, ClamAvArguments.QuickScan(), cancellationToken, progress);
 
     public Task<ClamAvScanOutcome> FullScanAsync(
         CancellationToken cancellationToken = default,
@@ -460,7 +457,7 @@ public sealed class ClamAvService : IClamAvService
             .Where(drive => drive.IsReady && drive.DriveType == DriveType.Fixed)
             .Select(drive => drive.Name)
             .ToArray();
-        return ScanAsync(ClamAvScanKinds.Full, null, ClamAvArguments.FullScan(roots), FullScanTimeout, cancellationToken, progress);
+        return ScanAsync(ClamAvScanKinds.Full, null, ClamAvArguments.FullScan(roots), cancellationToken, progress);
     }
 
     public async Task<ClamAvScanOutcome> CustomScanAsync(
@@ -473,7 +470,6 @@ public sealed class ClamAvService : IClamAvService
             ClamAvScanKinds.Custom,
             fullPath,
             ClamAvArguments.CustomScan(fullPath),
-            CustomScanTimeout,
             cancellationToken,
             progress).ConfigureAwait(false);
     }
@@ -488,7 +484,6 @@ public sealed class ClamAvService : IClamAvService
         string kind,
         string? scanPath,
         string[] arguments,
-        TimeSpan timeout,
         CancellationToken cancellationToken,
         IProgress<ClamAvScanProgress>? progress = null)
     {
@@ -504,8 +499,6 @@ public sealed class ClamAvService : IClamAvService
             var result = await RunScanElevatedWithProgressAsync(
                 clamscan,
                 arguments,
-                timeout,
-                ScanTimeoutMessage,
                 cancellationToken,
                 kind,
                 progress).ConfigureAwait(false);
@@ -574,12 +567,16 @@ public sealed class ClamAvService : IClamAvService
     /// progreso por archivo llega igual que con pipes. Al terminar, el
     /// contenido del log se devuelve COMO StandardOutput: el parser y el
     /// caller no cambian en nada.
+    ///
+    /// Task 024: SIN tope de reloj. Un escaneo legítimo es largo por
+    /// naturaleza (discos grandes, zips que ClamAV descomprime) y todo
+    /// número fijo probado (20 min → 1 h → 2 h) terminó matando trabajo
+    /// válido. El control es del usuario: el job tiene botón Cancelar
+    /// (el token) y la consola elevada es visible.
     /// </summary>
     private async Task<ProcessResult?> RunScanElevatedWithProgressAsync(
         string clamscanPath,
         string[] arguments,
-        TimeSpan timeout,
-        string timeoutMessage,
         CancellationToken cancellationToken,
         string scanKind,
         IProgress<ClamAvScanProgress>? progress)
@@ -595,7 +592,6 @@ public sealed class ClamAvService : IClamAvService
                 {
                     FileName = clamscanPath,
                     Arguments = ClamAvArguments.WithScanLog(arguments, logPath),
-                    Timeout = timeout,
                     RequiresElevation = true,
                 },
                 cancellationToken);
@@ -649,10 +645,6 @@ public sealed class ClamAvService : IClamAvService
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
-        }
-        catch (ProcessTimeoutException)
-        {
-            throw new ClamAvException(BridgeErrorCodes.ClamAvTimeout, timeoutMessage);
         }
         catch (Exception exception)
         {
