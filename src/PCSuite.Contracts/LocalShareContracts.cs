@@ -86,6 +86,9 @@ public sealed class ShareTransferResult
 
     public int ItemCount { get; init; }
 
+    /// <summary>Task 16.8: la transferencia ES un mensaje de texto — la lista la pinta como "Mensaje".</summary>
+    public bool IsMessage { get; init; }
+
     public string? DestinationSummary { get; init; }
 
     public string? ErrorCode { get; init; }
@@ -286,6 +289,16 @@ public sealed class LocalShareTransferFinishedPayload
 {
     public string TransferId { get; init; } = "";
     public string Status { get; init; } = "";
+
+    /// <summary>
+    /// Bytes transferidos en el desenlace. Las transferencias diminutas (un
+    /// mensaje de texto) completan en milisegundos: el único evento de
+    /// progreso puede llegar a la UI ANTES de que la transferencia exista
+    /// en su estado (carrera con la respuesta de la op). El desenlace
+    /// lleva el número FINAL para que la tarjeta no quede en "0 B / 7 B".
+    /// </summary>
+    public long TransferredBytes { get; init; }
+
     public string? ErrorMessage { get; init; }
     public long TotalBytes { get; init; }
 }

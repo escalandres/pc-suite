@@ -135,6 +135,20 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 22.3 - CI publish.yml: mapeo archivo por archivo releases\<v>\ → public\ (live + archive + notes + logo); firma con -UseGpg en CI (la clave se importa al keyring de gpg; el keyring de SignRelease está vacío en el agente) | ✅ Completado | El viejo "Copy-Item site\*" además arrastraba index.html del espejo al build de Astro (bug latente, corregido) |
 | └ 22.4 - Guías para agentes de IA actualizadas: INTEGRACION-AES-STUDIO.md (mapa nuevo + banner landing-Astro), TASKS-17.5-17.6-PARA-AGENT.md (banner Task 022 + comandos gpg), CI_CD_PGP_KEY_MANAGEMENT.md (flujo CI), PCSuite_Landing_Propuesta.md (nota histórica) | ✅ Completado | PLAN.md fila 17.5 queda como registro histórico de su fecha; esta sección es el estado vigente |
 
+### Task 023 - Pulido del estado de transferencias (regresión de la 16.8)
+
+> Reporte del usuario 2026-10-20: un mensaje de 7 bytes completaba con la
+> tarjeta "→ Enviando · 1 archivo(s) / completed / 0 B / 7 B" — tres
+> mentiras en una línea: el verbo en curso sobre un desenlace terminado,
+> el enum crudo en inglés, y los bytes que nunca llegaron a la UI.
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 023 - El desenlace de una transferencia lleva los bytes FINALES y la tarjeta dice la verdad | ✅ Completado | 947/947, 0 warnings, tsc+vite OK. LocalShare E2E 54/54 |
+| ├ 23.1 - Carrera de transferencias diminutas: un mensaje completa en ms y su ÚNICO evento de progreso llega antes de que la entrada exista en el estado (se pierde); el refresh post-op puede aterrizar después con un snapshot en vuelo. Fix en capas: LocalShareTransferFinishedPayload gana TransferredBytes (número final), el handler mergea bytes + SIEMPRE re-consulta la lista autoritativa (convergencia ante cualquier orden de llegada) | ✅ Completado | RaiseTransferFinished publica el registro ya completado — payload y lista salen de ahí |
+| ├ 23.2 - Reanudaciones sub-contaban: el registro del emisor contaba SOLO bytes nuevos (totalTransferred) y el receivedBytes del receptor ignoraba el prefijo reanudado → una reanudación completaba mostrando menos bytes que el total (la misma mentira). Fix: contador acumulativo para registro/progreso en ambos lados; el throttle del emisor sigue midiendo solo bytes nuevos (inflarlo con un offset gigante lo congelaría) | ✅ Completado | El test de reanudación cambia su evidencia: el PRIMER progreso del 2º intento lleva el prefijo encima (> un chunk de 64 KB); nuevos asertos de bytes finales en ambos registros |
+| └ 23.3 - UI de la tarjeta: chip de estado en español (statusLabel — antes el enum crudo "completed"), verbos en pasado en desenlaces (→ Enviado / ← Recibido / Falló el envío), y "Mensaje" como sustantivo para transferencias de texto (flag IsMessage en ShareTransfer fijado por AMBOS lados al crear — sin cargar ítems) | ✅ Completado | Contratos aditivos: ShareTransferResult.IsMessage + isMessage? en el tipo del frontend (degradación elegante) |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |

@@ -64,6 +64,23 @@ function statusColor(status: string): string {
   }
 }
 
+/** Etiqueta del chip en español — el enum crudo ("completed") es un idioma
+ *  de máquina, no de usuarios. Fallback: el valor tal cual (desconocidos). */
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'pendingApproval': return 'Pendiente de aprobación';
+    case 'approved': return 'Aprobado';
+    case 'transferring': return 'Transfiriendo';
+    case 'paused': return 'Pausado';
+    case 'verifying': return 'Verificando';
+    case 'completed': return 'Completado';
+    case 'failed': return 'Fallido';
+    case 'cancelled': return 'Cancelado';
+    case 'rejected': return 'Rechazado';
+    default: return status;
+  }
+}
+
 export function LocalShare() {
   const [status, setStatus] = useState<LocalShareStatusResult | null>(null);
   const [devices, setDevices] = useState<SharedDeviceResult[]>([]);
@@ -105,6 +122,19 @@ export function LocalShare() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  /** Refresco de solo-transferencias. Lo usa el desenlace para converger al
+   *  estado final autoritativo: una transferencia diminuta (un mensaje de
+   *  texto) completa en milisegundos y su único evento de progreso puede
+   *  llegar ANTES de que la entrada exista en el estado — la re-consulta
+   *  repara cualquier orden de llegada. */
+  const refreshTransfers = useCallback(async () => {
+    try {
+      const transfersResult = await bridge.call<ShareTransferCollectionResult>(
+        OperationIds.localShareTransfers, undefined, READ_TIMEOUT);
+      setTransfers(transfersResult.transfers ?? []);
+    } catch { /* best-effort */ }
+  }, []);
+
   // Notificaciones autodestructivas: los éxitos duran 5 s, los errores 9 s
   // (dar tiempo a leerlos). Cada notificación nueva reinicia el reloj; la
   // acción manual (setNotice(null)) también limpia el temporizador.
@@ -142,8 +172,18 @@ export function LocalShare() {
     const unsubFinished = bridge.on<FinishedState>(EventIds.localShareTransferFinished, (payload) => {
       setTransfers((prev) => prev.map((t) =>
         t.transferId === payload.transferId
-          ? { ...t, status: payload.status, errorMessage: payload.errorMessage }
+          ? {
+              ...t,
+              status: payload.status,
+              errorMessage: payload.errorMessage,
+              transferredBytes: payload.transferredBytes,
+              totalBytes: payload.totalBytes,
+            }
           : t));
+      // Convergencia (carrera de transferencias diminutas): el desenlace
+      // re-consulta la lista autoritativa — cubre también el caso en que
+      // ESTE evento llegó antes de que la entrada existiera en el estado.
+      void refreshTransfers();
       if (payload.status === 'completed') {
         setNotice({ kind: 'success', text: 'Transferencia completada.' });
       } else if (payload.status === 'failed') {
@@ -189,7 +229,7 @@ export function LocalShare() {
       unsubPairFinished();
       unsubDeviceChanged();
     };
-  }, [refreshDevices]);
+  }, [refreshDevices, refreshTransfers]);
 
   // ------------------------------------------------------------------
   // Acciones
@@ -835,6 +875,19 @@ export function LocalShare() {
           <ul className="space-y-2">
             {transfers.map((t) => {
               const pct = t.totalBytes > 0 ? Math.min(100, (t.transferredBytes / t.totalBytes) * 100) : 0;
+              // Verbo por estado: gerundio en curso, pasado en el desenlace —
+              // "Enviando" sobre una transferencia completada era mentira.
+              const outgoing = t.direction === 'sending';
+              const verb = outgoing
+                ? (t.status === 'completed' ? '→ Enviado'
+                  : t.status === 'failed' ? '→ Falló el envío'
+                  : t.status === 'cancelled' || t.status === 'rejected' ? '→ Cancelado'
+                  : '→ Enviando')
+                : (t.status === 'completed' ? '← Recibido'
+                  : t.status === 'failed' ? '← Falló la recepción'
+                  : t.status === 'cancelled' || t.status === 'rejected' ? '← Cancelado'
+                  : '← Recibiendo');
+              const noun = t.isMessage ? 'Mensaje' : `${t.itemCount} archivo(s)`;
               return (
                 <li
                   key={t.transferId}
@@ -844,13 +897,13 @@ export function LocalShare() {
                   <div className="flex items-center gap-2 text-sm">
                     <span className="font-medium">{t.peerDisplayName}</span>
                     <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                      {t.direction === 'sending' ? '→ Enviando' : '← Recibiendo'} · {t.itemCount} archivo(s)
+                      {verb} · {noun}
                     </span>
                     <span
                       className="ml-auto rounded-full px-2 py-0.5 text-xs font-medium"
                       style={{ background: 'var(--pcs-surface-2)', color: statusColor(t.status) }}
                     >
-                      {t.status}
+                      {statusLabel(t.status)}
                     </span>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: 'var(--pcs-surface-2)' }}>

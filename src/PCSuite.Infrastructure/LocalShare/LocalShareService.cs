@@ -922,6 +922,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             PeerDisplayName = device.DisplayName,
             TotalBytes = items[0].ExpectedSize,
             ItemCount = 1,
+            IsMessage = true,
             Status = TransferStatus.PendingApproval,
         };
 
@@ -1258,6 +1259,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         {
             TransferId = transfer.TransferId,
             Status = transfer.Status.ToString().ToLowerInvariant(),
+            TransferredBytes = transfer.TransferredBytes,
             ErrorMessage = transfer.ErrorMessage,
             TotalBytes = transfer.TotalBytes,
         });
@@ -1446,6 +1448,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             IsMessage = i.Kind == 1,
         }).ToList();
 
+        // La lista pinta "Mensaje" sin cargar ítems: el flag viaja en la
+        // transferencia (Task 16.8), como en el emisor.
+        transfer.IsMessage = items.Any(i => i.IsMessage);
+
         lock (_lock)
         {
             _transfers[transfer.TransferId] = (transfer, items);
@@ -1589,6 +1595,11 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
             item.TempPath = tempPath;
             item.Status = TransferStatus.Transferring;
             item.TransferredBytes = resumeOffset;
+            // El prefijo reanudado cuenta para la TRANSFERENCIA: el registro
+            // y el progreso acumulan todo lo que ya viajó (no solo lo nuevo
+            // de este intento) — si no, una reanudación completaría
+            // mostrando menos bytes que el total.
+            receivedBytes += resumeOffset;
 
             // Decir al emisor desde dónde continuar (v2: siempre responde).
             await ShareProtocol.WriteControlAsync(

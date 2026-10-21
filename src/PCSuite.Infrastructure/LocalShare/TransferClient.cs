@@ -227,6 +227,12 @@ public sealed class TransferClient
 
         // 4. Transferir cada archivo en streaming
         var totalTransferred = 0L;
+        // Bytes para el REGISTRO y el progreso: incluye los prefijos
+        // reanudados de intentos anteriores (son bytes que YA viajaron de
+        // esta transferencia). totalTransferred queda solo-bytes-nuevos
+        // porque el throttle mide el caudal de ESTE intento — inflarlo con
+        // un offset reanudado lo congelaría con una pausa gigante.
+        var recordTransferred = 0L;
         var sendWatch = System.Diagnostics.Stopwatch.StartNew();
         foreach (var item in items)
         {
@@ -275,6 +281,7 @@ public sealed class TransferClient
             if (resumeOffset > 0)
             {
                 item.TransferredBytes = resumeOffset;
+                recordTransferred += resumeOffset;
                 _logger?.LogInformation(
                     "Reanudando {File} desde el byte {Offset} de {Size}",
                     item.RelativePath, resumeOffset, item.ExpectedSize);
@@ -305,9 +312,10 @@ public sealed class TransferClient
                     ct).ConfigureAwait(false);
 
                 totalTransferred += bytesRead;
+                recordTransferred += bytesRead;
                 item.TransferredBytes += bytesRead;
-                transfer.TransferredBytes = totalTransferred;
-                onProgress(totalTransferred);
+                transfer.TransferredBytes = recordTransferred;
+                onProgress(recordTransferred);
 
                 // Regulación de ancho de banda (16.7.2): pausa proporcional si
                 // vamos más rápido que el límite configurado (0 = sin límite).

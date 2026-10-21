@@ -152,6 +152,14 @@ public sealed class ShareTransfer
     /// </summary>
     public string? MessageText { get; set; }
 
+    /// <summary>
+    /// La transferencia ES un mensaje de texto (Task 16.8): la lista la pinta
+    /// como "Mensaje" en vez de "N archivo(s)". Lo fijan AMBOS lados al crear
+    /// la transferencia (el emisor al enviar; el receptor al leer el Kind del
+    /// ítem del protocolo) — así no requiere cargar la colección de ítems.
+    /// </summary>
+    public bool IsMessage { get; set; }
+
     /// <summary>Código de error tipado cuando Status es Failed.</summary>
     public string? ErrorCode { get; set; }
 

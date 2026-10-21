@@ -406,16 +406,51 @@ public class LocalShareEndToEndTests : IDisposable
             }
         };
 
+        // Prueba de reanudación REAL (Task 023): el primer evento de progreso
+        // del segundo intento ya lleva el prefijo reanudado encima — el
+        // registro acumula lo que YA viajó (prefijo + bytes nuevos), no solo
+        // lo nuevo de este intento. Sin reanudación, el primer evento sería
+        // exactamente un chunk (64 KB); con ella, supera el chunk.
+        var firstProgress = new TaskCompletionSource<long>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.ProgressChanged += p =>
+        {
+            if (p.TransferId != first.TransferId)
+            {
+                firstProgress.TrySetResult(p.TransferredBytes);
+            }
+        };
+
+        // Lado receptor: su desenlace también debe acumular el prefijo.
+        var bFinished = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceB.TransferFinished += t =>
+        {
+            if (t.TransferId != first.TransferId)
+            {
+                bFinished.TrySetResult(t);
+            }
+        };
+
         await _serviceA.SendAsync("device-b", [file]);
+
+        var earlyProgress = await firstProgress.Task.WaitAsync(TimeSpan.FromSeconds(30));
         var second = await secondFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(TransferStatus.Completed, second.Status);
 
-        // Prueba de que hubo reanudación real: el emisor solo envió los
-        // bytes que faltaban, no el archivo completo desde cero.
-        Assert.True(second.TransferredBytes > 0, "El segundo intento debió enviar algo.");
-        Assert.True(second.TransferredBytes < 256 * 1024,
-            $"Parece que empezó de cero: envió {second.TransferredBytes} de 262144 bytes.");
+        Assert.True(earlyProgress > 64 * 1024,
+            $"Parece que empezó de cero: el primer progreso fue {earlyProgress} B " +
+            "(debería superar un chunk de 64 KB con el prefijo reanudado encima).");
+
+        // Regresión Task 023: el desenlace acumula TODO — antes una reanudación
+        // completaba mostrando "bytes nuevos / total" en vez de "bytes
+        // viajados / total" (la misma mentira del "0 B / 7 B completado").
+        Assert.Equal(second.TotalBytes, second.TransferredBytes);
+
+        var bSecond = await bFinished.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(TransferStatus.Completed, bSecond.Status);
+        Assert.Equal(bSecond.TotalBytes, bSecond.TransferredBytes);
 
         // El archivo llegó COMPLETO e íntegro: Publish verificó el SHA-256
         // del archivo entero (prefijo reanudado + resto nuevo).
@@ -833,6 +868,9 @@ public class LocalShareEndToEndTests : IDisposable
         var finishedTcs = new TaskCompletionSource<ShareTransfer>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         _serviceB.TransferFinished += t => finishedTcs.TrySetResult(t);
+        var senderFinishedTcs = new TaskCompletionSource<ShareTransfer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _serviceA.TransferFinished += t => senderFinishedTcs.TrySetResult(t);
 
         await _serviceA.SendMessageAsync("device-b", "hola desde el test 😄\nsegunda línea");
 
@@ -853,6 +891,19 @@ public class LocalShareEndToEndTests : IDisposable
         Assert.Equal(
             "hola desde el test 😄\nsegunda línea",
             await File.ReadAllTextAsync(messageItem.FinalPath!));
+
+        // Regresión Task 023 (la carrera del "0 B / 7 B completado"): el
+        // desenlace de una transferencia diminuta lleva los bytes FINALES en
+        // el registro — el payload del evento y la lista del bridge salen de
+        // aquí. "Completado" con 0 bytes transferidos era mentira.
+        Assert.True(finished.IsMessage);
+        Assert.True(finished.TotalBytes > 0);
+        Assert.Equal(finished.TotalBytes, finished.TransferredBytes);
+
+        var senderFinished = await senderFinishedTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(TransferStatus.Completed, senderFinished.Status);
+        Assert.True(senderFinished.IsMessage);
+        Assert.Equal(senderFinished.TotalBytes, senderFinished.TransferredBytes);
     }
 
     [Fact]

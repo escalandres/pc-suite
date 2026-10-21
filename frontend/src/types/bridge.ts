@@ -657,6 +657,8 @@ export interface ShareTransferResult {
   totalBytes: number;
   transferredBytes: number;
   itemCount: number;
+  /** Task 16.8: la transferencia ES un mensaje — la lista la pinta como "Mensaje". */
+  isMessage?: boolean;
   destinationSummary?: string | null;
   errorCode?: string | null;
   errorMessage?: string | null;
@@ -700,6 +702,8 @@ export interface LocalShareIncomingRequestPayload {
 export interface LocalShareTransferFinishedPayload {
   transferId: string;
   status: string;
+  /** Bytes transferidos en el desenlace (carrera de transferencias diminutas). */
+  transferredBytes: number;
   errorMessage?: string | null;
   totalBytes: number;
 }

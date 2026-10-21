@@ -277,6 +277,7 @@ public sealed class LocalShareTransfersOperation(ILocalShareService service) : I
         TotalBytes = t.TotalBytes,
         TransferredBytes = t.TransferredBytes,
         ItemCount = t.ItemCount,
+        IsMessage = t.IsMessage,
         DestinationSummary = t.DestinationSummary,
         ErrorCode = t.ErrorCode,
         ErrorMessage = t.ErrorMessage,
