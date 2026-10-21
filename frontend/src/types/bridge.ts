@@ -49,6 +49,8 @@ export interface AppReadyEvent {
 export const OperationIds = {
   systemInfo: 'system.info',
   systemPickFiles: 'system.pickFiles',
+  /** Portapapeles nativo del host — navigator.clipboard falla en WebView2 sin permiso. */
+  systemWriteClipboard: 'system.writeClipboard',
   toolsList: 'tools.list',
   toolsSearch: 'tools.search',
   toolExecute: 'tool.execute',

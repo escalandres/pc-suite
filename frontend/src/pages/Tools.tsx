@@ -259,11 +259,12 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
     void executePayload(parsed);
   };
 
-  /** Copia el resultado al portapapeles (acción local de la UI). */
+  /** Copia el resultado al portapapeles — vía el host: navigator.clipboard
+   *  falla en silencio en WebView2 (permiso clipboard-write no concedido). */
   const copyOutput = async () => {
     if (output === null) return;
     try {
-      await navigator.clipboard.writeText(output);
+      await bridge.call(OperationIds.systemWriteClipboard, { text: output });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

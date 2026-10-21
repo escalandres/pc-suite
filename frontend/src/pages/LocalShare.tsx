@@ -352,6 +352,31 @@ export function LocalShare() {
     catch { /* best-effort */ }
   };
 
+  /** Copia texto al portapapeles NATIVO del host. navigator.clipboard falla
+   *  en WebView2 (permiso clipboard-write no concedido): el botón "Copiar"
+   *  no hacía nada. Feedback: check en el propio botón 1.6 s. */
+  const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
+  const copyToClipboard = async (text: string, itemId: string) => {
+    try {
+      await bridge.call(OperationIds.systemWriteClipboard, { text }, READ_TIMEOUT);
+      setCopiedItemId(itemId);
+      setTimeout(() => setCopiedItemId((current) => (current === itemId ? null : current)), 1600);
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo copiar.' });
+    }
+  };
+
+  /** Abre el Explorador en la carpeta donde se guardó lo recibido —
+   *  destinationSummary lo fija el backend al crear la transferencia
+   *  entrante (la carpeta de descargas configurada). */
+  const openDestination = async (path: string) => {
+    try {
+      await bridge.call(OperationIds.explorerOpenPath, { path }, READ_TIMEOUT);
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo abrir la carpeta.' });
+    }
+  };
+
   const pauseTransfer = async (transferId: string) => {
     try { await bridge.call(OperationIds.localSharePauseTransfer, { transferId }, READ_TIMEOUT); await refresh(); }
     catch (e) { setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo pausar.' }); }
@@ -920,6 +945,10 @@ export function LocalShare() {
                   : t.status === 'cancelled' || t.status === 'rejected' ? '← Cancelado'
                   : '← Recibiendo');
               const noun = t.isMessage ? 'Mensaje' : `${t.itemCount} archivo(s)`;
+              // Receptor completado: la carpeta donde quedó lo recibido.
+              const destination = t.direction === 'receiving' && t.status === 'completed'
+                ? t.destinationSummary
+                : null;
               return (
                 <li
                   key={t.transferId}
@@ -947,6 +976,18 @@ export function LocalShare() {
                   <div className="mt-1 flex items-center justify-between text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                     <span>{formatBytes(t.transferredBytes)} / {formatBytes(t.totalBytes)}</span>
                     <span className="flex items-center gap-3">
+                      {destination && (
+                        <button
+                          type="button"
+                          onClick={() => { void openDestination(destination); }}
+                          className="flex cursor-pointer items-center gap-1 text-xs font-medium transition-colors"
+                          style={{ color: 'var(--pcs-accent)' }}
+                          title="Abrir la carpeta donde se guardó"
+                        >
+                          <FolderOpen size={13} aria-hidden />
+                          Abrir carpeta
+                        </button>
+                      )}
                       {t.direction === 'sending' && t.status === 'transferring' && (
                         <button
                           type="button"
@@ -1002,12 +1043,14 @@ export function LocalShare() {
                               </p>
                               <button
                                 type="button"
-                                onClick={() => void navigator.clipboard.writeText(i.messageText ?? '')}
+                                onClick={() => void copyToClipboard(i.messageText ?? '', i.itemId)}
                                 className="shrink-0 cursor-pointer rounded border px-1.5 py-0.5 text-xs font-medium"
                                 style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text-muted)' }}
                                 title="Copiar mensaje al portapapeles"
                               >
-                                <Copy size={12} aria-hidden />
+                                {copiedItemId === i.itemId
+                                  ? <CheckCircle2 size={12} aria-hidden style={{ color: 'var(--pcs-success)' }} />
+                                  : <Copy size={12} aria-hidden />}
                               </button>
                             </div>
                           ) : (

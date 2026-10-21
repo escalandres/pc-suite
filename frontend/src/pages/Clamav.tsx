@@ -966,12 +966,16 @@ export function Clamav() {
                         cursor: 'pointer',
                       }}
                       onClick={() => {
-                        navigator.clipboard.writeText(threat.file).then(() => {
-                          // Toast temporal o feedback visual
-                          const originalTitle = document.title;
-                          document.title = '✓ Ruta copiada al portapapeles';
-                          setTimeout(() => { document.title = originalTitle; }, 1500);
-                        });
+                        // Vía el host: navigator.clipboard falla en WebView2
+                        // (permiso clipboard-write no concedido).
+                        void bridge.call(OperationIds.systemWriteClipboard, { text: threat.file }, READ_TIMEOUT_MS)
+                          .then(() => {
+                            // Toast temporal o feedback visual
+                            const originalTitle = document.title;
+                            document.title = '✓ Ruta copiada al portapapeles';
+                            setTimeout(() => { document.title = originalTitle; }, 1500);
+                          })
+                          .catch(() => { /* best-effort */ });
                       }}
                       title="Copiar ruta al portapapeles"
                     >

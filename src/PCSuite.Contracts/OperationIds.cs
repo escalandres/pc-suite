@@ -15,6 +15,15 @@ public static class OperationIds
     /// </summary>
     public const string SystemPickFiles = "system.pickFiles";
 
+    /// <summary>
+    /// Copia texto al portapapeles de Windows (payload: {"text"}). El
+    /// navigator.clipboard de Chromium en WebView2 exige el permiso
+    /// clipboard-write, que el host no concede — fallaba EN SILENCIO
+    /// (el botón "Copiar" no hacía nada). El host escribe el portapapeles
+    /// nativo en su lugar.
+    /// </summary>
+    public const string SystemWriteClipboard = "system.writeClipboard";
+
     /// <summary>Devuelve los metadatos de todas las tools registradas.</summary>
     public const string ToolsList = "tools.list";
 
