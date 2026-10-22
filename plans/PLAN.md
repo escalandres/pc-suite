@@ -183,6 +183,18 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 25.3-lite - Cancelación honesta: el notice de cancelado avisa que la consola elevada puede quedar abierta y que se cierra manualmente (el padre no elevado no puede matarla — limitación documentada en 024) | ✅ Completado | 25.3-full en backlog |
 | └ 25.4 - Reporte del usuario (2026-10-22): cerrar la consola a mitad de escaneo dejaba en el historial la ÚLTIMA LÍNEA CRUDA del log ("Scanning C:\…\archivo.cab") como detail — y la ruta larga desbordaba la tarjeta. Fix: ClamAvParser gana HasScanActivity (líneas "Scanning"/"OK"/FOUND); el desenlace "actividad + sin SCAN SUMMARY + exit code ajeno a clamscan (0/1/2)" produce el mensaje CONTROLADO "El escaneo se interrumpió: el proceso de ClamAV terminó antes de finalizar…". Exit 2 sin resumen conserva su línea de error (error PROPIO de clamscan); el frontend blinda ambos detail con break-words | ✅ Completado | Test de regresión con el log real del reporte (Win11SDK + exit 0xC000013A de cierre de consola): aserta el mensaje controlado en outcome e historial, y que NO contenga "Scanning". 952/952 (+1), 0 warnings, tsc+vite OK |
 
+### Task 026 - ClamAV: escaneo personalizado con selectores nativos y drag-and-drop
+
+> Pedido del usuario (2026-10-22): fuera el input manual de ruta — botón que
+> abra el explorador para elegir CARPETA, y una sección drag-and-drop para
+> escanear ARCHIVOS (con su botón de selección por explorador).
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 026 - El escaneo personalizado se elige con diálogos NATIVOS de Windows (carpeta y archivo) + drop zone honesta para archivos | ✅ Completado | 952/952, 0 warnings, tsc+vite OK, Desktop build verde |
+| ├ 26.1 - system.pickFolder (Desktop\Bridge, patrón system.pickFiles): el picker MODERNO de carpetas de Win10/11 (OpenFileDialog sin validar nombres con centinela — el FolderBrowserDialog de WinForms sigue siendo el árbol clásico de XP); si el centinela sobrevive, la ruta real es la carpeta contenedora. system.pickFiles gana payload OPCIONAL { multiselect: false } (ClamAV escanea UN archivo; Local Share sin payload no cambia) | ✅ Completado | Fuera los alert() con lenguaje de navegador del input viejo — el WebView no expone rutas (documentado en Local Share) |
+| └ 26.2 - UI: ActionButton "Carpeta…" abre el selector nativo (atajo C); sección nueva con "Escanear un archivo": botón Seleccionar archivo… (picker nativo, multiselección off) + drop zone con el patrón honesto de Local Share (prueba file.path defensivamente → aviso "el navegador embebido no entrega rutas al arrastrar, usá el botón"). El input manual, sus hints y sus alerts DESAPARECEN | ✅ Completado | customPath queda como estado de solo-display (el panel de ejecución sigue mostrando qué se escanea). PICKER_TIMEOUT_MS = 10 min (mismo margen que Local Share: el usuario puede navegar un rato) |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |

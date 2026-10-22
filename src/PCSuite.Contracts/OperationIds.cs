@@ -24,6 +24,13 @@ public static class OperationIds
     /// </summary>
     public const string SystemWriteClipboard = "system.writeClipboard";
 
+    /// <summary>
+    /// Diálogo NATIVO de Windows para elegir UNA carpeta (devuelve su ruta
+    /// absoluta). El WebView no puede proveer rutas de carpetas — igual que
+    /// system.pickFiles (Task 026: escaneo personalizado de ClamAV).
+    /// </summary>
+    public const string SystemPickFolder = "system.pickFolder";
+
     /// <summary>Devuelve los metadatos de todas las tools registradas.</summary>
     public const string ToolsList = "tools.list";
 

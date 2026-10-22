@@ -4,6 +4,7 @@ import {
   Clock,
   Copy,
   Download,
+  FileSearch,
   FileText,
   Folder,
   FolderSearch,
@@ -12,8 +13,6 @@ import {
   RefreshCw,
   ShieldAlert,
   Zap,
-  MousePointer2,
-  Keyboard,
 } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds, EventIds } from '../types/bridge';
@@ -29,6 +28,8 @@ import type {
   ClamAvFreshclamProgressPayload,
   ClamAvScanProgressPayload,
   JobEventPayload,
+  SystemPickFilesResult,
+  SystemPickFolderResult,
 } from '../types/bridge';
 
 // Timeouts del lado del cliente, siempre por encima de los del nativo
@@ -37,6 +38,9 @@ import type {
 // horas (el desenlace llega por job.event y se puede cancelar con job.cancel).
 const READ_TIMEOUT_MS = 45_000;
 const MUTATION_TIMEOUT_MS = 930_000;
+/** Task 026: los selectores nativos pueden quedar abiertos un rato mientras
+ *  el usuario navega — el mismo margen que usa Local Share para pickFiles. */
+const PICKER_TIMEOUT_MS = 10 * 60_000;
 
 type ScanKind = 'quick' | 'full' | 'custom';
 type ActionKind = ScanKind | 'install' | 'update';
@@ -85,8 +89,8 @@ export function Clamav() {
     kind: ScanKind;
     result: ClamAvScanResult;
   } | null>(null);
+  /** Ruta en curso del escaneo personalizado (para el panel de ejecución). */
   const [customPath, setCustomPath] = useState('');
-  const customPathInputRef = useRef<HTMLInputElement>(null);
 
   // Progreso de actualización de definiciones (freshclam)
   const [freshclamProgress, setFreshclamProgress] = useState<ClamAvFreshclamProgressPayload | null>(null);
@@ -354,14 +358,79 @@ export function Clamav() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runInstall es estable por sesión
   }, [loading, status, busy]);
 
-  const runCustomScan = () => {
-    const target = customPath.trim();
-    if (!target) return;
-    // La validación (absoluta/existente/sin NUL) es de .NET: aquí solo
-    // evitamos la llamada vacía.
-    void runScan('custom', OperationIds.clamavCustomScan, {
-      path: target,
-    });
+  // ------------------------------------------------------------------
+  // Task 026 — escaneo personalizado sin input manual: carpeta por diálogo
+  // NATIVO del host (el WebView no expone rutas de carpetas) y archivo por
+  // diálogo nativo o drag-and-drop (con el aviso honesto de siempre).
+  // ------------------------------------------------------------------
+
+  /** Escaneo personalizado sobre una ruta ya elegida (carpeta o archivo). */
+  const scanCustomPath = (path: string) => {
+    if (!path) return;
+    setCustomPath(path);
+    void runScan('custom', OperationIds.clamavCustomScan, { path });
+  };
+
+  /** Carpeta por el selector NATIVO de Windows (system.pickFolder). */
+  const pickFolderAndScan = async () => {
+    if (busy !== null) return;
+    try {
+      const result = await bridge.call<SystemPickFolderResult>(
+        OperationIds.systemPickFolder,
+        undefined,
+        PICKER_TIMEOUT_MS,
+      );
+      if (result.cancelled || !result.path) return;
+      scanCustomPath(result.path);
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text: errorMessage(error, 'No se pudo abrir el selector de carpeta.'),
+      });
+    }
+  };
+
+  /** UN archivo por el selector NATIVO (multiselección desactivada). */
+  const pickFileAndScan = async () => {
+    if (busy !== null) return;
+    try {
+      const result = await bridge.call<SystemPickFilesResult>(
+        OperationIds.systemPickFiles,
+        { multiselect: false },
+        PICKER_TIMEOUT_MS,
+      );
+      if (result.cancelled || result.paths.length === 0) return;
+      scanCustomPath(result.paths[0]);
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text: errorMessage(error, 'No se pudo abrir el selector de archivo.'),
+      });
+    }
+  };
+
+  /** Drop de archivo para escanear: el WebView embebido no entrega rutas al
+   *  arrastrar (limitación de Chromium) — se prueba defensivamente, igual
+   *  que la zona de envío de Local Share, y cae al aviso honesto. */
+  const onScanDrop = async (event: React.DragEvent) => {
+    event.preventDefault();
+    if (busy !== null) return;
+    const paths: string[] = [];
+    for (const item of event.dataTransfer.items) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        const path = (file as unknown as { path?: string }).path;
+        if (file && path) paths.push(path);
+      }
+    }
+    if (paths.length === 0) {
+      setNotice({
+        kind: 'error',
+        text: 'El navegador embebido no entrega rutas al arrastrar. Usá «Seleccionar archivo…».',
+      });
+      return;
+    }
+    scanCustomPath(paths[0]);
   };
 
   // ------------------------------------------------------------------
@@ -420,7 +489,7 @@ export function Clamav() {
           }
           break;
         case 'c':
-          if (!busy && customPath.trim()) runCustomScan();
+          if (!busy) void pickFolderAndScan();
           break;
         case 'd':
           if (!busy && status?.canUpdateDefinitions) {
@@ -436,7 +505,7 @@ export function Clamav() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [loading, status, busy, customPath, quickModalOpen, refresh, runScan, runMutation, runCustomScan, openQuickModal]);
+  }, [loading, status, busy, quickModalOpen, refresh, runScan, runMutation, pickFolderAndScan, openQuickModal]);
 
   const installed = status?.installed ?? false;
   const busyAny = busy !== null;
@@ -609,76 +678,46 @@ export function Clamav() {
                 void runScan('full', OperationIds.clamavFullScan);
               }}
             />
-            {/* Escaneo de directorio seleccionado */}
+            {/* Task 026: carpeta por diálogo NATIVO — el WebView no expone rutas */}
             <ActionButton
               busy={busy === 'custom'}
-              disabled={busyAny || customPath.trim().length === 0}
-              label={busy === 'custom' ? 'Escaneando…' : 'Escanear ruta'}
+              disabled={busyAny}
+              label={busy === 'custom' ? 'Escaneando…' : 'Carpeta…'}
               icon={<FolderSearch size={14} aria-hidden />}
               shortcut="C"
-              onClick={runCustomScan}
+              onClick={() => void pickFolderAndScan()}
             />
           </div>
 
-          {/* Ingresar ruta manualmente con drag-and-drop */}
-          <div className="mt-3">
-            <div className="relative">
-              <input
-                ref={customPathInputRef}
-                type="text"
-                value={customPath}
-                onChange={(event) => setCustomPath(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') runCustomScan();
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  event.currentTarget.classList.add('ring-2', 'ring-offset-2', 'ring-[var(--pcs-accent)]');
-                }}
-                onDragLeave={(event) => {
-                  event.currentTarget.classList.remove('ring-2', 'ring-offset-2', 'ring-[var(--pcs-accent)]');
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  event.currentTarget.classList.remove('ring-2', 'ring-offset-2', 'ring-[var(--pcs-accent)]');
-                  const items = event.dataTransfer.items;
-                  if (items && items.length > 0) {
-                    // Para directorios, usar webkitRelativePath
-                    const entry = items[0].webkitGetAsEntry?.();
-                    if (entry && entry.isDirectory) {
-                      // No se puede obtener la ruta completa por seguridad del navegador
-                      // Mostrar mensaje al usuario
-                      setCustomPath(''); // Limpiar para que el usuario ingrese manualmente
-                      alert('Por seguridad, los navegadores no permiten obtener la ruta completa de carpetas.\nPor favor, ingrese la ruta manualmente (ej: C:\\Users\\Usuario\\Descargas)');
-                    } else if (items[0].kind === 'file') {
-                      const file = items[0].getAsFile();
-                      if (file) {
-                        // Para archivos, tampoco hay ruta completa
-                        alert('Por seguridad, los navegadores no permiten obtener la ruta completa.\nPor favor, ingrese la ruta del directorio manualmente.');
-                      }
-                    }
-                  } else if (event.dataTransfer.files.length > 0) {
-                    // Fallback para archivos
-                    alert('Por seguridad, los navegadores no permiten obtener la ruta completa.\nPor favor, ingrese la ruta del directorio manualmente.');
-                  }
-                }}
-                disabled={busyAny}
-                placeholder="C:\\Descargas o directorio (arrastre aquí)"
-                aria-label="Ruta a escanear"
-                className="w-full max-w-xs rounded-md border px-3 py-2 text-sm outline-none sm:w-auto transition-colors"
-                style={{
-                  background: 'var(--pcs-surface-2)',
-                  borderColor: 'var(--pcs-border)',
-                  color: 'var(--pcs-text)',
-                }}
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs" style={{ color: 'var(--pcs-text-muted)', pointerEvents: 'none' }}>
-                <Keyboard size={12} aria-hidden />
-                <span>Enter: escanear</span>
-                <MousePointer2 size={12} aria-hidden />
-                <span>Arrastar carpeta</span>
-              </div>
-            </div>
+          {/* Task 026: escaneo de UN archivo — selección nativa o
+              drag-and-drop. El navegador embebido no entrega rutas al
+              arrastrar (limitación de Chromium en el WebView): el handler
+              lo prueba defensivamente y cae al aviso honesto — el mismo
+              patrón que la zona de envío de Local Share. */}
+          <div
+            className="mt-3 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center"
+            style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)' }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => void onScanDrop(event)}
+          >
+            <FileSearch size={22} aria-hidden className="opacity-40" style={{ color: 'var(--pcs-accent)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--pcs-text)' }}>
+              Escanear un archivo
+            </p>
+            <button
+              type="button"
+              disabled={busyAny}
+              onClick={() => void pickFileAndScan()}
+              className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+            >
+              <FileSearch size={14} aria-hidden />
+              Seleccionar archivo…
+            </button>
+            <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+              También podés arrastrarlo aquí — el navegador embebido no entrega rutas al
+              arrastrar, así que probablemente convenga usar el botón.
+            </p>
           </div>
 
           {!status.canUpdateDefinitions && (

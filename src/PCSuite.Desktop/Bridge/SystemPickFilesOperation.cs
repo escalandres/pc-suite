@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Windows.Forms;
 using PCSuite.Contracts;
 using PCSuite.Core.Operations;
@@ -33,12 +34,30 @@ public sealed class SystemPickFilesOperation : IOperation
 
     public Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
     {
+        // Task 026: payload OPCIONAL { multiselect: false } — los callers de
+        // UN solo archivo (el escaneo de ClamAV) desactivan la multiselección.
+        // Sin payload (o inválido) → multiselección: Local Share no cambia.
+        var multiselect = true;
+        if (context.Payload.HasValue)
+        {
+            try
+            {
+                multiselect = context.Payload.Value
+                    .Deserialize<SystemPickFilesPayload>(BridgeJson.Options)
+                    ?.Multiselect ?? true;
+            }
+            catch (JsonException)
+            {
+                // Payload inválido: default (multiselección).
+            }
+        }
+
         using var dialog = new OpenFileDialog
         {
-            Multiselect = true,
+            Multiselect = multiselect,
             CheckFileExists = true,
             DereferenceLinks = true,
-            Title = "Selecciona archivos para enviar",
+            Title = "Selecciona archivos",
         };
 
         var result = _owner is null ? dialog.ShowDialog() : dialog.ShowDialog(_owner);

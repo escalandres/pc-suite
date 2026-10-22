@@ -49,6 +49,8 @@ export interface AppReadyEvent {
 export const OperationIds = {
   systemInfo: 'system.info',
   systemPickFiles: 'system.pickFiles',
+  /** Diálogo nativo de UNA carpeta (Task 026): escaneo personalizado de ClamAV. */
+  systemPickFolder: 'system.pickFolder',
   /** Portapapeles nativo del host — navigator.clipboard falla en WebView2 sin permiso. */
   systemWriteClipboard: 'system.writeClipboard',
   toolsList: 'tools.list',
@@ -149,6 +151,12 @@ export const EventIds = {
 export interface SystemPickFilesResult {
   paths: string[];
   cancelled: boolean;
+}
+
+/** Resultado de system.pickFolder (Task 026): UNA carpeta absoluta del diálogo nativo. */
+export interface SystemPickFolderResult {
+  cancelled: boolean;
+  path?: string | null;
 }
 
 /* =====================================================================
