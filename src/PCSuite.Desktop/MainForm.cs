@@ -587,15 +587,15 @@ public partial class MainForm : Form
         core.NewWindowRequested += (_, args) => args.Handled = true;
 
         // Task 026.3: drop NATIVO de archivos del SO — el host toma el
-        // destino OLE del contenido de WebView2 y publica las RUTAS reales
-        // por evento system.filesDropped (la página no puede verlas:
-        // limitación de Chromium). No-op silencioso si el árbol de ventanas
-        // cambia en un runtime futuro: queda el aviso honesto de la página.
-        NativeFileDropTarget.Attach(
-            _webView.Handle,
-            paths => _bridge.SendEvent(
-                EventIds.SystemFilesDropped,
-                new SystemFilesDroppedPayload { Paths = paths }));
+        // destino OLE de la ventana de CONTENIDO de WebView2 (Chrome_WidgetWin_1,
+        // que NO es hijo directo del control: la búsqueda es recursiva) y
+        // publica las RUTAS reales por evento system.filesDropped (la página
+        // no puede verlas: limitación de Chromium). Reintento en cada
+        // NavigationCompleted: Chromium puede re-registrar su destino al
+        // navegar/renderizar. Un false solo degrada al aviso honesto de la
+        // página.
+        AttachNativeFileDrop();
+        core.NavigationCompleted += (_, _) => AttachNativeFileDrop();
 
         core.NavigationStarting += (_, args) =>
         {
@@ -648,6 +648,29 @@ public partial class MainForm : Form
         _bridge.Attach(core, _allowedOrigins);
         _logger.LogInformation("Loading frontend from {Directory}", distDirectory);
         core.Navigate($"{origin}/index.html");
+    }
+
+    /// <summary>
+    /// Task 026.3: (re)registrar el destino OLE del drop nativo de archivos.
+    /// Idempotente (Revoke+Register); el resultado queda en el log para
+    /// diagnóstico — un false solo degrada al aviso honesto de la página.
+    /// </summary>
+    private void AttachNativeFileDrop()
+    {
+        var registered = NativeFileDropTarget.Attach(
+            _webView.Handle,
+            paths => _bridge.SendEvent(
+                EventIds.SystemFilesDropped,
+                new SystemFilesDroppedPayload { Paths = paths }));
+
+        if (registered)
+        {
+            _logger.LogInformation("Drop nativo de archivos registrado sobre la ventana de contenido de WebView2.");
+        }
+        else
+        {
+            _logger.LogWarning("No se pudo registrar el drop nativo de archivos (árbol de ventanas inesperado). Fallback: aviso honesto de la página.");
+        }
     }
 
     private bool IsAllowedNavigation(string uri)

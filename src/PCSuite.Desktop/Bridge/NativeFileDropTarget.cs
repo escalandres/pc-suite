@@ -29,30 +29,33 @@ internal static class NativeFileDropTarget
 {
     /// <summary>
     /// Registra el destino OLE sobre la ventana de contenido del WebView2.
-    /// No-op silencioso si el árbol de ventanas no es el esperado.
+    /// Devuelve false (no-op silencioso) si el árbol de ventanas no es el
+    /// esperado — la página conserva su aviso honesto como fallback.
     /// </summary>
-    public static void Attach(IntPtr webViewHandle, Action<IReadOnlyList<string>> onFilesDropped)
+    public static bool Attach(IntPtr webViewHandle, Action<IReadOnlyList<string>> onFilesDropped)
     {
         var chrome = FindChromiumContentWindow(webViewHandle, depth: 0);
         if (chrome == IntPtr.Zero)
         {
-            return; // árbol cambió: sin DnD nativo (la página sigue con su aviso)
+            return false; // árbol cambió: sin DnD nativo (la página sigue con su aviso)
         }
 
         RevokeDragDrop(chrome);
         if (RegisterDragDrop(chrome, new DropTarget(onFilesDropped)) != 0)
         {
-            return; // no se pudo registrar: fallback de la página
+            return false; // no se pudo registrar: fallback de la página
         }
+
+        return true;
     }
 
     // ------------------------------------------------------------------
     // Búsqueda de la ventana de contenido de Chromium (árbol estable hace
-    // años; búsqueda por nombre de clase con profundidad defensiva).
+    // años). LECCIÓN del diagnóstico 2026-10-22: la ventana con el drop
+    // target de Chromium es Chrome_WidgetWin_1 y NO es hijo directo del
+    // control (el árbol real es control → _0 → _1): hay que buscarla
+    // RECURSIVAMENTE por su nombre exacto antes de considerar el fallback.
     // ------------------------------------------------------------------
-
-    private static readonly string[] ChromiumWindowClasses =
-        ["Chrome_WidgetWin_1", "Chrome_WidgetWin_0"];
 
     private static IntPtr FindChromiumContentWindow(IntPtr parent, int depth)
     {
@@ -61,19 +64,35 @@ internal static class NativeFileDropTarget
             return IntPtr.Zero;
         }
 
-        foreach (var className in ChromiumWindowClasses)
+        // La ventana de CONTENIDO (la dueña del drop target de Chromium):
+        // búsqueda recursiva completa por su clase exacta.
+        var content = FindByClassNameRecursive(parent, "Chrome_WidgetWin_1", depth);
+        if (content != IntPtr.Zero)
         {
-            var direct = FindWindowEx(parent, IntPtr.Zero, className, null);
-            if (direct != IntPtr.Zero)
-            {
-                return direct;
-            }
+            return content;
+        }
+
+        // Fallback defensivo para árboles antiguos: el contenedor externo.
+        return FindByClassNameRecursive(parent, "Chrome_WidgetWin_0", depth);
+    }
+
+    private static IntPtr FindByClassNameRecursive(IntPtr parent, string className, int depth)
+    {
+        if (depth > 6)
+        {
+            return IntPtr.Zero;
+        }
+
+        var direct = FindWindowEx(parent, IntPtr.Zero, className, null);
+        if (direct != IntPtr.Zero)
+        {
+            return direct;
         }
 
         var child = IntPtr.Zero;
         while ((child = FindWindowEx(parent, child, null, null)) != IntPtr.Zero)
         {
-            var found = FindChromiumContentWindow(child, depth + 1);
+            var found = FindByClassNameRecursive(child, className, depth + 1);
             if (found != IntPtr.Zero)
             {
                 return found;
