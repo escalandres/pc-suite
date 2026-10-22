@@ -500,6 +500,38 @@ public sealed class ClamAvServiceTests
     }
 
     [Fact]
+    public async Task Scan_InterruptedMidScan_ControlledMessageInsteadOfRawLogLine()
+    {
+        // Task 025.4 (reporte del usuario 2026-10-22): cerrar la consola
+        // elevada a mitad de escaneo mata clamscan con un exit code del SO
+        // (0xC000013A — cierre de consola): había actividad pero el SCAN
+        // SUMMARY nunca llegó. El detail debe ser CONTROLADO; antes era la
+        // última línea cruda del log y su ruta larga desbordaba la tarjeta
+        // del historial.
+        var log = string.Join('\n',
+            "Scanning C:\\Users\\andre\\Desktop",
+            "C:\\Users\\andre\\Desktop\\notas.txt: OK",
+            "Scanning C:\\Users\\andre\\AppData\\Local\\Temp\\gstbwebx\\Win11SDK_10.0.26100.33CB91E8D8190C6A58CA\\Installers\\a76e4219ecb0f1c0006a6fe080c54ad9.cab");
+        using var fx = ClamAvFixture.Create(
+            FakeProcessRunner.WritingScanLog(log, exitCode: -1073741510));
+
+        var outcome = await fx.Service.QuickScanAsync();
+
+        const string expected =
+            "El escaneo se interrumpió: el proceso de ClamAV terminó antes de finalizar " +
+            "(consola cerrada o proceso detenido antes de completar).";
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(expected, outcome.Detail);
+        Assert.DoesNotContain("Scanning", outcome.Detail, StringComparison.Ordinal);
+
+        // El historial registra el desenlace con el mensaje controlado (nada
+        // de líneas crudas del log).
+        var entry = Assert.Single(fx.History.Read());
+        Assert.False(entry.Succeeded);
+        Assert.Equal(expected, entry.Detail);
+    }
+
+    [Fact]
     public async Task Scan_WithoutClamAv_ThrowsNotInstalled_WithoutRequestOrHistory()
     {
         using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(""), withClamAv: false);

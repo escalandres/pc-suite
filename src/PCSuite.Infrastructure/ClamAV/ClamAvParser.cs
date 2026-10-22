@@ -11,7 +11,8 @@ internal sealed record ClamAvScanParse(
     int? InfectedFiles,
     int? KnownViruses,
     string? EngineVersion,
-    bool HasSummary);
+    bool HasSummary,
+    bool HasScanActivity);
 
 /// <summary>
 /// Parseo CONTROLADO de la salida de clamscan (solo lectura, sin shell).
@@ -75,6 +76,7 @@ internal static class ClamAvParser
         int? knownViruses = null;
         string? engineVersion = null;
         var hasSummary = false;
+        var hasScanActivity = false;
 
         if (!string.IsNullOrEmpty(output))
         {
@@ -84,6 +86,18 @@ internal static class ClamAvParser
                 if (line.Length == 0)
                 {
                     continue;
+                }
+
+                // Task 025.4: actividad = el escaneo llegó a EMPEZAR (líneas
+                // "Scanning …" o "archivo: OK"/FOUND) aunque el SCAN SUMMARY
+                // nunca llegara — distingue "murió a mitad" de "falló antes
+                // de arrancar".
+                if (!hasScanActivity
+                    && (line.StartsWith("Scanning ", StringComparison.Ordinal)
+                        || line.EndsWith(": OK", StringComparison.Ordinal)
+                        || line.EndsWith(FoundSuffix, StringComparison.Ordinal)))
+                {
+                    hasScanActivity = true;
                 }
 
                 if (line.EndsWith(FoundSuffix, StringComparison.Ordinal))
@@ -130,7 +144,7 @@ internal static class ClamAvParser
             }
         }
 
-        return new ClamAvScanParse(threats, scannedDirectories, scannedFiles, infectedFiles, knownViruses, engineVersion, hasSummary);
+        return new ClamAvScanParse(threats, scannedDirectories, scannedFiles, infectedFiles, knownViruses, engineVersion, hasSummary, hasScanActivity);
     }
 
     private static int? IntValue(string line, int labelLength) =>

@@ -58,6 +58,17 @@ public sealed class ClamAvService : IClamAvService
         "(bloqueados en exclusiva por otro proceso, cifrados o puntos de reanálisis). " +
         "Esto es normal en escaneos de disco. Para mayor cobertura, cierre aplicaciones y reintente.";
 
+    /// <summary>
+    /// Task 025.4 (reporte del usuario 2026-10-22): el proceso de ClamAV
+    /// terminó antes de finalizar el escaneo (consola cerrada, proceso
+    /// detenido, crash) — había actividad de escaneo pero el SCAN SUMMARY
+    /// nunca llegó. Mensaje CONTROLADO: jamás la última línea cruda del log
+    /// (una ruta larga desbordaba la tarjeta del historial).
+    /// </summary>
+    private const string InterruptedScanDetail =
+        "El escaneo se interrumpió: el proceso de ClamAV terminó antes de finalizar " +
+        "(consola cerrada o proceso detenido antes de completar).";
+
     /// <summary>Mensaje cuando el usuario descarta el prompt UAC del escaneo.</summary>
     private const string UacDeclinedMessage =
         "Se rechazó el permiso de administrador (UAC): el escaneo no se ejecutó.";
@@ -515,9 +526,22 @@ public sealed class ClamAvService : IClamAvService
             // sin resumen o >2: fallo estructurado.
             var succeeded = result.ExitCode is 0 or 1
                 || (result.ExitCode == 2 && parsed.HasSummary);
-            var detail = !succeeded
-                ? ClamAvOutput.FailureMessage(result)
-                : result.ExitCode > 1 ? PartialScanDetail : null;
+            // Task 025.4: cerrar la consola elevada a mitad de escaneo mata
+            // clamscan a nivel del SO — exit code ajeno a clamscan (0/1/2),
+            // HABÍA actividad pero el SCAN SUMMARY nunca llegó. Mensaje
+            // CONTROLADO; el fallback anterior tomaba la última línea cruda
+            // del log ("Scanning C:\…\archivo.cab") y su ruta desbordaba la
+            // tarjeta del historial. Exit 2 SIN resumen sigue siendo un error
+            // PROPIO de clamscan: conserva su línea de error.
+            var interrupted = !succeeded
+                && parsed.HasScanActivity
+                && !parsed.HasSummary
+                && result.ExitCode is not 2;
+            var detail = interrupted
+                ? InterruptedScanDetail
+                : !succeeded
+                    ? ClamAvOutput.FailureMessage(result)
+                    : result.ExitCode > 1 ? PartialScanDetail : null;
             var infected = parsed.InfectedFiles ?? parsed.Threats.Count;
 
             // Excepciones (no instalado / timeout) NO registran entrada: solo

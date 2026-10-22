@@ -1050,7 +1050,7 @@ export function Clamav() {
                   <p className="font-medium" style={{ color: 'var(--pcs-warning)' }}>
                     Escaneo completado con accesos limitados
                   </p>
-                  <p className="mt-1">{lastScan.result.detail}</p>
+                  <p className="mt-1 break-words">{lastScan.result.detail}</p>
                 </div>
               </div>
             </div>
@@ -1122,7 +1122,7 @@ export function Clamav() {
                   </span>
                   {entry.detail && (
                     <p
-                      className="w-full text-xs"
+                      className="w-full break-words text-xs"
                       style={{ color: 'var(--pcs-danger)' }}
                     >
                       {entry.detail}
