@@ -327,6 +327,67 @@ public sealed class ClamAvOperationTests
             op => Assert.False(op.RequiresElevation)); // los escaneos jamás elevan
     }
 
+    // ------------------------------------------------------------------
+    // Task 025.1 — clamav.activeScan (re-adjunta de la UI tras recargar)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task ActiveScan_WithoutScans_ReturnsEmpty()
+    {
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(""));
+
+        var response = await Send(fx.Router, "a1", OperationIds.ClamavActiveScan);
+
+        Assert.True(response.Success);
+        // WhenWritingNull: sin escaneo activo el resultado es {} (sin jobId).
+        Assert.False(response.Result!.Value.TryGetProperty("jobId", out _));
+    }
+
+    [Fact]
+    public async Task ActiveScan_WithRunningScan_ReturnsIt_AndEmptiesWhenFinished()
+    {
+        // Runner que BLOQUEA hasta que el test lo libera: el job queda
+        // Running mientras se pregunta por el activo — el escenario real del
+        // re-adjunta (la UI recarga con el escaneo a mitad de camino).
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var fx = ClamAvFixture.Create(new FakeProcessRunner(async (_, ct) =>
+        {
+            await release.Task.WaitAsync(ct);
+            return new ProcessResult { ExitCode = 0 };
+        }));
+
+        var start = await Send(fx.Router, "a2", OperationIds.ClamavFullScan);
+        var jobId = start.Result!.Value.GetProperty("jobId").GetString();
+
+        var active = await Send(fx.Router, "a3", OperationIds.ClamavActiveScan);
+        var data = active.Result!.Value;
+        Assert.Equal(jobId, data.GetProperty("jobId").GetString());
+        Assert.Equal("full", data.GetProperty("kind").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(data.GetProperty("startedAt").GetString()));
+
+        release.SetResult();
+        var job = await WaitForJobAsync(fx.Jobs, jobId!);
+        Assert.Equal(JobStatus.Completed, job.Status);
+
+        // Terminado el escaneo, el activo vuelve a quedar vacío.
+        var after = await Send(fx.Router, "a4", OperationIds.ClamavActiveScan);
+        Assert.False(after.Result!.Value.TryGetProperty("jobId", out _));
+    }
+
+    [Fact]
+    public async Task ActiveScan_IgnoresOtherJobTypes()
+    {
+        using var fx = ClamAvFixture.Create(FakeProcessRunner.Returning(""));
+
+        // Un job corriendo de OTRO tipo no es un escaneo: el activo queda vacío.
+        fx.Jobs.Start("winget.install");
+
+        var response = await Send(fx.Router, "a5", OperationIds.ClamavActiveScan);
+
+        Assert.True(response.Success);
+        Assert.False(response.Result!.Value.TryGetProperty("jobId", out _));
+    }
+
     private static Task<BridgeResponse> Send(
         CommandRouter router,
         string id,

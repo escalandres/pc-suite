@@ -461,13 +461,14 @@ public sealed class ClamAvServiceTests
         var request = Assert.Single(fx.Runner.Requests);
         Assert.True(request.RequiresElevation);
         Assert.Equal("--recursive", request.Arguments[0]);
+        Assert.Equal("--verbose", request.Arguments[1]); // Task 025.2: progreso vivo también en el full
         var logIndex = Assert.Single(
             request.Arguments.Select((argument, index) => (argument, index))
                 .Where(t => t.argument.StartsWith("--log=", StringComparison.Ordinal))
                 .Select(t => t.index));
-        Assert.True(logIndex >= 2); // --recursive + al menos un disco fijo (C:\) + --log
+        Assert.True(logIndex >= 3); // --recursive --verbose + al menos un disco fijo (C:\) + --log
         Assert.All(
-            request.Arguments.Skip(1).Take(logIndex - 1),
+            request.Arguments.Skip(2).Take(logIndex - 2),
             root => Assert.True(Path.IsPathRooted(root)));
         Assert.Null(request.Timeout); // Task 024: sin tope de reloj
     }

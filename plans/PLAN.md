@@ -167,6 +167,21 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 24.1 - ClamAvService: fuera QuickScanTimeout/CustomScanTimeout/FullScanTimeout (1 h/1 h/2 h) + ScanTimeoutMessage + el catch de ProcessTimeoutException del runner elevado; el ProcessRequest del escaneo viaja con Timeout = null (el ProcessRunner solo para por cancelación) | ✅ Completado | La cancelación (job.cancel) se propaga limpia: OCE sin historial. Limitación conocida: el padre NO elevado no puede matar un clamscan elevado (TryKill falla con Access Denied en silencio) — Cancelar detiene el job y la espera; la consola puede seguir hasta cerrarla o que el escaneo termine |
 | └ 24.2 - Tests: los asertos de timeout de los 3 modos pasan a verificar Timeout == null (guard contra futuros "presupuestos fijos"); el test del desenlace de timeout se reemplaza por runner-crash (fallo estructurado sin historial) + nuevo test de cancelación (OCE sin historial) | ✅ Completado | 948/948 (+1 neto) |
 
+### Task 025 - ClamAV: re-adjunta del escaneo + progreso del full + cancelación honesta
+
+> Del análisis consolidado post-024: quitar los topes de reloj creó nuevas
+> obligaciones — un escaneo de hasta 24 h debe sobrevivir a que la UI se
+> recargue y debe mostrar señales de vida. Aprobado por el usuario:
+> 25.1 + 25.2 + 25.3-lite. 25.3-full (cancelación real del clamscan elevado
+> vía helper con canal de cancelación) queda en el backlog documentado.
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 025 - La UI se re-adjunta al escaneo en curso; el full reporta progreso vivo; el cancelar es honesto sobre la consola | ✅ Completado | 951/951 (+3), 0 warnings, tsc+vite OK |
+| ├ 25.1 - `clamav.activeScan` (payload cero, solo lectura): el escaneo en curso {jobId, kind, startedAt, progress} — la página de ClamAV al montar re-entra en estado escaneando (cronómetro desde el startedAt REAL + la suscripción job.event re-engancha por [scanJobId]). Filtra GetHistory(200) por los 3 jobtypes no-terminales | ✅ Completado | ClamAvJobTypes = fuente única de los 3 jobtypes (las ops ya no repiten literals). Tests op: sin escaneo → vacío; runner que BLOQUEA → devuelve el job con kind correcto y vacía al terminar; job de otro tipo → ignorado |
+| ├ 25.2 - FullScan CON --verbose (decisión 024 invertida deliberadamente): sin topes, un full de horas necesitaba señales de vida — el IPC sigue capped por el throttle (~4/s), solo crece el log temporal (~60-120 MB en discos enormes, borrado al final) | ✅ Completado | Fuera BaseScanFlags (muerto). Argv del full actualizado en ClamAvServiceTests + ClamAvArgumentsTests |
+| └ 25.3-lite - Cancelación honesta: el notice de cancelado avisa que la consola elevada puede quedar abierta y que se cierra manualmente (el padre no elevado no puede matarla — limitación documentada en 024) | ✅ Completado | 25.3-full en backlog |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |

@@ -16,9 +16,6 @@ internal static class ClamAvArguments
     public static readonly string[] Freshclam = [];
 
     /// <summary>Flags base de escaneo (los objetivos van siempre después).</summary>
-    private static readonly string[] BaseScanFlags = ["--recursive"];
-
-    /// <summary>Flags para escaneos con progreso detallado (quick, custom).</summary>
     private static readonly string[] VerboseScanFlags = ["--recursive", "--verbose"];
 
     public static string[] QuickScan() => [.. VerboseScanFlags, .. QuickTargets()];
@@ -31,10 +28,18 @@ internal static class ClamAvArguments
     /// </summary>
     public static IReadOnlyList<string> QuickScanTargets() => QuickTargets();
 
-    /// <summary>Escaneo completo SIN --verbose para evitar millones de líneas de salida
-    /// al escanear discos enteros. El parser usa el SCAN SUMMARY para contadores exactos.
+    /// <summary>
+    /// Escaneo completo CON --verbose (Task 025.2 — decisión invertida
+    /// deliberadamente): sin tope de reloj (Task 024) un full scan puede
+    /// durar horas y el progreso por archivo pasó a ser la única forma de
+    /// saber que sigue vivo — la versión anterior (sin --verbose) dejaba la
+    /// barra congelada en 0% hasta el SCAN SUMMARY final. El volumen de
+    /// líneas NO toca el puente (el throttle del reporter lo limita a ~4
+    /// eventos/s); lo único que crece es el log temporal (~60-120 MB en
+    /// discos enormes), borrado al final. El resumen sigue dando los
+    /// contadores exactos.
     /// </summary>
-    public static string[] FullScan(IReadOnlyList<string> driveRoots) => [.. BaseScanFlags, .. driveRoots];
+    public static string[] FullScan(IReadOnlyList<string> driveRoots) => [.. VerboseScanFlags, .. driveRoots];
 
     public static string[] CustomScan(string fullPath) => [.. VerboseScanFlags, fullPath];
 

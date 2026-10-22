@@ -120,6 +120,13 @@ public static class OperationIds
     /// <summary>Historial de escaneos persistido (más reciente primero).</summary>
     public const string ClamavHistory = "clamav.history";
 
+    /// <summary>
+    /// El escaneo en curso (Task 025.1): re-adjunta la UI tras navegar o
+    /// recargar durante un escaneo largo — devuelve {jobId, kind, startedAt}
+    /// o vacío si no hay ninguno activo. Payload cero, solo lectura.
+    /// </summary>
+    public const string ClamavActiveScan = "clamav.activeScan";
+
     // Operaciones de jobs (larga duración): los escaneos clamav.* ya no
     // retienen la respuesta — devuelven {jobId} y la UI consulta/cancela.
 

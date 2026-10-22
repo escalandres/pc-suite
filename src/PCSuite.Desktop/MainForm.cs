@@ -343,6 +343,7 @@ public partial class MainForm : Form
                 new ClamAvFullScanOperation(clamAvService, jobManager),
                 new ClamAvCustomScanOperation(clamAvService, jobManager),
                 new ClamAvHistoryOperation(clamAvService),
+                new ClamAvActiveScanOperation(jobManager),
                 new JobGetOperation(jobManager),
                 new JobCancelOperation(jobManager),
                 new SshDetectOperation(sshKeyService),

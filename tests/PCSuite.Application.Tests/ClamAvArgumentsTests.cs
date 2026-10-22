@@ -30,9 +30,12 @@ public sealed class ClamAvArgumentsTests
     [Fact]
     public void FullScan_AppendsGivenDriveRoots_AfterFlags()
     {
+        // Task 025.2: el full también lleva --verbose — el progreso por
+        // archivo pasó a ser la única forma de saber que un escaneo de
+        // horas sigue vivo (la barra ya no queda congelada hasta el resumen).
         var args = ClamAvArguments.FullScan(["C:\\", "D:\\"]);
 
-        Assert.Equal<string>(["--recursive", "C:\\", "D:\\"], args);
+        Assert.Equal<string>(["--recursive", "--verbose", "C:\\", "D:\\"], args);
     }
 
     [Fact]

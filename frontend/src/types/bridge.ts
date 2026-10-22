@@ -79,6 +79,7 @@ export const OperationIds = {
   clamavFullScan: 'clamav.fullScan',
   clamavCustomScan: 'clamav.customScan',
   clamavHistory: 'clamav.history',
+  clamavActiveScan: 'clamav.activeScan',
   cleanerScan: 'cleaner.scan',
   cleanerClean: 'cleaner.clean',
   securityGetStatus: 'security.getStatus',
@@ -366,6 +367,15 @@ export interface ClamAvThreatResult {
 /** Respuesta de iniciar un escaneo clamav.*: el job queda corriendo. */
 export interface ClamAvScanStartResult {
   jobId: string;
+}
+
+/** Respuesta de clamav.activeScan: el escaneo en curso (Task 025.1) — para
+ *  re-adjuntar la UI tras recargar/navegar. Vacío si no hay escaneo activo. */
+export interface ClamAvActiveScanResult {
+  jobId?: string;
+  kind?: 'quick' | 'full' | 'custom' | null;
+  startedAt?: string | null;
+  progress?: number | null;
 }
 
 /** Evento job.event: ciclo de vida de un job (resultado en statusChanged). */

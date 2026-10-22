@@ -243,6 +243,63 @@ public sealed class ClamAvQuickTargetsOperation : IOperation
         })));
 }
 
+/// <summary>
+/// JobTypes de los escaneos clamav.*: una sola fuente para las ops y para
+/// el re-adjunta (Task 025.1).
+/// </summary>
+internal static class ClamAvJobTypes
+{
+    public const string Quick = "clamav.quickScan";
+    public const string Full = "clamav.fullScan";
+    public const string Custom = "clamav.customScan";
+
+    public static readonly IReadOnlyList<string> All = [Quick, Full, Custom];
+
+    /// <summary>JobType → kind del dominio (quick/full/custom), para que la UI reconstruya etiquetas.</summary>
+    public static string? KindOf(string jobType) => jobType switch
+    {
+        Quick => ClamAvScanKinds.Quick,
+        Full => ClamAvScanKinds.Full,
+        Custom => ClamAvScanKinds.Custom,
+        _ => null,
+    };
+}
+
+/// <summary>
+/// clamav.activeScan (Task 025.1): el escaneo en curso. Cierra la metodología
+/// del job-como-webhook: si la página se cerró/recargó durante un escaneo de
+/// horas, al volver la UI se RE-ADJUNTA al job vivo (estado + cronómetro +
+/// suscripción a job.event) en vez de quedar ciega hasta que el resultado
+/// caiga al historial. Payload cero, solo lectura, sin elevación.
+/// </summary>
+public sealed class ClamAvActiveScanOperation(IJobManager jobs) : IOperation
+{
+    public string Id => OperationIds.ClamavActiveScan;
+    public bool RequiresElevation => false;
+
+    public Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // GetHistory recorre TODOS los jobs vivos (solo expiran por el tope
+        // del historial): el escaneo activo es el match más reciente que no
+        // esté terminal. La serie de 1 (_gate) hace improbable que haya
+        // dos; si los hay (uno encolado), manda el más nuevo.
+        var active = jobs.GetHistory(200)
+            .FirstOrDefault(job => !job.IsFinished && ClamAvJobTypes.All.Contains(job.Type));
+
+        return Task.FromResult(OperationResult.Ok(BridgeJson.ToJson(active is { } job
+            ? new ClamAvActiveScanResult
+            {
+                JobId = job.Id,
+                Kind = ClamAvJobTypes.KindOf(job.Type),
+                StartedAt = job.StartedAt,
+                Progress = job.Progress,
+            }
+            : new ClamAvActiveScanResult())));
+    }
+}
+
 public sealed class ClamAvQuickScanOperation : ClamAvScanJobOperation
 {
     public ClamAvQuickScanOperation(IClamAvService service, IJobManager jobs)
@@ -252,7 +309,7 @@ public sealed class ClamAvQuickScanOperation : ClamAvScanJobOperation
 
     public override string Id => OperationIds.ClamavQuickScan;
 
-    protected override string JobType => "clamav.quickScan";
+    protected override string JobType => ClamAvJobTypes.Quick;
 
     protected override Func<CancellationToken, IProgress<ClamAvScanProgress>?, Task<ClamAvScanOutcome>> PrepareScan(
         OperationContext context) =>
@@ -268,7 +325,7 @@ public sealed class ClamAvFullScanOperation : ClamAvScanJobOperation
 
     public override string Id => OperationIds.ClamavFullScan;
 
-    protected override string JobType => "clamav.fullScan";
+    protected override string JobType => ClamAvJobTypes.Full;
 
     protected override Func<CancellationToken, IProgress<ClamAvScanProgress>?, Task<ClamAvScanOutcome>> PrepareScan(
         OperationContext context) =>
@@ -284,7 +341,7 @@ public sealed class ClamAvCustomScanOperation : ClamAvScanJobOperation
 
     public override string Id => OperationIds.ClamavCustomScan;
 
-    protected override string JobType => "clamav.customScan";
+    protected override string JobType => ClamAvJobTypes.Custom;
 
     protected override Func<CancellationToken, IProgress<ClamAvScanProgress>?, Task<ClamAvScanOutcome>> PrepareScan(
         OperationContext context)

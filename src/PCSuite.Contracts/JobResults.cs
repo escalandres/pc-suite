@@ -8,6 +8,26 @@ public sealed class ClamAvScanStartResult
     public string JobId { get; init; } = "";
 }
 
+/// <summary>
+/// Resultado de clamav.activeScan (Task 025.1): el escaneo en curso para que
+/// la UI se re-adjunte tras recargar/navegar. Vacío (todas las propiedades
+/// null/ausentes) si no hay escaneo activo.
+/// </summary>
+public sealed class ClamAvActiveScanResult
+{
+    /// <summary>Id del job activo; null si no hay escaneo corriendo.</summary>
+    public string? JobId { get; init; }
+
+    /// <summary>quick | full | custom; null si no hay escaneo activo.</summary>
+    public string? Kind { get; init; }
+
+    /// <summary>Instante de arranque del escaneo activo (para el cronómetro).</summary>
+    public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>Progreso 0..1 conocido hasta el momento.</summary>
+    public double? Progress { get; init; }
+}
+
 /// <summary>Snapshot de un job expuesto al frontend (job.get / job.event).</summary>
 public sealed class JobSnapshotResult
 {

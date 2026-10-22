@@ -104,6 +104,7 @@ internal sealed class ClamAvFixture : IDisposable
                 new ClamAvFullScanOperation(service, jobs),
                 new ClamAvCustomScanOperation(service, jobs),
                 new ClamAvHistoryOperation(service),
+                new ClamAvActiveScanOperation(jobs),
                 new JobGetOperation(jobs),
                 new JobCancelOperation(jobs),
             },

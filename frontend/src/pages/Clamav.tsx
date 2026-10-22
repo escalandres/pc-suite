@@ -18,6 +18,7 @@ import {
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds, EventIds } from '../types/bridge';
 import type {
+  ClamAvActiveScanResult,
   ClamAvHistoryEntryResult,
   ClamAvHistoryResult,
   ClamAvMutationResult,
@@ -146,6 +147,38 @@ export function Clamav() {
     void refresh();
   }, [refresh]);
 
+  // Task 025.1 — re-adjunta: si hay un escaneo corriendo en el backend (la
+  // página se cerró o navegaste a otra durante un escaneo de horas), la
+  // vista revive con el job en vivo: estado + cronómetro + suscripción. El
+  // desenlace sigue llegando por job.event — el efecto re-suscribe con el
+  // scanJobId recuperado. Best-effort: sin re-adjunta la página funciona
+  // igual (solo pierde la vista en vivo).
+  useEffect(() => {
+    void (async () => {
+      try {
+        const active = await bridge.call<ClamAvActiveScanResult>(
+          OperationIds.clamavActiveScan,
+          undefined,
+          READ_TIMEOUT_MS,
+        );
+        if (!active.jobId || active.kind !== 'quick' && active.kind !== 'full' && active.kind !== 'custom') {
+          return;
+        }
+
+        scanKindRef.current = active.kind;
+        scanStartedAtRef.current = active.startedAt
+          ? new Date(active.startedAt).getTime()
+          : Date.now();
+        setBusy(active.kind);
+        setScanElapsedMs(Date.now() - (scanStartedAtRef.current ?? Date.now()));
+        setScanJobId(active.jobId);
+      } catch {
+        // best-effort
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
+  }, []);
+
   // Escuchar eventos de progreso de freshclam
   useEffect(() => {
     const unsub = bridge.on<ClamAvFreshclamProgressPayload>(
@@ -236,7 +269,10 @@ export function Clamav() {
       scanStartedAtRef.current = null;
 
       if (payload.status === 'cancelled') {
-        setNotice({ kind: 'error', text: 'Escaneo cancelado.' });
+        setNotice({
+          kind: 'error',
+          text: 'Escaneo cancelado. Si la consola de ClamAV queda abierta, cerrala manualmente (el proceso elevado es de Windows).',
+        });
         return;
       }
 
