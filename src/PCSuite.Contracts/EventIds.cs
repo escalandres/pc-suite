@@ -4,6 +4,13 @@ public static class EventIds
 {
     public const string AppReady = "app.ready";
 
+    /// <summary>
+    /// Task 026.3: el host NATIVO capturó un drop de archivos del SO con sus
+    /// RUTAS absolutas (el WebView no las entrega a la página — limitación de
+    /// Chromium). Las páginas que quieran hacer algo con ellos se suscriben.
+    /// </summary>
+    public const string SystemFilesDropped = "system.filesDropped";
+
     /// <summary>Progreso de actualización de definiciones ClamAV (freshclam).</summary>
     public const string ClamAvFreshclamProgress = "clamav.freshclam.progress";
 

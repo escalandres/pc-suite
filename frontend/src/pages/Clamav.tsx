@@ -28,6 +28,7 @@ import type {
   ClamAvFreshclamProgressPayload,
   ClamAvScanProgressPayload,
   JobEventPayload,
+  SystemFilesDroppedPayload,
   SystemPickFilesResult,
   SystemPickFolderResult,
 } from '../types/bridge';
@@ -212,6 +213,28 @@ export function Clamav() {
     );
     return () => unsub();
   }, []);
+
+  // Task 026.3: drop NATIVO — el host captura el drop del SO sobre la
+  // ventana de WebView2 y entrega las RUTAS reales por evento (la página no
+  // puede verlas: limitación de Chromium). Se escanea el primero de los
+  // archivos soltados (para varios, conviene el escaneo de carpeta). El
+  // handler onDrop de la página queda como fallback si el registro nativo
+  // fallara algún día (degradación elegante).
+  useEffect(() => {
+    const unsub = bridge.on<SystemFilesDroppedPayload>(EventIds.systemFilesDropped, (payload) => {
+      const paths = payload.paths ?? [];
+      if (paths.length === 0 || busy !== null) return;
+      if (paths.length > 1) {
+        setNotice({
+          kind: 'error',
+          text: `Se soltaron ${paths.length} archivos: se escanea el primero. Para varios, usá el escaneo de carpeta.`,
+        });
+      }
+      scanCustomPath(paths[0]);
+    });
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scanCustomPath solo usa setters/refs estables
+  }, [busy]);
 
   // Reloj del panel de ejecución: hace tick mientras dura el escaneo
   useEffect(() => {
@@ -715,8 +738,8 @@ export function Clamav() {
               Seleccionar archivo…
             </button>
             <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              También podés arrastrarlo aquí — el navegador embebido no entrega rutas al
-              arrastrar, así que probablemente convenga usar el botón.
+              O arrastrá el archivo aquí — o sobre cualquier parte de PCSuite: el
+              escaneo arranca al soltarlo.
             </p>
           </div>
 

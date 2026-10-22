@@ -586,6 +586,17 @@ public partial class MainForm : Form
 #endif
         core.NewWindowRequested += (_, args) => args.Handled = true;
 
+        // Task 026.3: drop NATIVO de archivos del SO — el host toma el
+        // destino OLE del contenido de WebView2 y publica las RUTAS reales
+        // por evento system.filesDropped (la página no puede verlas:
+        // limitación de Chromium). No-op silencioso si el árbol de ventanas
+        // cambia en un runtime futuro: queda el aviso honesto de la página.
+        NativeFileDropTarget.Attach(
+            _webView.Handle,
+            paths => _bridge.SendEvent(
+                EventIds.SystemFilesDropped,
+                new SystemFilesDroppedPayload { Paths = paths }));
+
         core.NavigationStarting += (_, args) =>
         {
             if (!IsAllowedNavigation(args.Uri))

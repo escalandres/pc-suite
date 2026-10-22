@@ -31,6 +31,7 @@ import type {
   LocalShareIncomingRequestPayload,
   LocalShareTransferProgressPayload,
   LocalShareTransferFinishedPayload,
+  SystemFilesDroppedPayload,
 } from '../types/bridge';
 
 /**
@@ -262,6 +263,28 @@ export function LocalShare() {
       unsubDeviceChanged();
     };
   }, [refreshDevices, refreshTransfers]);
+
+  // Task 026.3: drop NATIVO — el host captura el drop del SO sobre la
+  // ventana de WebView2 y entrega las RUTAS reales por evento (la página no
+  // puede verlas: limitación de Chromium). Con destino elegido, el envío
+  // arranca al soltar; sin destino, avisa. El onDrop de la página queda
+  // como fallback si el registro nativo fallara algún día.
+  useEffect(() => {
+    const unsub = bridge.on<SystemFilesDroppedPayload>(EventIds.systemFilesDropped, (payload) => {
+      const paths = payload.paths ?? [];
+      if (paths.length === 0) return;
+      if (!selectedDevice) {
+        setNotice({
+          kind: 'error',
+          text: 'Se soltaron archivos sin destino: elegí un dispositivo emparejado primero.',
+        });
+        return;
+      }
+      if (sending) return;
+      void sendFiles(paths);
+    });
+    return () => unsub();
+  }, [selectedDevice, sending]);
 
   // ------------------------------------------------------------------
   // Acciones

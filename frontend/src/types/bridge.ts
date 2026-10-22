@@ -136,6 +136,8 @@ export const OperationIds = {
 
 export const EventIds = {
   appReady: 'app.ready',
+  /** Task 026.3: rutas reales del drop de archivos capturado por el HOST nativo. */
+  systemFilesDropped: 'system.filesDropped',
   clamavFreshclamProgress: 'clamav.freshclam.progress',
   clamavScanProgress: 'clamav.scan.progress',
   jobEvent: 'job.event',
@@ -157,6 +159,12 @@ export interface SystemPickFilesResult {
 export interface SystemPickFolderResult {
   cancelled: boolean;
   path?: string | null;
+}
+
+/** Evento system.filesDropped (Task 026.3): rutas absolutas del drop de
+ *  archivos del SO, capturadas por el host nativo (la página no puede verlas). */
+export interface SystemFilesDroppedPayload {
+  paths: string[];
 }
 
 /* =====================================================================
