@@ -31,8 +31,14 @@ internal static class NativeFileDropTarget
     /// Registra el destino OLE sobre la ventana de contenido del WebView2.
     /// Devuelve false (no-op silencioso) si el árbol de ventanas no es el
     /// esperado — la página conserva su aviso honesto como fallback.
+    /// <paramref name="onDragUpdate"/>(x, y, over) recibe el estado del drag en
+    /// pantalla (Task 026.4: la página no ve los eventos de drag del SO — este
+    /// es el feedback visual); throttled a ~25/s en DragOver.
     /// </summary>
-    public static bool Attach(IntPtr webViewHandle, Action<IReadOnlyList<string>> onFilesDropped)
+    public static bool Attach(
+        IntPtr webViewHandle,
+        Action<IReadOnlyList<string>> onFilesDropped,
+        Action<int, int, bool> onDragUpdate)
     {
         var chrome = FindChromiumContentWindow(webViewHandle, depth: 0);
         if (chrome == IntPtr.Zero)
@@ -41,7 +47,7 @@ internal static class NativeFileDropTarget
         }
 
         RevokeDragDrop(chrome);
-        if (RegisterDragDrop(chrome, new DropTarget(onFilesDropped)) != 0)
+        if (RegisterDragDrop(chrome, new DropTarget(onFilesDropped, onDragUpdate)) != 0)
         {
             return false; // no se pudo registrar: fallback de la página
         }
@@ -148,8 +154,10 @@ internal static class NativeFileDropTarget
 
     /// <summary>
     /// El destino OLE real: ofrece "copiar" cuando el drag trae archivos y
-    /// al soltar extrae las rutas del CF_HDROP. Llega SIEMPRE en el hilo
-    /// UI STA — el callback puede tocar el puente sin marshaling extra.
+    /// al soltar extrae las rutas del CF_HDROP. Durante el drag informa el
+    /// estado a la UI (Task 026.4: la página no ve los eventos de drag del
+    /// SO). Llega SIEMPRE en el hilo UI STA — los callbacks pueden tocar el
+    /// puente sin marshaling extra.
     /// </summary>
     [ComVisible(true)]
     private sealed class DropTarget : IOleDropTarget
@@ -160,30 +168,60 @@ internal static class NativeFileDropTarget
         private const uint DropEffectCopy = 1;
 
         private readonly Action<IReadOnlyList<string>> _onFiles;
+        private readonly Action<int, int, bool> _onDragUpdate;
 
-        public DropTarget(Action<IReadOnlyList<string>> onFiles)
+        /// <summary>Throttle del DragOver: el mouse se mueve a ~60 Hz — 25
+        /// eventos/s bastan para un feedback fluido sin bombardear el puente.</summary>
+        private long _lastHoverTick;
+        private const long MinHoverIntervalMs = 40;
+
+        public DropTarget(Action<IReadOnlyList<string>> onFiles, Action<int, int, bool> onDragUpdate)
         {
             _onFiles = onFiles;
+            _onDragUpdate = onDragUpdate;
         }
 
         public int DragEnter(ComTypes.IDataObject pDataObj, uint grfKeyState, POINTL pt, ref uint pdwEffect)
         {
-            // Solo aceptamos drags que traen archivos; el resto pasa de largo.
-            pdwEffect = HasFiles(pDataObj) ? DropEffectCopy : DropEffectNone;
+            // Solo aceptamos drags que traen archivos; el resto pasa de largo
+            // (y sin feedback de UI: no va a ninguna zona de drop).
+            if (!HasFiles(pDataObj))
+            {
+                pdwEffect = DropEffectNone;
+                return 0;
+            }
+
+            pdwEffect = DropEffectCopy;
+            _lastHoverTick = Environment.TickCount64;
+            _onDragUpdate(pt.X, pt.Y, true);
             return 0; // S_OK
         }
 
         public int DragOver(uint grfKeyState, POINTL pt, ref uint pdwEffect)
         {
             pdwEffect = DropEffectCopy;
+
+            var tick = Environment.TickCount64;
+            if (tick - _lastHoverTick >= MinHoverIntervalMs)
+            {
+                _lastHoverTick = tick;
+                _onDragUpdate(pt.X, pt.Y, true);
+            }
+
             return 0;
         }
 
-        public int DragLeave() => 0;
+        public int DragLeave()
+        {
+            _onDragUpdate(0, 0, false);
+            return 0;
+        }
 
         public int Drop(ComTypes.IDataObject pDataObj, uint grfKeyState, POINTL pt, ref uint pdwEffect)
         {
             pdwEffect = DropEffectCopy;
+            _onDragUpdate(0, 0, false);
+
             var paths = ExtractHdropPaths(pDataObj);
             if (paths.Count > 0)
             {

@@ -138,6 +138,8 @@ export const EventIds = {
   appReady: 'app.ready',
   /** Task 026.3: rutas reales del drop de archivos capturado por el HOST nativo. */
   systemFilesDropped: 'system.filesDropped',
+  /** Task 026.4: estado + posición del drag de archivos en vivo (host nativo). */
+  systemDragHover: 'system.dragHover',
   clamavFreshclamProgress: 'clamav.freshclam.progress',
   clamavScanProgress: 'clamav.scan.progress',
   jobEvent: 'job.event',
@@ -165,6 +167,16 @@ export interface SystemPickFolderResult {
  *  archivos del SO, capturadas por el host nativo (la página no puede verlas). */
 export interface SystemFilesDroppedPayload {
   paths: string[];
+}
+
+/** Evento system.dragHover (Task 026.4): estado + posición del drag de
+ *  archivos en vivo (la página no ve los eventos de drag del SO — el destino
+ *  OLE es del host). Coordenadas FÍSICAS del cliente: dividir por
+ *  devicePixelRatio para CSS px. */
+export interface SystemDragHoverPayload {
+  over: boolean;
+  clientX?: number;
+  clientY?: number;
 }
 
 /* =====================================================================

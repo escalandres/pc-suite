@@ -651,17 +651,33 @@ public partial class MainForm : Form
     }
 
     /// <summary>
-    /// Task 026.3: (re)registrar el destino OLE del drop nativo de archivos.
-    /// Idempotente (Revoke+Register); el resultado queda en el log para
-    /// diagnóstico — un false solo degrada al aviso honesto de la página.
+    /// Task 026.3/026.4: (re)registrar el destino OLE del drop nativo de
+    /// archivos + el feedback de hover. Idempotente (Revoke+Register); el
+    /// resultado queda en el log para diagnóstico — un false solo degrada al
+    /// aviso honesto de la página.
     /// </summary>
     private void AttachNativeFileDrop()
     {
         var registered = NativeFileDropTarget.Attach(
             _webView.Handle,
-            paths => _bridge.SendEvent(
+            onFilesDropped: paths => _bridge.SendEvent(
                 EventIds.SystemFilesDropped,
-                new SystemFilesDroppedPayload { Paths = paths }));
+                new SystemFilesDroppedPayload { Paths = paths }),
+            onDragUpdate: (screenX, screenY, over) =>
+            {
+                if (!over)
+                {
+                    _bridge.SendEvent(EventIds.SystemDragHover, new SystemDragHoverPayload { Over = false });
+                    return;
+                }
+
+                // Pantalla → cliente del WebView: la frontend divide por
+                // devicePixelRatio para CSS px.
+                var client = _webView.PointToClient(new System.Drawing.Point(screenX, screenY));
+                _bridge.SendEvent(
+                    EventIds.SystemDragHover,
+                    new SystemDragHoverPayload { Over = true, ClientX = client.X, ClientY = client.Y });
+            });
 
         if (registered)
         {

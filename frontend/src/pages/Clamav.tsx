@@ -29,6 +29,7 @@ import type {
   ClamAvScanProgressPayload,
   JobEventPayload,
   SystemFilesDroppedPayload,
+  SystemDragHoverPayload,
   SystemPickFilesResult,
   SystemPickFolderResult,
 } from '../types/bridge';
@@ -92,6 +93,11 @@ export function Clamav() {
   } | null>(null);
   /** Ruta en curso del escaneo personalizado (para el panel de ejecución). */
   const [customPath, setCustomPath] = useState('');
+
+  /** Task 026.4: la zona de drop resaltada mientras el drag del SO pasa
+   *  sobre ELLA (el host emite la posición; la página no ve los drags). */
+  const scanDropZoneRef = useRef<HTMLDivElement>(null);
+  const [dragOverZone, setDragOverZone] = useState(false);
 
   // Progreso de actualización de definiciones (freshclam)
   const [freshclamProgress, setFreshclamProgress] = useState<ClamAvFreshclamProgressPayload | null>(null);
@@ -235,6 +241,31 @@ export function Clamav() {
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- scanCustomPath solo usa setters/refs estables
   }, [busy]);
+
+  // Task 026.4: feedback visual del drag NATIVO — el host emite la posición
+  // del cursor durante el drag (la página no ve los eventos de drag del SO:
+  // el destino OLE es del host). La zona se ilumina SOLO cuando el cursor
+  // está sobre ella y vuelve al color normal al salir o soltar.
+  useEffect(() => {
+    const unsub = bridge.on<SystemDragHoverPayload>(EventIds.systemDragHover, (payload) => {
+      const zone = scanDropZoneRef.current;
+      if (!payload.over || payload.clientX === undefined || payload.clientY === undefined || !zone) {
+        setDragOverZone(false);
+        return;
+      }
+
+      // Físico → CSS px y ¿está dentro de la zona?
+      const scale = window.devicePixelRatio || 1;
+      const rect = zone.getBoundingClientRect();
+      const inside =
+        payload.clientX / scale >= rect.left &&
+        payload.clientX / scale <= rect.right &&
+        payload.clientY / scale >= rect.top &&
+        payload.clientY / scale <= rect.bottom;
+      setDragOverZone((current) => (current === inside ? current : inside));
+    });
+    return () => unsub();
+  }, []);
 
   // Reloj del panel de ejecución: hace tick mientras dura el escaneo
   useEffect(() => {
@@ -718,8 +749,14 @@ export function Clamav() {
               lo prueba defensivamente y cae al aviso honesto — el mismo
               patrón que la zona de envío de Local Share. */}
           <div
-            className="mt-3 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center"
-            style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)' }}
+            ref={scanDropZoneRef}
+            className="mt-3 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors"
+            style={{
+              // Task 026.4: azul claro intenso mientras el drag del SO pasa
+              // por encima; color normal al salir o soltar.
+              borderColor: dragOverZone ? '#38BDF8' : 'var(--pcs-border)',
+              background: 'var(--pcs-surface)',
+            }}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => void onScanDrop(event)}
           >

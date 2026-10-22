@@ -11,6 +11,14 @@ public static class EventIds
     /// </summary>
     public const string SystemFilesDropped = "system.filesDropped";
 
+    /// <summary>
+    /// Task 026.4: el cursor arrastra archivos sobre PCSuite (estado + posición
+    /// del drag en vivo, capturados por el IDropTarget del host — la página no
+    /// ve los eventos de drag del SO). Lo usa la UI para el feedback visual de
+    /// las zonas de drop.
+    /// </summary>
+    public const string SystemDragHover = "system.dragHover";
+
     /// <summary>Progreso de actualización de definiciones ClamAV (freshclam).</summary>
     public const string ClamAvFreshclamProgress = "clamav.freshclam.progress";
 
