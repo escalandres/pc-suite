@@ -378,6 +378,15 @@ Write-Host "[3/6] Generando notas de versión HTML..."
 $notesMd = "docs\landing\notas\$Version.md"
 Convert-MarkdownToHtml -MarkdownPath $notesMd -Version $Version -RelDate $relDate
 
+# Ajuste 2026-10-22: la nota .md TAMBIÉN vive en la carpeta del release —
+# es el material fuente (notas del release de GitHub + origen del HTML) y
+# hace la carpeta autocontenida de verdad. Best-effort: sin .md, el release
+# sigue igual que sin el HTML (que ya se omite con aviso).
+if (Test-Path $notesMd) {
+    Copy-Item $notesMd (Join-Path $releaseDir "$Version.md") -Force
+    Write-Host "  ✓ Nota .md copiada: $releaseDir\$Version.md"
+}
+
 # ---------- 4. Firmar manifiesto con PGP (Task 17.6) ----------
 Write-Host ""
 Write-Host "[4/6] Inyectando signingKeyFingerprint en el manifiesto..."
@@ -475,6 +484,7 @@ Write-Host ("  Manifiesto      : $releaseDir\latest.json")
 Write-Host ("  Historial       : $releaseDir\manifest.json")
 Write-Host ("  Release         : https://github.com/$ReleaseRepo/releases/tag/$tag")
 Write-Host ("  Notas HTML      : $releaseDir\$Version.html")
+Write-Host ("  Notas MD        : $releaseDir\$Version.md")
 Write-Host ("  Firma PGP       : $releaseDir\latest.json.sig")
 Write-Host ("  Clave pública   : $releaseDir\latest.json.pub")
 Write-Host ("  Instalador      : $setupName  (~" + $mb.Invoke($setupSize) + " MB)")

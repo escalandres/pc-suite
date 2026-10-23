@@ -23,7 +23,8 @@ releases\0.7.0\
 ├── latest.json.sig    ← firma PGP sobre ESOS bytes exactos
 ├── latest.json.pub    ← clave pública de firma (Ed25519 releases@aes-studio.dev)
 ├── manifest.json      ← copia del historial inmutable (mismos bytes que latest.json)
-└── 0.7.0.html         ← notas de versión (desde docs\landing\notas\0.7.0.md)
+├── 0.7.0.md           ← nota fuente (notas del release de GitHub + origen del HTML)
+└── 0.7.0.html         ← notas de versión desplegables (desde el .md)
 ```
 
 La carpeta de cada versión queda congelada al publicar (regla de oro abajo).
@@ -86,6 +87,9 @@ curl -s -o NUL -w "%{http_code}" https://aes-studio.dev/notes/<v>.html          
 
 ## Qué NUNCA se copia
 
+- `releases\<v>\<v>.md` → material fuente (las notas del release de GitHub
+  y el origen del HTML): Astro sirve el HTML ya generado — el .md queda
+  como documentación del release en este repo.
 - `site\index.html` → entraría en conflicto con las páginas Astro
   (`dist/pcsuite/index.html` se genera en el build). Es la copia estática
   ENGLISH solo para pruebas locales con `serve-site.mjs`.
