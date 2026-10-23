@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCSuite 0.7.0 — Notas de versión</title>
+  <link rel="stylesheet" href="/pcsuite/assets/styles.css">
+  <link rel="icon" type="image/svg+xml" href="/pcsuite/assets/logo.svg">
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/pcsuite/">
+      <img src="/pcsuite/assets/logo.svg" alt="PCSuite" width="28" height="28">
+      <span>PCSuite</span>
+    </a>
+    <div class="nav-links">
+      <a href="/pcsuite/#descarga">Descarga</a>
+      <a href="/pcsuite/#actualizar">Actualizar</a>
+    </div>
+    <span class="nav-studio">AES Studio</span>
+  </nav>
+  <main class="section">
+    <h1>PCSuite 0.7.0</h1>
+    <p class="section-sub">Publicado el 22 de octubre de 2026</p>
+
+    <article class="notes-content">
+<h1>PCSuite 0.7.0 — Notas de versión</h1>\n\n<blockquote><p>Tag: <code>pcsuite-v0.7.0</code></p></blockquote>
+<blockquote><p>SHA-256: instalador <code>2be2e27815da6a8ac70aaa770c33977d60daa062cb81a1678aa4b548eb7e36e4</code> — portable <code>b85142bf459f76f264bbdfe2dc2a80f0f5215a5338bd808e82562de1ef6ec721</code></p></blockquote>\n\n<hr>\n\n<h2>Title</h2>\n\n<p>`<code><code>
+PCSuite 0.7.0
+</code></code><code></p>\n\n<h2>Description (Markdown)</h2>\n\n<p></code>`<code><code>markdown
+<h3>🔔 Notificaciones de Windows</h3></p>\n\n<p>Lo que pasa cuando estás en otra cosa ahora llega al Centro de Notificaciones:</p>\n\n<ul><li><strong>Local Share</strong>: "SKLA-X quiere enviarte 3 archivo(s) · 12 MB — acéptalo o recházalo en PCSuite", emparejamientos con el recordatorio de comparar códigos, archivos recibidos verificados con SHA-256 y mensajes recibidos con preview del texto</li>
+<li><strong>ClamAV</strong>: "detectó 2 amenaza(s)" al terminar un escaneo — aunque no estés mirando la app</li>
+<li><strong>Actualizaciones</strong>: "PCSuite 0.7.0 disponible" al arrancar (check silencioso diferido)</li>
+<li>Clic en cualquier notificación trae PCSuite al frente (des-minimiza y activa)</li>
+<li>Regla de oro: si estás mirando la app, <strong>jamás</strong> molesta — los banners internos ya te cubren. El silenciado vive donde corresponde: Configuración de Windows → Notificaciones → PCSuite</li>
+</ul>
+<h3>🛡️ ClamAV sin límites de tiempo y con visión completa</h3>\n\n<ul><li>Los escaneos <strong>ya no tienen tope de reloj</strong>: antes un escaneo grande moría a la hora con "se superó el tiempo de espera" a mitad de trabajo. Ahora corre hasta terminar — el control es tuyo (botón Cancelar + la consola de progreso siempre visible)</li>
+<li>El <strong>escaneo completo muestra progreso en vivo</strong>: archivo actual, contadores y porcentaje durante todo el recorrido (antes la barra quedaba congelada en 0% hasta el final)</li>
+<li><strong>La página recuerda el escaneo activo</strong>: si navegás a otra sección durante un escaneo de horas, al volver a ClamAV la vista se re-engancha al escaneo en curso — con su cronómetro correcto y la barra moviéndose</li>
+<li>Mensajes claros: si cerrás la consola a mitad de escaneo, el historial dice "El escaneo se interrumpió: el proceso de ClamAV terminó antes de finalizar" (antes mostraba una línea cruda del log con una ruta interminable que desbordaba la tarjeta)</li>
+</ul>
+<h3>🖱️ Escaneo personalizado con diálogos nativos y drag-and-drop real</h3>\n\n<ul><li>Fuera el input de texto: <strong>"Carpeta…"</strong> abre el selector de carpetas nativo de Windows (el moderno de Win10/11) y <strong>"Seleccionar archivo…"</strong> el clásico de archivos</li>
+<li><strong>Arrastrá un archivo — o una carpeta — sobre PCSuite y el escaneo arranca al soltarlo</strong>: la zona se ilumina con bordes azul intenso mientras el drag pasa por encima y vuelve a la normal al retirarlo o soltarlo</li>
+</ul>
+<h3>💬 Local Share honesto de punta a punta</h3>\n\n<ul><li>Las tarjetas de transferencia <strong>ya no mienten</strong>: bytes reales al completar ("7 B / 7 B", no "0 B / 7 B"), verbos en pasado en los desenlaces ("Enviado", "Recibido") y estados en español (antes el enum crudo "completed")</li>
+<li><strong>El receptor ve la transferencia desde que llega la solicitud</strong> — pendiente → transfiriendo con barra en vivo → recibido. Antes era invisible hasta el desenlace</li>
+<li>Nuevo botón <strong>"Abrir carpeta"</strong> en lo recibido: abre el Explorador exactamente donde se guardó</li>
+<li>El botón <strong>"Copiar" de los mensajes por fin funciona</strong> — el portapapeles lo escribe el host nativo (el del navegador embebido falla en silencio)</li>
+<li>La marca 💬 en las solicitudes de mensaje y la burbuja con su botón copiar <strong>sobreviven los refrescos</strong> (antes desaparecían)</li>
+<li><strong>Drag-and-drop para enviar archivos</strong>: arrastrá sobre la ventana y el envío arranca con el destino elegido</li>
+</ul>
+#### Nota de compatibilidad\n\n<p>Todos los cambios de protocolo son aditivos: un PCSuite 0.6.x que reciba transferencias o mensajes de un 0.7.0 los procesa igual que siempre (los campos nuevos se ignoran sin romper nada).
+</code></code><code><code></p>\n\n<h2>Crear el release</h2>\n\n<p></code></code><code>powershell
+gh release create pcsuite-v0.7.0 </code>
+  --repo escalandres/pc-suite <code>
+  --title "PCSuite 0.7.0" </code>
+  --notes-file docs\landing\notas\0.7.0.md <code>
+  dist\instalador\PCSuite-Setup-0.7.0-win64.exe </code>
+  dist\PCSuite-0.7.0-win-x64.zip
+```</p>\n\n
+    </article>
+  </main>
+  <footer>
+    <p>Requiere Windows 10/11 x64 · WebView2 Runtime (preinstalado con Edge)</p>
+    <p>Sin telemetría: PCSuite no envía nada a ningún servidor salvo la consulta de actualizaciones (y con tu consentimiento para instalar).</p>
+    <p class="copyright">© 2026 AES Studio · sha256 por versión publicado en el manifiesto</p>
+  </footer>
+</body>
+</html>
