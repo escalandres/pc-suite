@@ -148,7 +148,7 @@ export function UpdateStartupModal({ check }: { check: AppUpdateCheckResult | nu
             href={check.releaseNotesUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-flex items-center gap-1 text-xs"
+            className="mt-2 inline-flex cursor-pointer items-center gap-1 text-xs underline-offset-2 transition-colors hover:underline"
             style={{ color: 'var(--pcs-accent)' }}
           >
             Notas de versión
@@ -373,7 +373,7 @@ export function UpdatePanel() {
                 href={check.releaseNotesUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="ml-auto flex items-center gap-1 text-xs"
+                className="ml-auto flex cursor-pointer items-center gap-1 text-xs underline-offset-2 transition-colors hover:underline"
                 style={{ color: 'var(--pcs-accent)' }}
               >
                 Notas de versión

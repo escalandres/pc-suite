@@ -584,7 +584,28 @@ public partial class MainForm : Form
 #if !DEBUG
         core.Settings.AreDevToolsEnabled = false;
 #endif
-        core.NewWindowRequested += (_, args) => args.Handled = true;
+        core.NewWindowRequested += (_, args) =>
+        {
+            // Task 028.1: target="_blank" del frontend (Notas de versión, etc.)
+            // — el WebView NO abre ventanas nuevas; el enlace EXTERNO se abre
+            // en el navegador del sistema. Todo lo demás queda bloqueado (jamás
+            // ventanas dentro del host) y SOLO http/https: sin file:// ni
+            // esquemas arbitrarios.
+            args.Handled = true;
+            if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogWarning(exception, "No se pudo abrir {Uri} en el navegador.", uri.AbsoluteUri);
+                }
+            }
+        };
 
         // Task 026.3: drop NATIVO de archivos del SO — el host toma el
         // destino OLE de la ventana de CONTENIDO de WebView2 (Chrome_WidgetWin_1,
