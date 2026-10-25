@@ -21,11 +21,14 @@ import type {
 /**
  * Task 17.3/17.4 — actualizaciones dentro de la app.
  *
- * Flujo (propuesta §8): check al montar (no bloquea, 5 s máximo) → badge
- * discreto → panel con versión/tamaño/notas → "Descargar e instalar" (Job
- * con progreso y SHA-256 en streaming del lado nativo) → "Instalar ahora"
- * (ÚNICO botón que ejecuta algo) → la app se cierra sola y el Setup pide
- * UAC él solo.
+ * Flujo (propuesta §8): check al montar (no bloquea, 5 s máximo) → modal de
+ * versión nueva (Task 027, una vez por sesión) + badge discreto → panel con
+ * versión/tamaño/notas → "Descargar e instalar" (Job con progreso y SHA-256
+ * en streaming del lado nativo) → "Instalar ahora" (ÚNICO botón que ejecuta
+ * algo) → la app se cierra sola y el Setup pide UAC él solo.
+ *
+ * El check vive en AppLayout (monta UNA vez, corre aunque el sidebar esté
+ * colapsado) y alimenta al badge y al modal como props puras.
  */
 
 const CHECK_TIMEOUT = 10_000;
@@ -43,21 +46,12 @@ function formatMb(bytes: number): string {
 }
 
 /**
- * Estado global de actualización, montado UNA vez en App: hace el check al
- * arrancar y expone el badge. El panel completo vive en Ajustes ("Acerca de").
+ * Badge de actualización disponible (sidebar). Presentacional: el check lo
+ * hace AppLayout y llega por prop — así corre también con el sidebar
+ * colapsado (antes el badge era el dueño del check y colapsarlo mataba
+ * ambos de un golpe).
  */
-export function UpdateCenter() {
-  const [check, setCheck] = useState<AppUpdateCheckResult | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    bridge
-      .call<AppUpdateCheckResult>(OperationIds.updateCheck, undefined, CHECK_TIMEOUT)
-      .then((result) => { if (!cancelled) setCheck(result); })
-      .catch(() => { /* sin red o fallo: la app funciona igual — sin drama */ });
-    return () => { cancelled = true; };
-  }, []);
-
+export function UpdateCenter({ check }: { check: AppUpdateCheckResult | null }) {
   if (!check?.available) return null;
 
   return (
@@ -73,6 +67,124 @@ export function UpdateCenter() {
       <Sparkles size={12} aria-hidden />
       Actualización
     </a>
+  );
+}
+
+/**
+ * Task 027 — modal de versión nueva al arrancar. Antes el desenlace del check
+ * de arranque era solo el badge del sidebar (fácil de perder); ahora, si hay
+ * versión nueva, aparece UN diálogo con la versión y el camino directo a
+ * Actualizaciones. Una vez por sesión: "Más tarde" lo despide hasta el
+ * próximo arranque.
+ *
+ * No aparece si hay aviso de rotación de clave: esa es una anomalía de
+ * seguridad que el panel de Actualizaciones explica con su aviso ámbar —
+ * celebrar "¡versión nueva!" con la descarga bloqueada sería contradictorio.
+ */
+export function UpdateStartupModal({ check }: { check: AppUpdateCheckResult | null }) {
+  const [dismissed, setDismissed] = useState(false);
+
+  // Escape = "Más tarde": un diálogo respeta el teclado.
+  useEffect(() => {
+    if (!check?.available || check.keyRotationWarning || dismissed) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDismissed(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [check?.available, check?.keyRotationWarning, dismissed]);
+
+  if (!check?.available || check.keyRotationWarning || dismissed) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0, 0, 0, 0.55)' }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="update-modal-title"
+      onClick={() => setDismissed(true)}
+    >
+      <div
+        className="w-[min(92vw,420px)] rounded-lg border p-6 shadow-2xl"
+        style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+            style={{
+              background: 'color-mix(in srgb, var(--pcs-accent) 16%, transparent)',
+              color: 'var(--pcs-accent)',
+            }}
+          >
+            <Sparkles size={20} aria-hidden />
+          </span>
+          <h2 id="update-modal-title" className="text-base font-semibold">
+            Nueva versión disponible
+          </h2>
+        </div>
+
+        <p className="mt-4 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
+          Hay una versión nueva de PCSuite lista para descargar e instalar:
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs font-mono" style={{ color: 'var(--pcs-text-muted)' }}>
+            {check.currentVersion}
+          </span>
+          <span style={{ color: 'var(--pcs-accent)' }}>→</span>
+          <span className="text-lg font-semibold" style={{ color: 'var(--pcs-accent)' }}>
+            {check.latestVersion}
+          </span>
+          {check.sizeBytes > 0 && (
+            <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+              · {formatMb(check.sizeBytes)}
+            </span>
+          )}
+        </div>
+
+        {check.releaseNotesUrl && (
+          <a
+            href={check.releaseNotesUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex items-center gap-1 text-xs"
+            style={{ color: 'var(--pcs-accent)' }}
+          >
+            Notas de versión
+            <ExternalLink size={10} aria-hidden className="opacity-70" />
+          </a>
+        )}
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            className="rounded-md border px-3 py-2 text-sm font-medium cursor-pointer transition-colors"
+            style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
+          >
+            Más tarde
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDismissed(true);
+              location.hash = '#/settings';
+            }}
+            className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium cursor-pointer transition-colors"
+            style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+          >
+            <Download size={14} aria-hidden />
+            Actualizar
+          </button>
+        </div>
+
+        <p className="mt-3 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+          El botón te lleva a Ajustes › Actualizaciones: la descarga se verifica con
+          SHA-256 y Windows puede pedir permiso (UAC) al instalar.
+        </p>
+      </div>
+    </div>
   );
 }
 

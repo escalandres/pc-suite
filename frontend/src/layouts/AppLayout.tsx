@@ -20,8 +20,11 @@ import {
 } from 'lucide-react';
 import { pageKey, toggleFavorite, useFavorites } from '../favorites';
 import { openHelp } from '../shortcuts';
+import { bridge } from '../services/pcsuiteBridge';
+import { OperationIds } from '../types/bridge';
+import type { AppUpdateCheckResult } from '../types/bridge';
 import { Breadcrumbs } from '../components/Breadcrumbs';
-import { UpdateCenter } from '../components/UpdateCenter';
+import { UpdateCenter, UpdateStartupModal } from '../components/UpdateCenter';
 
 export type PageId =
   | 'home'
@@ -112,6 +115,21 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
     }
   }, [collapsed]);
 
+  // Task 17.3/027 — check de actualizaciones al ARRANCAR, aquí en la raíz:
+  // corre aunque el sidebar esté colapsado (antes vivía dentro del badge y
+  // colapsarlo mataba el check de un golpe). El resultado alimenta al badge
+  // y al modal de versión nueva (una vez por sesión). Sin red o fallo: la
+  // app funciona igual — sin drama.
+  const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    bridge
+      .call<AppUpdateCheckResult>(OperationIds.updateCheck, undefined, 10_000)
+      .then((result) => { if (!cancelled) setUpdateCheck(result); })
+      .catch(() => { /* best-effort */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const sidebarWidth = collapsed ? 'w-12' : 'w-56';
 
   return (
@@ -144,9 +162,9 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
           </button>
         </div>
 
-        {/* Task 17.3 — badge de actualización disponible (check silencioso
-            al arrancar; el panel completo vive en Ajustes › Actualizaciones). */}
-        {!collapsed && <UpdateCenter />}
+        {/* Task 17.3 — badge de actualización disponible (el check vive en
+            AppLayout: el panel completo vive en Ajustes › Actualizaciones). */}
+        {!collapsed && <UpdateCenter check={updateCheck} />}
 
         <nav className="pcs-scroll-thin flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
           {NAV_ITEMS.map((item) => {
@@ -297,6 +315,10 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
           {children}
         </div>
       </main>
+
+      {/* Task 027 — modal de versión nueva (una vez por sesión, sobre todo
+          el layout: sidebar incluido). */}
+      <UpdateStartupModal check={updateCheck} />
     </div>
   );
 }

@@ -197,6 +197,17 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | └ 26.3 - Reporte del usuario ("el drag and drop no funciona; el botón sí"): correcto — a nivel de página JAMÁS puede funcionar (Chromium no entrega rutas). Solución REAL: `NativeFileDropTarget` — el host revoca el IDropTarget de Chromium en su ventana de contenido y registra el propio (COM interop IOleDropTarget con vtable en orden de contrato + CF_HDROP vía DragQueryFileW) → rutas reales en el hilo UI STA → evento tipado `system.filesDropped` por el puente. Suscripciones: ClamAV (escanea el primero de los soltados; multi → aviso) y Local Share (envía si hay destino; sin destino → aviso) | ✅ Completado | **Bug de primera versión (diagnóstico 2026-10-22)**: el árbol real es control → `Chrome_WidgetWin_0` → `Chrome_WidgetWin_1` — la ventana con el drop target (_1) NO es hija directa del control; la búsqueda original acertaba el _0 contenedor y cortaba → el drop de Chromium en _1 seguía vivo. Fix: búsqueda RECURSIVA por nombre exacto (_1 primero, _0 fallback) + `AttachNativeFileDrop` con logging y re-intento en cada NavigationCompleted (idempotente). Degradación elegante intacta. El DnD de Local Share (nunca funcional desde la 016) también despierta. 952/952, 0 warnings, Desktop build verde, smoke OK |
 | └ 26.4 - Pedido del usuario: la zona de drop se ilumina (bordes azul claro intenso `#38BDF8`, con transición) mientras el drag pasa sobre ELLA y vuelve al color normal al salir/soltar. Como el destino OLE es del HOST, la página no ve los eventos de drag del SO → el feedback también nace del host: DragEnter/DragOver(throttled ~25/s)/DragLeave/Drop emiten `system.dragHover` {over, clientX, clientY FÍSICOS} → la frontend divide por devicePixelRatio, compara contra el rect de la zona y resalta solo si el cursor está DENTRO | ✅ Completado | Coordenadas pantalla→cliente en MainForm (PointToClient, hilo UI). Transiciones con guarda (sin re-render por evento). 952/952, 0 warnings, tsc+vite OK, Desktop build verde, smoke OK |
 
+### Task 027 - Modal de versión nueva al arrancar
+
+> Pedido del usuario (2026-10-24): el check de actualizaciones del arranque solo
+> encendía el badge del sidebar — había que ir a Ajustes para enterarse. Ahora,
+> si hay versión nueva, aparece un diálogo con la versión y el camino directo.
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 027 - `UpdateStartupModal`: diálogo una vez por sesión cuando el check de arranque halla versión nueva — versión actual → nueva + tamaño, notas de versión, "Actualizar" (lleva a Ajustes › Actualizaciones, donde vive el flujo de consentimiento con SHA-256 y UAC) y "Más tarde" (despide hasta el próximo arranque; Escape y clic en el fondo también) | ✅ Completado | Con rotación de clave NO aparece: esa anomalía la explica el panel con su aviso ámbar (celebrar "¡versión nueva!" con la descarga bloqueada sería contradictorio). tsc+vite OK |
+| └ 27.1 - El check de arranque SUBE a AppLayout (antes vivía dentro del badge): corre SIEMPRE — de paso arregla el bug latente de que con el sidebar colapsado no había ni badge ni check. UpdateCenter pasa a presentacional (prop) alimentado por AppLayout junto al modal; UpdatePanel (Ajustes) conserva su check manual propio | ✅ Completado | Complementa los toasts de la 021: modal cuando estás mirando la app al abrir, toast de Windows cuando la app está en fondo |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |
