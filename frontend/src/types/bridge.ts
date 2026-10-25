@@ -930,6 +930,9 @@ export interface DefenderStatusResult {
   realTimeProtection?: boolean | null;
   /** Ausente si Defender no expuso la fecha. */
   signatureLastUpdated?: string | null;
+  /** Task 028.2: nota de firmas ("Al día"/"Desactualizadas") cuando la
+   *  fuente (Centro de seguridad) solo sabe eso, sin timestamp. */
+  signatureNote?: string | null;
 }
 
 /** Tarjeta de firewall con un semáforo por perfil. */

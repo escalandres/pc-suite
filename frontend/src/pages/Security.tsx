@@ -301,9 +301,9 @@ export function Security() {
                 value={
                   defender.signatureLastUpdated
                     ? new Date(defender.signatureLastUpdated).toLocaleDateString()
-                    : 'Sin datos'
+                    : defender.signatureNote ?? 'Sin datos'
                 }
-                color={defender.signatureLastUpdated ? undefined : 'var(--pcs-text-muted)'}
+                color={defender.signatureLastUpdated || defender.signatureNote ? undefined : 'var(--pcs-text-muted)'}
               />
             </Card>
 

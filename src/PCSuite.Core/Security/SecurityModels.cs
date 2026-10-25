@@ -30,12 +30,15 @@ public static class SecurityStatuses
     public const string Warn = "warn";
 }
 
-/// <summary>Windows Defender: salud general + protección en tiempo real y firmas.</summary>
+/// <summary>Windows Defender: salud general + protección en tiempo real y firmas.
+/// SignatureNote reemplaza al timestamp cuando la fuente (Centro de seguridad)
+/// solo sabe al día/desactualizada — nunca una fecha inventada.</summary>
 public sealed record DefenderInfo(
     string Status,
     bool? AntivirusEnabled,
     bool? RealTimeProtection,
-    DateTimeOffset? SignatureLastUpdated);
+    DateTimeOffset? SignatureLastUpdated,
+    string? SignatureNote = null);
 
 /// <summary>
 /// Firewall por perfil (dominio/privado/público). <c>null</c> en un perfil

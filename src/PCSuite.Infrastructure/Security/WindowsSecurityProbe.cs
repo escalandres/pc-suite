@@ -72,6 +72,25 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
 
     private static DefenderRaw? ReadDefender()
     {
+        // Tier 1: WMI clásico, instantáneo — donde el namespace existe.
+        var viaWmi = ReadDefenderViaWmi();
+        if (viaWmi is not null)
+        {
+            return viaWmi;
+        }
+
+        // Tier 2 (Task 028.2): Windows 11 actuales ELIMINARON
+        // root\Microsoft\Defender ("espacio de nombres no válido"). El
+        // Centro de seguridad (root\SecurityCenter2, vivo desde Vista)
+        // publica el estado del producto codificado en productState —
+        // instantáneo. Get-MpComputerStatus daría el timestamp exacto de
+        // firmas, pero arrancar PowerShell + el módulo de Defender cuesta
+        // ~6 s por visita a la página: mala tara por un dato secundario.
+        return ReadDefenderFromSecurityCenter();
+    }
+
+    private static DefenderRaw? ReadDefenderViaWmi()
+    {
         try
         {
             using var searcher = new ManagementObjectSearcher(
@@ -106,9 +125,81 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         }
         catch (Exception)
         {
-            // WMI puede lanzar ManagementException/COMException/UnauthorizedAccess: degradación.
+            // WMI puede lanzar ManagementException/COMException/UnauthorizedAccess:
+            // en Windows 11 actuales es "espacio de nombres no válido" — el
+            // tier 2 toma el relevo.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Tier 2: el estado de Defender registrado en el Centro de seguridad.
+    /// El namespace existe desde Vista y sigue vivo: es la fuente que la
+    /// página ya usa para listar los antivirus.
+    /// </summary>
+    private static DefenderRaw? ReadDefenderFromSecurityCenter()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                @"root\SecurityCenter2",
+                "SELECT displayName, productState FROM AntiVirusProduct");
+            using var results = searcher.Get();
+
+            foreach (ManagementObject item in results)
+            {
+                using (item)
+                {
+                    if (item["displayName"] is not string name ||
+                        !name.Contains("Defender", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue; // otros productos: la lista general los reporta
+                    }
+
+                    return item["productState"] is uint state ? DecodeDefenderState(state) : null;
+                }
+            }
+
+            return null; // Defender no registrado en el Centro de seguridad
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Decodifica el productState del Centro de seguridad (esquema de facto,
+    /// estable desde Vista, sin documentación oficial). Los 6 dígitos hex:
+    /// byte 2 = escáner (10/11 activo; 01 en espera — otro AV tomó el
+    /// control —; 00 desactivado); byte 3 = firmas (00 al día; 10
+    /// desactualizadas). Antivirus y tiempo real comparten el byte: el
+    /// Centro reporta UN solo estado por producto. Esquema desconocido →
+    /// null, antes que mentir.
+    /// </summary>
+    internal static DefenderRaw? DecodeDefenderState(uint productState)
+    {
+        var hex = productState.ToString("X6");
+        if (hex.Length != 6)
+        {
+            return null;
+        }
+
+        var scanner = hex.Substring(2, 2);
+        if (scanner is not ("10" or "11" or "01" or "00"))
+        {
+            return null;
+        }
+
+        bool? upToDate = hex.Substring(4, 2) switch
+        {
+            "00" => true,
+            "10" => false,
+            _ => null,
+        };
+
+        var enabled = scanner is "10" or "11";
+        return new DefenderRaw(enabled, enabled, null, upToDate);
     }
 
     private static IReadOnlyList<string>? ReadAntivirusProducts()

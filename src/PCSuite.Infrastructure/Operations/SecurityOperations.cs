@@ -41,6 +41,7 @@ public sealed class SecurityGetStatusOperation : IOperation
                 AntivirusEnabled = snapshot.Defender.AntivirusEnabled,
                 RealTimeProtection = snapshot.Defender.RealTimeProtection,
                 SignatureLastUpdated = snapshot.Defender.SignatureLastUpdated,
+                SignatureNote = snapshot.Defender.SignatureNote,
             },
             Firewall = new FirewallStatusResult
             {

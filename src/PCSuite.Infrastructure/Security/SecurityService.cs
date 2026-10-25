@@ -72,8 +72,9 @@ public sealed class SecurityService : ISecurityService
                     : SecurityStatuses.NotMonitored,
                 d.AntivirusEnabled,
                 d.RealTimeProtection,
-                d.SignatureLastUpdated)
-            : new DefenderInfo(SecurityStatuses.Unknown, null, null, null);
+                d.SignatureLastUpdated,
+                SignatureNote(d))
+            : new DefenderInfo(SecurityStatuses.Unknown, null, null, null, null);
 
         var firewall = new FirewallInfo(
             raw.FirewallHealth ?? SecurityStatuses.Unknown,
@@ -180,7 +181,18 @@ public sealed class SecurityService : ISecurityService
     {
         if (defender?.SignatureLastUpdated is not { } updated)
         {
-            return new SecurityCheck("signatures", SignatureLabel, SecurityStatuses.Unknown, null);
+            // Task 028.2: fallback del Centro de seguridad (sin timestamp) —
+            // el bit de firmas al día sostiene el semáforo igual.
+            return defender?.SignaturesUpToDate switch
+            {
+                true => new SecurityCheck(
+                    "signatures", SignatureLabel, SecurityStatuses.Ok,
+                    "Al día según el Centro de seguridad de Windows."),
+                false => new SecurityCheck(
+                    "signatures", SignatureLabel, SecurityStatuses.Warn,
+                    "Desactualizadas según el Centro de seguridad; revisa Windows Update."),
+                _ => new SecurityCheck("signatures", SignatureLabel, SecurityStatuses.Unknown, null),
+            };
         }
 
         var age = now - updated;
@@ -192,4 +204,17 @@ public sealed class SecurityService : ISecurityService
                 $"{detail} Hace {(int)age.TotalDays} días; revisa Windows Update.")
             : new SecurityCheck("signatures", SignatureLabel, SecurityStatuses.Ok, detail);
     }
+
+    /// <summary>Nota para la fila "Firmas" cuando no hay timestamp: el Centro
+    /// de seguridad solo dice al día/desactualizada (tier 2 de Windows 11
+    /// actuales, sin root\Microsoft\Defender).</summary>
+    private static string? SignatureNote(DefenderRaw d) =>
+        d.SignatureLastUpdated is null
+            ? d.SignaturesUpToDate switch
+            {
+                true => "Al día",
+                false => "Desactualizadas",
+                _ => null,
+            }
+            : null;
 }

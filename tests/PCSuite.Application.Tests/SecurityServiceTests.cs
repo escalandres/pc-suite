@@ -44,6 +44,7 @@ public class SecurityServiceTests
         Assert.True(snapshot.Defender.AntivirusEnabled);
         Assert.True(snapshot.Defender.RealTimeProtection);
         Assert.NotNull(snapshot.Defender.SignatureLastUpdated);
+        Assert.Null(snapshot.Defender.SignatureNote); // con timestamp no hay nota
 
         Assert.Equal(SecurityStatuses.Good, snapshot.Firewall.Status);
         Assert.True(snapshot.Firewall.DomainEnabled);
@@ -56,6 +57,81 @@ public class SecurityServiceTests
         // Con la lectura completa todos los checks quedan en verde.
         Assert.Equal(["uac", "rdp", "realtime", "signatures"], snapshot.Diagnostics.Select(c => c.Id));
         Assert.All(snapshot.Diagnostics, c => Assert.Equal(SecurityStatuses.Ok, c.Status));
+    }
+
+    [Fact]
+    public void DecodeDefenderState_StatesTable()
+    {
+        // Task 028.2: Windows 11 actual ELIMINÓ root\Microsoft\Defender — el
+        // tier 2 decodifica el productState del Centro de seguridad.
+
+        // Activado + firmas al día (0x061100).
+        var active = WindowsSecurityProbe.DecodeDefenderState(0x061100);
+        Assert.NotNull(active);
+        Assert.True(active!.AntivirusEnabled);
+        Assert.True(active.RealTimeProtection);
+        Assert.True(active.SignaturesUpToDate);
+
+        // En espera (otro AV tomó el control) + al día — el caso real del
+        // diagnóstico (Defender cedió ante 360 Total Security: 0x060100).
+        var snoozed = WindowsSecurityProbe.DecodeDefenderState(0x060100);
+        Assert.NotNull(snoozed);
+        Assert.False(snoozed!.AntivirusEnabled);
+        Assert.False(snoozed.RealTimeProtection);
+        Assert.True(snoozed.SignaturesUpToDate);
+
+        // Desactivado explícito (0x060000).
+        var disabled = WindowsSecurityProbe.DecodeDefenderState(0x060000);
+        Assert.NotNull(disabled);
+        Assert.False(disabled!.AntivirusEnabled);
+
+        // Activado + firmas desactualizadas (byte 3 = 10).
+        var outdated = WindowsSecurityProbe.DecodeDefenderState(0x061110);
+        Assert.NotNull(outdated);
+        Assert.True(outdated!.AntivirusEnabled);
+        Assert.False(outdated.SignaturesUpToDate);
+
+        // Esquema desconocido: null antes que mentir.
+        Assert.Null(WindowsSecurityProbe.DecodeDefenderState(0xFFFFFF));
+    }
+
+    [Fact]
+    public async Task GetStatus_DefenderFromSecurityCenter_NoteReplacesMissingTimestamp()
+    {
+        // Tier 2 en acción: sin namespace WMI, el Centro de seguridad solo
+        // sabe el bit de firmas — la fila del card muestra la nota y el
+        // check sostiene el semáforo con ella.
+        var reading = FullReading() with
+        {
+            Defender = new DefenderRaw(false, false, null, SignaturesUpToDate: true),
+        };
+
+        var snapshot = await Service(reading).GetStatusAsync();
+
+        // Card: valores REALES (no "Sin datos") + nota en firmas.
+        Assert.False(snapshot.Defender.AntivirusEnabled);
+        Assert.False(snapshot.Defender.RealTimeProtection);
+        Assert.Null(snapshot.Defender.SignatureLastUpdated);
+        Assert.Equal("Al día", snapshot.Defender.SignatureNote);
+
+        // El check de firmas sostiene el semáforo con el bit.
+        var signatures = Assert.Single(snapshot.Diagnostics, c => c.Id == "signatures");
+        Assert.Equal(SecurityStatuses.Ok, signatures.Status);
+    }
+
+    [Fact]
+    public async Task GetStatus_DefenderFromSecurityCenter_OutdatedSignatures_WarnWithNote()
+    {
+        var reading = FullReading() with
+        {
+            Defender = new DefenderRaw(true, true, null, SignaturesUpToDate: false),
+        };
+
+        var snapshot = await Service(reading).GetStatusAsync();
+
+        Assert.Equal("Desactualizadas", snapshot.Defender.SignatureNote);
+        var signatures = Assert.Single(snapshot.Diagnostics, c => c.Id == "signatures");
+        Assert.Equal(SecurityStatuses.Warn, signatures.Status);
     }
 
     [Fact]

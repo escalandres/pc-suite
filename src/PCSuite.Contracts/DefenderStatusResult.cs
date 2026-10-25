@@ -14,4 +14,10 @@ public sealed class DefenderStatusResult
 
     /// <summary>UTC de la última actualización de firmas (null si desconocido).</summary>
     public DateTimeOffset? SignatureLastUpdated { get; init; }
+
+    /// <summary>
+    /// Task 028.2: nota de firmas cuando la fuente (Centro de seguridad) solo
+    /// sabe al día/desactualizada — reemplaza al timestamp en la fila del card.
+    /// </summary>
+    public string? SignatureNote { get; init; }
 }

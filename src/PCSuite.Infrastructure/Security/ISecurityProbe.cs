@@ -8,11 +8,18 @@ namespace PCSuite.Infrastructure.Security;
 // traduce a "unknown" con detalle legible (§14 Security Center). Así los tests
 // inyectan lecturas falsas y corren deterministas en cualquier máquina.
 
-/// <summary>Windows Defender por WMI (root\Microsoft\Defender); null = WMI no respondió.</summary>
+/// <summary>
+/// Windows Defender: tier 1 = WMI clásico (root\Microsoft\Defender, donde
+/// el namespace existe); tier 2 = Centro de seguridad (root\SecurityCenter2,
+/// productState) en Windows 11 actuales que lo eliminaron. null = ninguna
+/// fuente respondió. SignaturesUpToDate solo lo sabe el tier 2 (el WMI
+/// clásico entrega el timestamp de firmas).
+/// </summary>
 public sealed record DefenderRaw(
     bool AntivirusEnabled,
     bool RealTimeProtection,
-    DateTimeOffset? SignatureLastUpdated);
+    DateTimeOffset? SignatureLastUpdated,
+    bool? SignaturesUpToDate = null);
 
 /// <summary>Perfiles de firewall desde el registro (StandardProfile = privado); null = sin datos.</summary>
 public sealed record FirewallRaw(bool? DomainEnabled, bool? PrivateEnabled, bool? PublicEnabled);
