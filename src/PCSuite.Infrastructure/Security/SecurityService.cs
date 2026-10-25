@@ -62,7 +62,8 @@ public sealed class SecurityService : ISecurityService
         Firewall: new FirewallRaw(null, null, null),
         System: new SystemRaw(null, null),
         Ports: [],
-        Connections: []);
+        Connections: [],
+        UdpEndpoints: []);
 
     private static SecuritySnapshot Build(RawSecurityReading raw, DateTimeOffset now)
     {
@@ -103,6 +104,13 @@ public sealed class SecurityService : ISecurityService
             })
             .ToList();
 
+        var udpEndpoints = raw.UdpEndpoints
+            .Select(endpoint => endpoint with
+            {
+                ReviewNote = BuildReviewNote(endpoint.Process, tempRoot),
+            })
+            .ToList();
+
         var diagnostics = new List<SecurityCheck>
         {
             BuildUacCheck(raw.System),
@@ -111,7 +119,7 @@ public sealed class SecurityService : ISecurityService
             BuildSignatureCheck(raw.Defender, now),
         };
 
-        return new SecuritySnapshot(defender, firewall, antivirus, ports, connections, diagnostics, now);
+        return new SecuritySnapshot(defender, firewall, antivirus, ports, connections, udpEndpoints, diagnostics, now);
     }
 
     private static SecurityCheck BuildUacCheck(SystemRaw system) =>

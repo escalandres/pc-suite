@@ -33,6 +33,21 @@ public sealed class ActiveConnectionResult
     public string? ReviewNote { get; init; }
 }
 
+/// <summary>Endpoint UDP VINCULADO con proceso dueño (Task 029).</summary>
+public sealed class UdpEndpointResult
+{
+    public string LocalAddress { get; init; } = "";
+
+    public int LocalPort { get; init; }
+
+    public int? Pid { get; init; }
+
+    public PortProcessResult? Process { get; init; }
+
+    /// <summary>Hechos para revisar (sin firma · ejecutable en TEMP); null = nada.</summary>
+    public string? ReviewNote { get; init; }
+}
+
 /// <summary>Resultado de security.getStatus: snapshot completo de solo lectura.</summary>
 public sealed class SecurityStatusResult
 {
@@ -50,6 +65,9 @@ public sealed class SecurityStatusResult
 
     /// <summary>Task 029: conexiones TCP establecidas con extremo remoto + proceso.</summary>
     public IReadOnlyList<ActiveConnectionResult> Connections { get; init; } = [];
+
+    /// <summary>Task 029: endpoints UDP vinculados con proceso dueño.</summary>
+    public IReadOnlyList<UdpEndpointResult> UdpEndpoints { get; init; } = [];
 
     /// <summary>Diagnóstico de seguridad (UAC, RDP, protección en tiempo real…).</summary>
     public IReadOnlyList<SecurityCheckResult> Diagnostics { get; init; } = [];

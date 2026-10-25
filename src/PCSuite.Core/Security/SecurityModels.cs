@@ -75,6 +75,17 @@ public sealed record ActiveConnection(
     PortProcessInfo? Process,
     string? ReviewNote = null);
 
+/// <summary>Endpoint UDP VINCULADO: un proceso con un socket UDP listo
+/// para enviar/recibir a cualquier dirección (UDP es connectionless — no
+/// hay "conexión establecida", pero un puerto vinculado con proceso
+/// sospechoso es igual de revelador).</summary>
+public sealed record UdpEndpoint(
+    string LocalAddress,
+    int LocalPort,
+    int? Pid,
+    PortProcessInfo? Process,
+    string? ReviewNote = null);
+
 /// <summary>Puerto en escucha (IPGlobalProperties). PID/proceso pueden ser null si la ACL lo niega.</summary>
 public sealed record ListeningPort(
     string Protocol,
@@ -98,5 +109,6 @@ public sealed record SecuritySnapshot(
     AntivirusInfo Antivirus,
     IReadOnlyList<ListeningPort> Ports,
     IReadOnlyList<ActiveConnection> Connections,
+    IReadOnlyList<UdpEndpoint> UdpEndpoints,
     IReadOnlyList<SecurityCheck> Diagnostics,
     DateTimeOffset ScannedAt);

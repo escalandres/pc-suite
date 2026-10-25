@@ -40,6 +40,11 @@ public class SecurityServiceTests
             // determinista en cualquier entorno.
             new ActiveConnection("192.168.1.10", 50001, "45.33.32.156", 8080, 888,
                 new PortProcessInfo("weird", Path.Combine(Path.GetTempPath(), "weird.exe"), null)),
+        ],
+        UdpEndpoints:
+        [
+            new UdpEndpoint("0.0.0.0", 5353, 1112, new PortProcessInfo("svchost", null, null)),
+            new UdpEndpoint("192.168.1.10", 137, 4, new PortProcessInfo("svchost", null, null)),
         ]);
 
     private static SecurityService Service(RawSecurityReading raw) => new(new FakeProbe(raw));
@@ -66,6 +71,12 @@ public class SecurityServiceTests
         var weird = snapshot.Connections.Single(c => c.Process?.Name == "weird");
         Assert.Contains("sin firma", weird.ReviewNote);
         Assert.Contains("TEMP", weird.ReviewNote);
+
+        // Task 029: los endpoints UDP también viajan con su proceso.
+        Assert.Equal(2, snapshot.UdpEndpoints.Count);
+        var mdns = snapshot.UdpEndpoints.Single(e => e.LocalPort == 5353);
+        Assert.Equal("svchost", mdns.Process?.Name);
+        Assert.Null(mdns.ReviewNote); // proceso del sistema sin ruta: no acusa
 
         Assert.Equal(SecurityStatuses.Good, snapshot.Firewall.Status);
         Assert.True(snapshot.Firewall.DomainEnabled);
@@ -199,7 +210,8 @@ public class SecurityServiceTests
             Firewall: new FirewallRaw(null, null, null),
             System: new SystemRaw(null, null),
             Ports: [],
-            Connections: []);
+            Connections: [],
+            UdpEndpoints: []);
 
         var snapshot = await Service(reading).GetStatusAsync();
 

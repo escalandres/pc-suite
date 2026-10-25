@@ -36,7 +36,8 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         Firewall: ReadFirewallProfiles(),
         System: ReadSystemFlags(),
         Ports: ReadPorts(),
-        Connections: ReadConnections());
+        Connections: ReadConnections(),
+        UdpEndpoints: ReadUdpEndpoints());
 
     // --- Centro de seguridad (WSC) ---------------------------------------
 
@@ -409,6 +410,90 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
                         new IPAddress(r6.RemoteAddr).ToString(),
                         NetworkToHost(r6.RemotePort),
                         r6.Pid));
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Task 029: endpoints UDP VINCULADOS con proceso dueño enriquecido.
+    /// UDP es connectionless — no hay "establecida", pero un puerto
+    /// vinculado por un proceso sin firma corriendo de TEMP es el mismo
+    /// patrón de sospecha que una TCP. La fuente es la misma
+    /// GetExtendedUdpTable de iphlpapi (lo que ya usa BuildListenerPidMap),
+    /// ahora enriquecida con ruta + firma.
+    /// </summary>
+    private static IReadOnlyList<UdpEndpoint> ReadUdpEndpoints()
+    {
+        try
+        {
+            var raw = new List<(string Address, int Port, uint Pid)>();
+            foreach (var family in new[] { AddressFamily.InterNetwork, AddressFamily.InterNetworkV6 })
+            {
+                ReadUdpEndpointTable(family, raw);
+            }
+
+            if (raw.Count == 0)
+            {
+                return [];
+            }
+
+            var details = BuildProcessDetails([.. raw.Select(e => (int)e.Pid).Distinct()]);
+            return [.. raw
+                .Select(e => new UdpEndpoint(
+                    e.Address, e.Port, (int)e.Pid,
+                    details.TryGetValue((int)e.Pid, out var found) ? found : null))
+                .OrderBy(e => e.LocalPort)
+                .ThenBy(e => e.LocalAddress, StringComparer.Ordinal)];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    private static void ReadUdpEndpointTable(AddressFamily family, List<(string Address, int Port, uint Pid)> into)
+    {
+        var size = 0;
+        if (GetExtendedUdpTable(IntPtr.Zero, ref size, false, (int)family, UdpTableOwnerPid, 0)
+            is not (0 or 122) || size <= 0)
+        {
+            return;
+        }
+
+        var buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            if (GetExtendedUdpTable(buffer, ref size, false, (int)family, UdpTableOwnerPid, 0) != 0)
+            {
+                return;
+            }
+
+            var isV4 = family == AddressFamily.InterNetwork;
+            var rowSize = isV4 ? Marshal.SizeOf<MibUdpRowV4>() : Marshal.SizeOf<MibUdpRowV6>();
+            var count = Marshal.ReadInt32(buffer);
+            var row = buffer + sizeof(uint);
+            for (var i = 0; i < count; i++, row += rowSize)
+            {
+                if (isV4)
+                {
+                    var r = Marshal.PtrToStructure<MibUdpRowV4>(row);
+                    if (r.Pid > 0)
+                    {
+                        into.Add((new IPAddress(BitConverter.GetBytes(r.LocalAddr)).ToString(), NetworkToHost(r.LocalPort), r.Pid));
+                    }
+                }
+                else
+                {
+                    var r6 = Marshal.PtrToStructure<MibUdpRowV6>(row);
+                    if (r6.Pid > 0)
+                    {
+                        into.Add((new IPAddress(r6.LocalAddr).ToString(), NetworkToHost(r6.LocalPort), r6.Pid));
+                    }
                 }
             }
         }

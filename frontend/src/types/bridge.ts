@@ -987,6 +987,15 @@ export interface ActiveConnectionResult {
   reviewNote?: string | null;
 }
 
+/** Endpoint UDP VINCULADO con proceso dueño (Task 029). */
+export interface UdpEndpointResult {
+  localAddress: string;
+  localPort: number;
+  pid?: number | null;
+  process?: PortProcessResult | null;
+  reviewNote?: string | null;
+}
+
 /** Una línea de diagnóstico de security.getStatus. */
 export interface SecurityCheckResult {
   /** uac | rdp | realtime | signatures. */
@@ -1006,6 +1015,8 @@ export interface SecurityStatusResult {
   ports: PortResult[];
   /** Task 029: conexiones TCP establecidas con extremo remoto + proceso. */
   connections: ActiveConnectionResult[];
+  /** Task 029: endpoints UDP vinculados con proceso dueño. */
+  udpEndpoints: UdpEndpointResult[];
   diagnostics: SecurityCheckResult[];
   /** Marca de tiempo ISO 8601 de la lectura. */
   scannedAt: string;

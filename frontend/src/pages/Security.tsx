@@ -464,86 +464,165 @@ export function Security() {
             <div className="flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 text-sm font-semibold">
                 <Globe size={14} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
-                Conexiones activas (TCP)
+                Conexiones activas
               </h2>
-              <span
-                className="rounded-full px-2 py-0.5 text-xs font-medium"
-                style={toneStyle('muted')}
-              >
-                {snapshot.connections.length}
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className="rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={toneStyle('muted')}
+                >
+                  {snapshot.connections.length} TCP · {snapshot.udpEndpoints.length} UDP
+                </span>
+              </div>
             </div>
-            {snapshot.connections.length === 0 ? (
+
+            {snapshot.connections.length === 0 && snapshot.udpEndpoints.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
                 <Globe size={32} aria-hidden className="mb-3 opacity-30" style={{ color: 'var(--pcs-accent)' }} />
-                <h4 className="text-sm font-medium mb-1">Sin conexiones TCP establecidas</h4>
+                <h4 className="text-sm font-medium mb-1">Sin conexiones ni endpoints activos</h4>
                 <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                   Ningún proceso está hablando con el exterior ahora mismo.
                 </p>
               </div>
             ) : (
-              <div
-                className="mt-3 max-h-72 overflow-auto rounded-md border"
-                style={{ borderColor: 'var(--pcs-border)' }}
-              >
-                <table className="w-full text-left text-xs pcs-tabular-nums">
-                  <thead>
-                    <tr
-                      style={{
-                        background: 'var(--pcs-surface-2)',
-                        color: 'var(--pcs-text-muted)',
-                      }}
+              <div className="mt-3 space-y-4">
+                {snapshot.connections.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium" style={{ color: 'var(--pcs-text-muted)' }}>
+                      Conexiones TCP establecidas
+                    </p>
+                    <div
+                      className="max-h-72 overflow-auto rounded-md border"
+                      style={{ borderColor: 'var(--pcs-border)' }}
                     >
-                      <th className="px-3 py-2 font-medium">Local</th>
-                      <th className="px-3 py-2 font-medium">Remoto</th>
-                      <th className="px-3 py-2 font-medium">PID</th>
-                      <th className="px-3 py-2 font-medium">Proceso</th>
-                      <th className="px-3 py-2 font-medium">Revisión</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {snapshot.connections.map((connection, index) => (
-                      <tr
-                        key={`${connection.localAddress}-${connection.localPort}-${connection.remoteAddress}-${connection.remotePort}-${index}`}
-                        style={{ borderTop: '1px solid var(--pcs-border)' }}
-                      >
-                        <td className="px-3 py-1.5 font-mono">
-                          {connection.localAddress}:{connection.localPort}
-                        </td>
-                        <td className="px-3 py-1.5 font-mono">
-                          {connection.remoteAddress}:{connection.remotePort}
-                        </td>
-                        <td className="px-3 py-1.5 font-mono">{connection.pid ?? '—'}</td>
-                        <td
-                          className="px-3 py-1.5"
-                          title={
-                            connection.process?.executablePath
-                              ? `${connection.process.executablePath}${connection.process.signer ? `\nFirmado: ${connection.process.signer}` : '\nSin firma'}`
-                              : undefined
-                          }
-                        >
-                          {connection.process?.name ?? 'Sin datos'}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {connection.reviewNote ? (
-                            <span
-                              className="rounded-full px-2 py-0.5 text-xs font-medium"
-                              style={{
-                                background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
-                                color: 'var(--pcs-warning)',
-                              }}
-                              title="Hechos para revisar esta conexión — el veredicto es tuyo"
+                      <table className="w-full text-left text-xs pcs-tabular-nums">
+                        <thead>
+                          <tr
+                            style={{
+                              background: 'var(--pcs-surface-2)',
+                              color: 'var(--pcs-text-muted)',
+                            }}
+                          >
+                            <th className="px-3 py-2 font-medium">Local</th>
+                            <th className="px-3 py-2 font-medium">Remoto</th>
+                            <th className="px-3 py-2 font-medium">PID</th>
+                            <th className="px-3 py-2 font-medium">Proceso</th>
+                            <th className="px-3 py-2 font-medium">Revisión</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {snapshot.connections.map((connection, index) => (
+                            <tr
+                              key={`${connection.localAddress}-${connection.localPort}-${connection.remoteAddress}-${connection.remotePort}-${index}`}
+                              style={{ borderTop: '1px solid var(--pcs-border)' }}
                             >
-                              ⚠ {connection.reviewNote}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--pcs-text-muted)' }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                              <td className="px-3 py-1.5 font-mono">
+                                {connection.localAddress}:{connection.localPort}
+                              </td>
+                              <td className="px-3 py-1.5 font-mono">
+                                {connection.remoteAddress}:{connection.remotePort}
+                              </td>
+                              <td className="px-3 py-1.5 font-mono">{connection.pid ?? '—'}</td>
+                              <td
+                                className="px-3 py-1.5"
+                                title={
+                                  connection.process?.executablePath
+                                    ? `${connection.process.executablePath}${connection.process.signer ? `\nFirmado: ${connection.process.signer}` : '\nSin firma'}`
+                                    : undefined
+                                }
+                              >
+                                {connection.process?.name ?? 'Sin datos'}
+                              </td>
+                              <td className="px-3 py-1.5">
+                                {connection.reviewNote ? (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-xs font-medium"
+                                    style={{
+                                      background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
+                                      color: 'var(--pcs-warning)',
+                                    }}
+                                    title="Hechos para revisar esta conexión — el veredicto es tuyo"
+                                  >
+                                    ⚠ {connection.reviewNote}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--pcs-text-muted)' }}>—</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {snapshot.udpEndpoints.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium" style={{ color: 'var(--pcs-text-muted)' }}>
+                      Endpoints UDP vinculados
+                    </p>
+                    <div
+                      className="max-h-72 overflow-auto rounded-md border"
+                      style={{ borderColor: 'var(--pcs-border)' }}
+                    >
+                      <table className="w-full text-left text-xs pcs-tabular-nums">
+                        <thead>
+                          <tr
+                            style={{
+                              background: 'var(--pcs-surface-2)',
+                              color: 'var(--pcs-text-muted)',
+                            }}
+                          >
+                            <th className="px-3 py-2 font-medium">Local</th>
+                            <th className="px-3 py-2 font-medium">PID</th>
+                            <th className="px-3 py-2 font-medium">Proceso</th>
+                            <th className="px-3 py-2 font-medium">Revisión</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {snapshot.udpEndpoints.map((endpoint, index) => (
+                            <tr
+                              key={`${endpoint.localAddress}-${endpoint.localPort}-${index}`}
+                              style={{ borderTop: '1px solid var(--pcs-border)' }}
+                            >
+                              <td className="px-3 py-1.5 font-mono">
+                                {endpoint.localAddress}:{endpoint.localPort}
+                              </td>
+                              <td className="px-3 py-1.5 font-mono">{endpoint.pid ?? '—'}</td>
+                              <td
+                                className="px-3 py-1.5"
+                                title={
+                                  endpoint.process?.executablePath
+                                    ? `${endpoint.process.executablePath}${endpoint.process.signer ? `\nFirmado: ${endpoint.process.signer}` : '\nSin firma'}`
+                                    : undefined
+                                }
+                              >
+                                {endpoint.process?.name ?? 'Sin datos'}
+                              </td>
+                              <td className="px-3 py-1.5">
+                                {endpoint.reviewNote ? (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-xs font-medium"
+                                    style={{
+                                      background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
+                                      color: 'var(--pcs-warning)',
+                                    }}
+                                    title="Hechos para revisar — el veredicto es tuyo"
+                                  >
+                                    ⚠ {endpoint.reviewNote}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--pcs-text-muted)' }}>—</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>

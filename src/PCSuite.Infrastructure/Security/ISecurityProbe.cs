@@ -39,7 +39,8 @@ public sealed record RawSecurityReading(
     FirewallRaw Firewall,
     SystemRaw System,
     IReadOnlyList<ListeningPort> Ports,
-    IReadOnlyList<ActiveConnection> Connections);
+    IReadOnlyList<ActiveConnection> Connections,
+    IReadOnlyList<UdpEndpoint> UdpEndpoints);
 
 public interface ISecurityProbe
 {

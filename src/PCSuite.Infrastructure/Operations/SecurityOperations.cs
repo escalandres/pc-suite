@@ -78,6 +78,16 @@ public sealed class SecurityGetStatusOperation : IOperation
                     ReviewNote = connection.ReviewNote,
                 })
                 .ToList(),
+            UdpEndpoints = snapshot.UdpEndpoints
+                .Select(endpoint => new UdpEndpointResult
+                {
+                    LocalAddress = endpoint.LocalAddress,
+                    LocalPort = endpoint.LocalPort,
+                    Pid = endpoint.Pid,
+                    Process = ToProcessResult(endpoint.Process),
+                    ReviewNote = endpoint.ReviewNote,
+                })
+                .ToList(),
             Diagnostics = snapshot.Diagnostics
                 .Select(check => new SecurityCheckResult
                 {
