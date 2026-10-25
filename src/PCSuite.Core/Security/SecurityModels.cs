@@ -55,13 +55,34 @@ public sealed record AntivirusInfo(
     string Status,
     IReadOnlyList<string> Products);
 
+/// <summary>Proceso dueño de un puerto/conexión: lo legible SIN elevación
+/// (procesos del sistema pueden ocultar ruta/firma — jamás un error).</summary>
+public sealed record PortProcessInfo(
+    string? Name,
+    string? ExecutablePath,
+    string? Signer);
+
+/// <summary>Conexión TCP ESTABLECIDA: local → remoto + proceso dueño.
+/// ReviewNote son marcadores FACTUALES de revisión (sin firma legible,
+/// ejecutable en TEMP) para escanear actividad sospechosa — decisiones
+/// del usuario, jamás veredictos.</summary>
+public sealed record ActiveConnection(
+    string LocalAddress,
+    int LocalPort,
+    string RemoteAddress,
+    int RemotePort,
+    int? Pid,
+    PortProcessInfo? Process,
+    string? ReviewNote = null);
+
 /// <summary>Puerto en escucha (IPGlobalProperties). PID/proceso pueden ser null si la ACL lo niega.</summary>
 public sealed record ListeningPort(
     string Protocol,
     string LocalAddress,
     int LocalPort,
     int? Pid,
-    string? Process);
+    string? Process,
+    PortProcessInfo? ProcessDetail = null);
 
 /// <summary>Una línea de diagnóstico (UAC, RDP, protección en tiempo real…).</summary>
 public sealed record SecurityCheck(
@@ -76,5 +97,6 @@ public sealed record SecuritySnapshot(
     FirewallInfo Firewall,
     AntivirusInfo Antivirus,
     IReadOnlyList<ListeningPort> Ports,
+    IReadOnlyList<ActiveConnection> Connections,
     IReadOnlyList<SecurityCheck> Diagnostics,
     DateTimeOffset ScannedAt);

@@ -38,7 +38,8 @@ public sealed record RawSecurityReading(
     IReadOnlyList<string>? AntivirusProducts,
     FirewallRaw Firewall,
     SystemRaw System,
-    IReadOnlyList<ListeningPort> Ports);
+    IReadOnlyList<ListeningPort> Ports,
+    IReadOnlyList<ActiveConnection> Connections);
 
 public interface ISecurityProbe
 {

@@ -45,6 +45,7 @@ public class SecurityOperationTests
             new SecurityCheck("uac", "Control de cuentas de usuario (UAC)", SecurityStatuses.Ok, "Activado."),
             new SecurityCheck("rdp", "Escritorio remoto (RDP)", SecurityStatuses.Warn, null),
         ],
+        Connections: [],
         ScannedAt: DateTimeOffset.Parse("2026-09-28T10:00:00+00:00"));
 
     private static SecuritySnapshot UnknownSnapshot() => new(
@@ -52,6 +53,7 @@ public class SecurityOperationTests
         Firewall: new FirewallInfo(SecurityStatuses.Unknown, null, null, null),
         Antivirus: new AntivirusInfo(SecurityStatuses.Unknown, []),
         Ports: [],
+        Connections: [],
         Diagnostics: [new SecurityCheck("uac", "Control de cuentas de usuario (UAC)", SecurityStatuses.Unknown, null)],
         ScannedAt: DateTimeOffset.Parse("2026-09-28T10:00:00+00:00"));
 

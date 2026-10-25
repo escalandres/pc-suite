@@ -35,7 +35,8 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         AntivirusProducts: ReadAntivirusProducts(),
         Firewall: ReadFirewallProfiles(),
         System: ReadSystemFlags(),
-        Ports: ReadPorts());
+        Ports: ReadPorts(),
+        Connections: ReadConnections());
 
     // --- Centro de seguridad (WSC) ---------------------------------------
 
@@ -266,16 +267,17 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         {
             var properties = IPGlobalProperties.GetIPGlobalProperties();
             var pids = BuildListenerPidMap();
+            var details = BuildProcessDetails([.. pids.Values.Distinct()]);
 
             var ports = new List<ListeningPort>();
             foreach (var endpoint in properties.GetActiveTcpListeners())
             {
-                ports.Add(ToPort("TCP", endpoint, pids));
+                ports.Add(ToPort("TCP", endpoint, pids, details));
             }
 
             foreach (var endpoint in properties.GetActiveUdpListeners())
             {
-                ports.Add(ToPort("UDP", endpoint, pids));
+                ports.Add(ToPort("UDP", endpoint, pids, details));
             }
 
             return ports;
@@ -286,7 +288,11 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         }
     }
 
-    private static ListeningPort ToPort(string protocol, IPEndPoint endpoint, IReadOnlyDictionary<string, int> pids)
+    private static ListeningPort ToPort(
+        string protocol,
+        IPEndPoint endpoint,
+        IReadOnlyDictionary<string, int> pids,
+        IReadOnlyDictionary<int, PortProcessInfo> details)
     {
         pids.TryGetValue($"{endpoint.Address}:{endpoint.Port}", out var pid);
 
@@ -304,8 +310,202 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
             }
         }
 
-        return new ListeningPort(protocol, endpoint.Address.ToString(), endpoint.Port,
-            pid > 0 ? pid : null, process);
+        var detail = pid > 0 && details.TryGetValue(pid, out var found) ? found : null;
+        return new ListeningPort(
+            protocol, endpoint.Address.ToString(), endpoint.Port,
+            pid > 0 ? pid : null, process, detail);
+    }
+
+    // --- Conexiones TCP establecidas (Task 029) ----------------------------
+
+    /// <summary>
+    /// Conexiones TCP en estado ESTABLISHED (la tabla OWNER_PID_CONNECTIONS
+    /// de iphlpapi — lo que netstat -ano lee por debajo), cada una con su
+    /// extremo remoto y el proceso dueño enriquecido (ruta + firma). Es la
+    /// vista de "¿quién habla con quién?" para detectar conexiones no
+    /// autorizadas.
+    /// </summary>
+    private static IReadOnlyList<ActiveConnection> ReadConnections()
+    {
+        try
+        {
+            var raw = new List<(string LocalAddress, int LocalPort, string RemoteAddress, int RemotePort, uint Pid)>();
+            foreach (var family in new[] { AddressFamily.InterNetwork, AddressFamily.InterNetworkV6 })
+            {
+                ReadConnectionTable(family, raw);
+            }
+
+            if (raw.Count == 0)
+            {
+                return [];
+            }
+
+            var details = BuildProcessDetails([.. raw.Select(c => (int)c.Pid).Distinct()]);
+            return [.. raw
+                .Select(c => new ActiveConnection(
+                    c.LocalAddress, c.LocalPort, c.RemoteAddress, c.RemotePort,
+                    (int)c.Pid,
+                    details.TryGetValue((int)c.Pid, out var found) ? found : null))
+                .OrderBy(c => c.RemoteAddress, StringComparer.Ordinal)
+                .ThenBy(c => c.RemotePort)
+                .ThenBy(c => c.LocalPort)];
+        }
+        catch (Exception)
+        {
+            return []; // iphlpapi/WMI caen: la página se renderiza igual
+        }
+    }
+
+    private static void ReadConnectionTable(
+        AddressFamily family,
+        List<(string LocalAddress, int LocalPort, string RemoteAddress, int RemotePort, uint Pid)> into)
+    {
+        var size = 0;
+        if (GetExtendedTcpTable(IntPtr.Zero, ref size, false, (int)family, TcpTableOwnerPidConnections, 0)
+            is not (0 or 122) || size <= 0)
+        {
+            return;
+        }
+
+        var buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            if (GetExtendedTcpTable(buffer, ref size, false, (int)family, TcpTableOwnerPidConnections, 0) != 0)
+            {
+                return;
+            }
+
+            var isV4 = family == AddressFamily.InterNetwork;
+            var rowSize = isV4 ? Marshal.SizeOf<MibTcpRowV4>() : Marshal.SizeOf<MibTcpRowV6>();
+            var count = Marshal.ReadInt32(buffer);
+            var row = buffer + sizeof(uint);
+            for (var i = 0; i < count; i++, row += rowSize)
+            {
+                if (isV4)
+                {
+                    var r = Marshal.PtrToStructure<MibTcpRowV4>(row);
+                    if (r.State != TcpStateEstablished || r.Pid == 0)                    {
+                        continue;
+                    }
+
+                    into.Add((
+                        new IPAddress(BitConverter.GetBytes(r.LocalAddr)).ToString(),
+                        NetworkToHost(r.LocalPort),
+                        new IPAddress(BitConverter.GetBytes(r.RemoteAddr)).ToString(),
+                        NetworkToHost(r.RemotePort),
+                        r.Pid));
+                }
+                else
+                {
+                    var r6 = Marshal.PtrToStructure<MibTcpRowV6>(row);
+                    if (r6.State != TcpStateEstablished || r6.Pid == 0)
+                    {
+                        continue;
+                    }
+
+                    into.Add((
+                        new IPAddress(r6.LocalAddr).ToString(),
+                        NetworkToHost(r6.LocalPort),
+                        new IPAddress(r6.RemoteAddr).ToString(),
+                        NetworkToHost(r6.RemotePort),
+                        r6.Pid));
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Enriquecimiento de procesos por PID (una sola pasada WMI): nombre,
+    /// ruta del ejecutable y firma del certificado (si firma). Procesos del
+    /// sistema/ protegidos devuelven lo que dejen leer — nunca lanza.
+    /// </summary>
+    private static Dictionary<int, PortProcessInfo> BuildProcessDetails(IReadOnlyList<int> pids)
+    {
+        var map = new Dictionary<int, PortProcessInfo>();
+        if (pids.Count == 0)
+        {
+            return map;
+        }
+
+        // WMI Win32_Process: una consulta, TODAS las rutas de golpe.
+        var paths = new Dictionary<int, string>();
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                @"root\CIMV2",
+                "SELECT ProcessId, ExecutablePath FROM Win32_Process");
+            using var results = searcher.Get();
+            foreach (ManagementObject item in results)
+            {
+                using (item)
+                {
+                    if (item["ProcessId"] is string idText
+                        && int.TryParse(idText, out var id)
+                        && item["ExecutablePath"] is string path)
+                    {
+                        paths[id] = path;
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // WMI caído: sin rutas — solo nombres y PIDs.
+        }
+
+        foreach (var pid in pids)
+        {
+            string? name = null;
+            try
+            {
+                using var owner = Process.GetProcessById(pid);
+                name = owner.ProcessName;
+            }
+            catch (Exception)
+            {
+                // Terminado o protegido: el PID queda, sin nombre.
+            }
+
+            string? path = null;
+            string? signer = null;
+            if (paths.TryGetValue(pid, out var executable) && File.Exists(executable))
+            {
+                path = executable;
+                signer = ReadSigner(executable);
+            }
+
+            map[pid] = new PortProcessInfo(name, path, signer);
+        }
+
+        return map;
+    }
+
+    /// <summary>Nombre legible (CN) del certificado Authenticode del archivo;
+    /// null si no firma o ilegible — "sin firma" es un HECHO útil para
+    /// detectar sospechosos, no un error.</summary>
+    private static string? ReadSigner(string path)
+    {
+        try
+        {
+            using var certificate = System.Security.Cryptography.X509Certificates.X509Certificate
+                .CreateFromSignedFile(path);
+
+            // Subject = "CN=Microsoft Windows, O=Microsoft Corporation, …":
+            // solo el CN para la UI (el DN completo no cabe en la tabla).
+            var cn = certificate.Subject
+                .Split(',')
+                .Select(part => part.Trim())
+                .FirstOrDefault(part => part.StartsWith("CN=", StringComparison.OrdinalIgnoreCase));
+            return cn is null ? certificate.Subject : cn["CN=".Length..];
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -411,8 +611,10 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
     private static int NetworkToHost(uint networkPort) =>
         (int)(((networkPort & 0xFF) << 8) | ((networkPort >> 8) & 0xFF));
 
-    private const int TcpTableOwnerPidListener = 3; // MIB_TCP_TABLE_CLASS
-    private const int UdpTableOwnerPid = 1;          // MIB_UDP_TABLE_CLASS
+    private const int TcpTableOwnerPidListener = 3;    // MIB_TCP_TABLE_CLASS
+    private const int TcpTableOwnerPidConnections = 4; // OWNER_PID_CONNECTIONS: no-listeners (ESTABLISHED, FIN_WAIT…)
+    private const int UdpTableOwnerPid = 1;            // MIB_UDP_TABLE_CLASS
+    private const uint TcpStateEstablished = 5;       // MIB_TCP_STATE
 
     [DllImport("iphlpapi.dll", SetLastError = true)]
     private static extern uint GetExtendedTcpTable(

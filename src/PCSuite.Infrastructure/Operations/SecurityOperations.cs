@@ -63,6 +63,19 @@ public sealed class SecurityGetStatusOperation : IOperation
                     LocalPort = port.LocalPort,
                     Pid = port.Pid,
                     Process = port.Process,
+                    ProcessDetail = ToProcessResult(port.ProcessDetail),
+                })
+                .ToList(),
+            Connections = snapshot.Connections
+                .Select(connection => new ActiveConnectionResult
+                {
+                    LocalAddress = connection.LocalAddress,
+                    LocalPort = connection.LocalPort,
+                    RemoteAddress = connection.RemoteAddress,
+                    RemotePort = connection.RemotePort,
+                    Pid = connection.Pid,
+                    Process = ToProcessResult(connection.Process),
+                    ReviewNote = connection.ReviewNote,
                 })
                 .ToList(),
             Diagnostics = snapshot.Diagnostics
@@ -76,4 +89,14 @@ public sealed class SecurityGetStatusOperation : IOperation
                 .ToList(),
             ScannedAt = snapshot.ScannedAt,
         });
+
+    private static PortProcessResult? ToProcessResult(PortProcessInfo? process) =>
+        process is null
+            ? null
+            : new PortProcessResult
+            {
+                Name = process.Name,
+                ExecutablePath = process.ExecutablePath,
+                Signer = process.Signer,
+            };
 }

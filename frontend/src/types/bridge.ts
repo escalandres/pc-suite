@@ -953,6 +953,15 @@ export interface AntivirusStatusResult {
   products: string[];
 }
 
+/** Proceso dueño legible SIN elevación (Task 029). */
+export interface PortProcessResult {
+  name?: string | null;
+  /** Ruta absoluta del ejecutable (ausente si ilegible). */
+  executablePath?: string | null;
+  /** CN del certificado de firma; ausente = sin firma (o ilegible). */
+  signer?: string | null;
+}
+
 /** Puerto en escucha (solo lectura, IPGlobalProperties + PID). */
 export interface PortResult {
   /** TCP | UDP. */
@@ -962,6 +971,20 @@ export interface PortResult {
   /** Ausente si la ACL lo niega. */
   pid?: number | null;
   process?: string | null;
+  /** Task 029: detalle (ruta + firma) para tooltip. */
+  processDetail?: PortProcessResult | null;
+}
+
+/** Conexión TCP ESTABLECIDA con extremo remoto y proceso dueño (Task 029). */
+export interface ActiveConnectionResult {
+  localAddress: string;
+  localPort: number;
+  remoteAddress: string;
+  remotePort: number;
+  pid?: number | null;
+  process?: PortProcessResult | null;
+  /** Hechos para revisar (sin firma · ejecutable en TEMP); ausente = nada. */
+  reviewNote?: string | null;
 }
 
 /** Una línea de diagnóstico de security.getStatus. */
@@ -981,6 +1004,8 @@ export interface SecurityStatusResult {
   firewall: FirewallStatusResult;
   antivirus: AntivirusStatusResult;
   ports: PortResult[];
+  /** Task 029: conexiones TCP establecidas con extremo remoto + proceso. */
+  connections: ActiveConnectionResult[];
   diagnostics: SecurityCheckResult[];
   /** Marca de tiempo ISO 8601 de la lectura. */
   scannedAt: string;

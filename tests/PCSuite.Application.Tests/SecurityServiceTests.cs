@@ -31,6 +31,15 @@ public class SecurityServiceTests
             new ListeningPort("UDP", "0.0.0.0", 5353, null, null),
             new ListeningPort("TCP", "0.0.0.0", 443, 123, "app"),
             new ListeningPort("TCP", "0.0.0.0", 135, 4, "svchost"),
+        ],
+        Connections:
+        [
+            new ActiveConnection("192.168.1.10", 50000, "93.184.216.34", 443, 777,
+                new PortProcessInfo("chrome", @"C:\Program Files\Google\Chrome\Application\chrome.exe", "Google LLC")),
+            // Ruta bajo el TEMP REAL de la máquina: el marcador "en TEMP" es
+            // determinista en cualquier entorno.
+            new ActiveConnection("192.168.1.10", 50001, "45.33.32.156", 8080, 888,
+                new PortProcessInfo("weird", Path.Combine(Path.GetTempPath(), "weird.exe"), null)),
         ]);
 
     private static SecurityService Service(RawSecurityReading raw) => new(new FakeProbe(raw));
@@ -46,6 +55,18 @@ public class SecurityServiceTests
         Assert.NotNull(snapshot.Defender.SignatureLastUpdated);
         Assert.Null(snapshot.Defender.SignatureNote); // con timestamp no hay nota
 
+        // Task 029: las conexiones viajan con su extremo remoto + proceso.
+        Assert.Equal(2, snapshot.Connections.Count);
+        var chrome = snapshot.Connections.Single(c => c.Process?.Name == "chrome");
+        Assert.Equal("93.184.216.34", chrome.RemoteAddress);
+        Assert.Equal(443, chrome.RemotePort);
+        Assert.Equal("Google LLC", chrome.Process!.Signer);
+        Assert.Null(chrome.ReviewNote); // firmado + fuera de TEMP: nada que revisar
+
+        var weird = snapshot.Connections.Single(c => c.Process?.Name == "weird");
+        Assert.Contains("sin firma", weird.ReviewNote);
+        Assert.Contains("TEMP", weird.ReviewNote);
+
         Assert.Equal(SecurityStatuses.Good, snapshot.Firewall.Status);
         Assert.True(snapshot.Firewall.DomainEnabled);
         Assert.True(snapshot.Firewall.PrivateEnabled);
@@ -57,6 +78,39 @@ public class SecurityServiceTests
         // Con la lectura completa todos los checks quedan en verde.
         Assert.Equal(["uac", "rdp", "realtime", "signatures"], snapshot.Diagnostics.Select(c => c.Id));
         Assert.All(snapshot.Diagnostics, c => Assert.Equal(SecurityStatuses.Ok, c.Status));
+    }
+
+    [Fact]
+    public void BuildReviewNote_MarcadoresFactuales()
+    {
+        // Sin firma (hecho útil), fuera de TEMP: solo "sin firma".
+        var unsigned = SecurityService.BuildReviewNote(
+            new PortProcessInfo("x", @"C:\Program Files\x\x.exe", null),
+            @"C:\Users\ana\AppData\Local\Temp\");
+        Assert.Equal("sin firma", unsigned);
+
+        // Firmado y en TEMP: solo "en TEMP".
+        var inTemp = SecurityService.BuildReviewNote(
+            new PortProcessInfo("y", @"C:\Users\ana\AppData\Local\Temp\y.exe", "Firma Válida"),
+            @"C:\Users\ana\AppData\Local\Temp\");
+        Assert.Equal("ejecutable en TEMP", inTemp);
+
+        // Ambos marcadores: "sin firma · ejecutable en TEMP".
+        var both = SecurityService.BuildReviewNote(
+            new PortProcessInfo("z", @"C:\Users\ana\AppData\Local\Temp\z.exe", null),
+            @"C:\Users\ana\AppData\Local\Temp\");
+        Assert.Equal("sin firma · ejecutable en TEMP", both);
+
+        // Firmado y en su sitio: nada que revisar.
+        var clean = SecurityService.BuildReviewNote(
+            new PortProcessInfo("chrome", @"C:\Program Files\...\chrome.exe", "Google LLC"),
+            @"C:\Users\ana\AppData\Local\Temp\");
+        Assert.Null(clean);
+
+        // Proceso del sistema (ruta ilegible): jamás acusa.
+        Assert.Null(SecurityService.BuildReviewNote(null, @"C:\Temp"));
+        Assert.Null(SecurityService.BuildReviewNote(
+            new PortProcessInfo("svchost", null, null), @"C:\Temp"));
     }
 
     [Fact]
@@ -144,7 +198,8 @@ public class SecurityServiceTests
             AntivirusProducts: null,
             Firewall: new FirewallRaw(null, null, null),
             System: new SystemRaw(null, null),
-            Ports: []);
+            Ports: [],
+            Connections: []);
 
         var snapshot = await Service(reading).GetStatusAsync();
 

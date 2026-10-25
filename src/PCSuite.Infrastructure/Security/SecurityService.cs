@@ -61,7 +61,8 @@ public sealed class SecurityService : ISecurityService
         AntivirusProducts: null,
         Firewall: new FirewallRaw(null, null, null),
         System: new SystemRaw(null, null),
-        Ports: []);
+        Ports: [],
+        Connections: []);
 
     private static SecuritySnapshot Build(RawSecurityReading raw, DateTimeOffset now)
     {
@@ -92,6 +93,16 @@ public sealed class SecurityService : ISecurityService
             .ThenBy(port => port.LocalAddress, StringComparer.Ordinal)
             .ToList();
 
+        // Task 029: marcadores factuales de revisión por conexión (la nota
+        // viaja al snapshot; el usuario juzga — jamás veredictos).
+        var tempRoot = Path.GetTempPath();
+        var connections = raw.Connections
+            .Select(connection => connection with
+            {
+                ReviewNote = BuildReviewNote(connection.Process, tempRoot),
+            })
+            .ToList();
+
         var diagnostics = new List<SecurityCheck>
         {
             BuildUacCheck(raw.System),
@@ -100,7 +111,7 @@ public sealed class SecurityService : ISecurityService
             BuildSignatureCheck(raw.Defender, now),
         };
 
-        return new SecuritySnapshot(defender, firewall, antivirus, ports, diagnostics, now);
+        return new SecuritySnapshot(defender, firewall, antivirus, ports, connections, diagnostics, now);
     }
 
     private static SecurityCheck BuildUacCheck(SystemRaw system) =>
@@ -217,4 +228,31 @@ public sealed class SecurityService : ISecurityService
                 _ => null,
             }
             : null;
+
+    /// <summary>
+    /// Task 029: marcadores FACTUALES de revisión para escanear conexiones
+    /// sospechosas: sin firma legible en el ejecutable o ejecutable dentro
+    /// de TEMP. Son HECHOS, no veredictos — el usuario decide. Rutas
+    /// ilegibles (procesos del sistema protegidos) no acusan nada.
+    /// </summary>
+    internal static string? BuildReviewNote(PortProcessInfo? process, string tempRoot)
+    {
+        if (process?.ExecutablePath is not { } path)
+        {
+            return null;
+        }
+
+        var notes = new List<string>();
+        if (process.Signer is null)
+        {
+            notes.Add("sin firma");
+        }
+
+        if (path.StartsWith(tempRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            notes.Add("ejecutable en TEMP");
+        }
+
+        return notes.Count > 0 ? string.Join(" · ", notes) : null;
+    }
 }

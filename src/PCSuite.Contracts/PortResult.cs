@@ -17,4 +17,7 @@ public sealed class PortResult
 
     /// <summary>Nombre del proceso (null si no se pudo resolver).</summary>
     public string? Process { get; init; }
+
+    /// <summary>Task 029: detalle del proceso (ruta + firma) para tooltip.</summary>
+    public PortProcessResult? ProcessDetail { get; init; }
 }
