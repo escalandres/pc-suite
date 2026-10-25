@@ -21,11 +21,11 @@
   </nav>
   <main class="section">
     <h1>PCSuite 0.7.0</h1>
-    <p class="section-sub">Publicado el 22 de octubre de 2026</p>
+    <p class="section-sub">Publicado el 24 de octubre de 2026</p>
 
     <article class="notes-content">
 <h1>PCSuite 0.7.0 — Notas de versión</h1>\n\n<blockquote><p>Tag: <code>pcsuite-v0.7.0</code></p></blockquote>
-<blockquote><p>SHA-256: instalador <code>2be2e27815da6a8ac70aaa770c33977d60daa062cb81a1678aa4b548eb7e36e4</code> — portable <code>b85142bf459f76f264bbdfe2dc2a80f0f5215a5338bd808e82562de1ef6ec721</code></p></blockquote>\n\n<hr>\n\n<h2>Title</h2>\n\n<p>`<code><code>
+<blockquote><p>SHA-256: instalador <code>03b33aa52a5ee322ceaf38451182d6cffdd4c0c37ce3f1db4d2e8ef914569df5</code> — portable <code>b1234fda371ee4bfdfdd1bfe45507fc0f612465b10894b8c9270d0b1145004bd</code></p></blockquote>\n\n<hr>\n\n<h2>Title</h2>\n\n<p>`<code><code>
 PCSuite 0.7.0
 </code></code><code></p>\n\n<h2>Description (Markdown)</h2>\n\n<p></code>`<code><code>markdown
 <h3>🔔 Notificaciones de Windows</h3></p>\n\n<p>Lo que pasa cuando estás en otra cosa ahora llega al Centro de Notificaciones:</p>\n\n<ul><li><strong>Local Share</strong>: "SKLA-X quiere enviarte 3 archivo(s) · 12 MB — acéptalo o recházalo en PCSuite", emparejamientos con el recordatorio de comparar códigos, archivos recibidos verificados con SHA-256 y mensajes recibidos con preview del texto</li>
@@ -48,6 +48,10 @@ PCSuite 0.7.0
 <li>El botón <strong>"Copiar" de los mensajes por fin funciona</strong> — el portapapeles lo escribe el host nativo (el del navegador embebido falla en silencio)</li>
 <li>La marca 💬 en las solicitudes de mensaje y la burbuja con su botón copiar <strong>sobreviven los refrescos</strong> (antes desaparecían)</li>
 <li><strong>Drag-and-drop para enviar archivos</strong>: arrastrá sobre la ventana y el envío arranca con el destino elegido</li>
+</ul>
+<h3>🔄 Avisos de actualización al arrancar</h3>\n\n<ul><li>Si al abrir PCSuite hay una versión nueva, aparece un <strong>diálogo con la versión y el tamaño</strong> — antes solo se encendía un pequeño badge en la barra lateral, fácil de pasar por alto</li>
+<li>"Actualizar" te lleva directo al panel de Actualizaciones (descarga verificada con SHA-256 y UAC al instalar); "Más tarde" lo despide hasta el próximo arranque</li>
+<li>El chequeo corre siempre al abrir la app, incluso con la barra lateral colapsada</li>
 </ul>
 #### Nota de compatibilidad\n\n<p>Todos los cambios de protocolo son aditivos: un PCSuite 0.6.x que reciba transferencias o mensajes de un 0.7.0 los procesa igual que siempre (los campos nuevos se ignoran sin romper nada).
 </code></code><code><code></p>\n\n<h2>Crear el release</h2>\n\n<p></code></code><code>powershell
