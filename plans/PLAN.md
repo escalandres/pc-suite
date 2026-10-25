@@ -208,6 +208,17 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | Task 027 - `UpdateStartupModal`: diálogo una vez por sesión cuando el check de arranque halla versión nueva — versión actual → nueva + tamaño, notas de versión, "Actualizar" (lleva a Ajustes › Actualizaciones, donde vive el flujo de consentimiento con SHA-256 y UAC) y "Más tarde" (despide hasta el próximo arranque; Escape y clic en el fondo también) | ✅ Completado | Con rotación de clave NO aparece: esa anomalía la explica el panel con su aviso ámbar (celebrar "¡versión nueva!" con la descarga bloqueada sería contradictorio). tsc+vite OK |
 | └ 27.1 - El check de arranque SUBE a AppLayout (antes vivía dentro del badge): corre SIEMPRE — de paso arregla el bug latente de que con el sidebar colapsado no había ni badge ni check. UpdateCenter pasa a presentacional (prop) alimentado por AppLayout junto al modal; UpdatePanel (Ajustes) conserva su check manual propio | ✅ Completado | Complementa los toasts de la 021: modal cuando estás mirando la app al abrir, toast de Windows cuando la app está en fondo |
 
+### Task 028 - PGP: algoritmo y tamaño expuestos en la UI de Certificados
+
+> Pedido del usuario (2026-10-24): al crear claves PGP, incluir diferentes
+> tamaños (4096, 2048, "entre otros"). El backend (Task 009) ya generaba
+> RSA 2048/3072/4096 + ed25519 con validación allow-list y tests — la UI
+> simplemente fijaba ed25519.
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 028 - El formulario "Generar clave de firma" gana selectores de Algoritmo (Ed25519 recomendada / RSA) y Tamaño (2048/3072/4096, deshabilitado para Ed25519 — curva fija); el payload viaja con algorithm + bits; textos explican el trade-off (Ed25519 moderna, RSA compatibilidad clásica) | ✅ Completado | Solo frontend: el contrato (PgpGenerateKeyPayload.Algorithm/Bits) y el servicio (rama RsaGeneral master+sub) existían desde el Task 009 con cobertura completa (defaults 3072, allow-list de bits — 1024 rechazado —, EncryptSign RSA round-trip). 952/952, tsc+vite OK |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |

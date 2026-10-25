@@ -262,6 +262,10 @@ export function Certificates() {
   const [genEmail, setGenEmail] = useState('');
   const [genPassphrase, setGenPassphrase] = useState('');
   const [genBusy, setGenBusy] = useState(false);
+  /** Task 028: algoritmo y tamaño de la clave PGP — el backend ya soportaba
+   *  rsa (2048/3072/4096) y ed25519; la UI solo fijaba ed25519. */
+  const [genAlgorithm, setGenAlgorithm] = useState<'ed25519' | 'rsa'>('ed25519');
+  const [genBits, setGenBits] = useState(4096);
 
   // Export de la clave pública (pgp.exportKey, includePrivate: false SIEMPRE).
   const [exporting, setExporting] = useState(false);
@@ -309,7 +313,10 @@ export function Certificates() {
         {
           name: genName.trim(),
           email: genEmail.trim(),
-          algorithm: 'ed25519',
+          algorithm: genAlgorithm,
+          // El tamaño solo aplica a RSA; Ed25519 es una curva fija (el
+          // backend ignora los bits en ese caso).
+          bits: genAlgorithm === 'rsa' ? genBits : undefined,
           passphrase: genPassphrase || undefined,
         },
         X509_TIMEOUT,
@@ -992,7 +999,7 @@ export function Certificates() {
                 <p className="mb-3 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                   {keys.length === 0
                     ? 'Aún no hay claves con material privado. Crea tu clave de firma — queda en el keyring de la app (%APPDATA%\\PCSuite\\pgp) y la privada NUNCA sale de este equipo.'
-                    : 'La nueva clave se añade al keyring de la app. Algoritmo ed25519 (recomendada).'}
+                    : 'La nueva clave se añade al keyring de la app. Ed25519 es la recomendada; RSA queda para compatibilidad con sistemas que no aceptan curvas modernas.'}
                 </p>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <Field label="Nombre *">
@@ -1026,6 +1033,35 @@ export function Certificates() {
                     />
                   </Field>
                 </div>
+                {/* Task 028: algoritmo + tamaño. Ed25519 es la recomendada;
+                    RSA (2048/3072/4096) por compatibilidad clásica — el
+                    backend ya generaba ambas desde el Task 009. */}
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <Field label="Algoritmo">
+                    <select
+                      value={genAlgorithm}
+                      onChange={(event) => setGenAlgorithm(event.target.value as 'ed25519' | 'rsa')}
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      style={inputStyle}
+                    >
+                      <option value="ed25519">Ed25519 (recomendada)</option>
+                      <option value="rsa">RSA</option>
+                    </select>
+                  </Field>
+                  <Field label="Tamaño (RSA)">
+                    <select
+                      value={String(genBits)}
+                      onChange={(event) => setGenBits(Number(event.target.value))}
+                      disabled={genAlgorithm !== 'rsa'}
+                      className="w-full rounded-md border px-3 py-2 text-sm disabled:opacity-50"
+                      style={inputStyle}
+                    >
+                      <option value="2048">2048 bits</option>
+                      <option value="3072">3072 bits</option>
+                      <option value="4096">4096 bits</option>
+                    </select>
+                  </Field>
+                </div>
                 <div className="mt-3 flex items-center gap-3">
                   <button
                     type="button"
@@ -1038,7 +1074,8 @@ export function Certificates() {
                     {genBusy ? 'Generando…' : 'Crear clave'}
                   </button>
                   <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                    Sin elevación; ed25519 se genera en segundos.
+                    Sin elevación. Ed25519 se genera en segundos; RSA 4096 puede
+                    tardar unos segundos más.
                   </span>
                 </div>
               </div>
