@@ -63,7 +63,8 @@ public sealed class SecurityService : ISecurityService
         System: new SystemRaw(null, null),
         Ports: [],
         Connections: [],
-        UdpEndpoints: []);
+        UdpEndpoints: [],
+        Audit: new SecurityAudit([], [], 0));
 
     private static SecuritySnapshot Build(RawSecurityReading raw, DateTimeOffset now)
     {
@@ -111,6 +112,17 @@ public sealed class SecurityService : ISecurityService
             })
             .ToList();
 
+        // Task 030: marcadores en autostart + snapshot de auditoría.
+        var autostart = raw.Audit.Autostart
+            .Select(entry => entry with
+            {
+                ReviewNote = BuildReviewNote(
+                    new PortProcessInfo(entry.Name, entry.ExecutablePath, entry.Signer),
+                    tempRoot),
+            })
+            .ToList();
+        var audit = raw.Audit with { Autostart = autostart };
+
         var diagnostics = new List<SecurityCheck>
         {
             BuildUacCheck(raw.System),
@@ -119,7 +131,7 @@ public sealed class SecurityService : ISecurityService
             BuildSignatureCheck(raw.Defender, now),
         };
 
-        return new SecuritySnapshot(defender, firewall, antivirus, ports, connections, udpEndpoints, diagnostics, now);
+        return new SecuritySnapshot(defender, firewall, antivirus, ports, connections, udpEndpoints, audit, diagnostics, now);
     }
 
     private static SecurityCheck BuildUacCheck(SystemRaw system) =>

@@ -37,7 +37,8 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         System: ReadSystemFlags(),
         Ports: ReadPorts(),
         Connections: ReadConnections(),
-        UdpEndpoints: ReadUdpEndpoints());
+        UdpEndpoints: ReadUdpEndpoints(),
+        Audit: ReadAudit());
 
     // --- Centro de seguridad (WSC) ---------------------------------------
 
@@ -503,8 +504,219 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         }
     }
 
+    // --- Auditoría de persistencia y procesos (Task 030) -------------------
+
     /// <summary>
-    /// Enriquecimiento de procesos por PID (una sola pasada WMI): nombre,
+    /// Task 030: auditoría de persistencia (inicio automático) y procesos
+    /// en ejecución que requieren revisión. Todo de SOLO LECTURA sin elevación.
+    /// </summary>
+    private static SecurityAudit ReadAudit()
+    {
+        var autostart = ReadAutostartEntries();
+        var (total, flagged) = ReadProcessAudit();
+        return new SecurityAudit(autostart, flagged, total);
+    }
+
+    /// <summary>
+    /// Entradas de inicio automático: registro Run/RunOnce, carpeta Startup
+    /// (usuario y común) y servicios con arranque automático. El vector nº1
+    /// de persistencia de malware.
+    /// </summary>
+    private static IReadOnlyList<AutostartEntry> ReadAutostartEntries()
+    {
+        var entries = new List<AutostartEntry>();
+
+        // --- Registro: Run/RunOnce (HKCU + HKLM + Wow6432Node) ---
+        foreach (var (source, keyPath) in AutostartRegistryKeys())
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(keyPath)
+                    ?? Registry.LocalMachine.OpenSubKey(keyPath);
+                if (key is null)
+                {
+                    continue;
+                }
+
+                foreach (var valueName in key.GetValueNames())
+                {
+                    if (key.GetValue(valueName) is string command && !string.IsNullOrWhiteSpace(command))
+                    {
+                        entries.Add(BuildAutostartEntry(source, valueName, command));
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Clave protegida o inexistente: sigue con la siguiente.
+            }
+        }
+
+        // --- Carpetas Startup (usuario + común) ---
+        foreach (var (source, folder) in StartupFolders())
+        {
+            try
+            {
+                if (!Directory.Exists(folder))
+                {
+                    continue;
+                }
+
+                foreach (var file in Directory.EnumerateFiles(folder))
+                {
+                    entries.Add(BuildAutostartEntry(source, Path.GetFileName(file), file));
+                }
+            }
+            catch (Exception)
+            {
+                // Permisos: carpeta ilegible, seguimos.
+            }
+        }
+
+        // --- Servicios con arranque automático (WMI) ---
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                @"root\CIMV2",
+                "SELECT Name, DisplayName, PathName FROM Win32_Service WHERE StartMode = 'Auto'");
+            using var results = searcher.Get();
+            foreach (ManagementObject item in results)
+            {
+                using (item)
+                {
+                    if (item["Name"] is string name
+                        && item["PathName"] is string path
+                        && !string.IsNullOrWhiteSpace(path))
+                    {
+                        entries.Add(new AutostartEntry(
+                            "Servicio automático",
+                            item["DisplayName"] as string ?? name,
+                            path,
+                            null, null, null));
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // WMI caído: sin servicios — lo que ya está listado sirve.
+        }
+
+        return [.. entries.OrderBy(e => e.Source, StringComparer.Ordinal).ThenBy(e => e.Name, StringComparer.Ordinal)];
+    }
+
+    private static (string Source, string KeyPath)[] AutostartRegistryKeys() =>
+    [
+        ("Registro (HKCU Run)", @"Software\Microsoft\Windows\CurrentVersion\Run"),
+        ("Registro (HKCU RunOnce)", @"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
+        ("Registro (HKLM Run)", @"Software\Microsoft\Windows\CurrentVersion\Run"),
+        ("Registro (HKLM RunOnce)", @"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
+        ("Registro (HKLM Run 32-bit)", @"Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"),
+    ];
+
+    private static (string Source, string Folder)[] StartupFolders() =>
+    [
+        ("Carpeta Startup (usuario)", Environment.GetFolderPath(Environment.SpecialFolder.Startup)),
+        ("Carpeta Startup (común)", Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup)),
+    ];
+
+    /// <summary>Construye la entrada con la ruta extraída y su firma.</summary>
+    private static AutostartEntry BuildAutostartEntry(string source, string name, string command)
+    {
+        var path = ExtractExecutablePath(command);
+        string? signer = null;
+        if (path is not null && File.Exists(path))
+        {
+            signer = ReadSigner(path);
+        }
+
+        return new AutostartEntry(source, name, command, path, signer);
+    }
+
+    /// <summary>
+    /// Extrae la ruta del ejecutable de un comando de registro/Startup:
+    /// "C:\Program Files\app\app.exe" /arg → C:\Program Files\app\app.exe
+    /// C:\app\app.exe /arg → C:\app\app.exe
+    /// </summary>
+    internal static string? ExtractExecutablePath(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return null;
+        }
+
+        var trimmed = command.Trim();
+
+        // Caso 1: entre comillas dobles — "C:\...\app.exe" args
+        if (trimmed.StartsWith('"'))
+        {
+            var close = trimmed.IndexOf('"', 1);
+            if (close > 1)
+            {
+                return trimmed[1..close];
+            }
+            return null;
+        }
+
+        // Caso 2: sin comillas — C:\...\app.exe args (la ruta termina en .exe)
+        // Buscar la primera ocurrencia de .exe, .dll, .bat, .cmd, .scr, .vbs, .ps1
+        var extensions = new[] { ".exe", ".dll", ".bat", ".cmd", ".scr", ".vbs", ".ps1", ".msi" };
+        foreach (var ext in extensions)
+        {
+            var idx = trimmed.IndexOf(ext, StringComparison.OrdinalIgnoreCase);
+            if (idx > 0)
+            {
+                return trimmed[..(idx + ext.Length)];
+            }
+        }
+
+        // Caso 3: solo la ruta (sin argumentos ni extensión conocida) — tomar hasta el primer espacio
+        var space = trimmed.IndexOf(' ');
+        return space > 0 ? trimmed[..space] : trimmed;
+    }
+
+    /// <summary>
+    /// Auditoría de procesos: total corriendo + los que tienen marcadores
+    /// de revisión (sin firma o en TEMP). Los procesos del sistema que
+    /// protegen su ruta NO acusan — solo los legibles.
+    /// </summary>
+    private static (int Total, IReadOnlyList<FlaggedProcess> Flagged) ReadProcessAudit()
+    {
+        try
+        {
+            var processes = Process.GetProcesses();
+            var pids = processes.Select(p => p.Id).ToList();
+            foreach (var p in processes)
+            {
+                p.Dispose();
+            }
+
+            var details = BuildProcessDetails(pids);
+            var tempRoot = Path.GetTempPath();
+            var flagged = new List<FlaggedProcess>();
+
+            foreach (var pid in pids)
+            {
+                if (!details.TryGetValue(pid, out var info) || info.ExecutablePath is null)
+                {
+                    continue;
+                }
+
+                var note = SecurityService.BuildReviewNote(info, tempRoot);
+                if (note is not null)
+                {
+                    flagged.Add(new FlaggedProcess(pid, info.Name, info.ExecutablePath, info.Signer, note));
+                }
+            }
+
+            return (pids.Count,
+                [.. flagged.OrderBy(p => p.Name, StringComparer.Ordinal)]);
+        }
+        catch (Exception)
+        {
+            return (0, []);
+        }
+    }
     /// ruta del ejecutable y firma del certificado (si firma). Procesos del
     /// sistema/ protegidos devuelven lo que dejen leer — nunca lanza.
     /// </summary>
@@ -576,8 +788,8 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
     {
         try
         {
-            using var certificate = System.Security.Cryptography.X509Certificates.X509Certificate
-                .CreateFromSignedFile(path);
+            using var certificate = System.Security.Cryptography.X509Certificates.X509CertificateLoader
+                .LoadCertificateFromFile(path);
 
             // Subject = "CN=Microsoft Windows, O=Microsoft Corporation, …":
             // solo el CN para la UI (el DN completo no cabe en la tabla).

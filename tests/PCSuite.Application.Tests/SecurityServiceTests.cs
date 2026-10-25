@@ -45,7 +45,21 @@ public class SecurityServiceTests
         [
             new UdpEndpoint("0.0.0.0", 5353, 1112, new PortProcessInfo("svchost", null, null)),
             new UdpEndpoint("192.168.1.10", 137, 4, new PortProcessInfo("svchost", null, null)),
-        ]);
+        ],
+        Audit: new SecurityAudit(
+        [
+            new AutostartEntry("Registro (HKCU Run)", "OneDrive", @"C:\Users\ana\AppData\Local\Microsoft\OneDrive\OneDrive.exe /background",
+                @"C:\Users\ana\AppData\Local\Microsoft\OneDrive\OneDrive.exe", "Microsoft Corporation"),
+            new AutostartEntry("Carpeta Startup (usuario)", "backup.lnk",
+                @"C:\Users\ana\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\backup.lnk",
+                null, null),
+            new AutostartEntry("Servicio automático", "Windows Defender Antivirus Service",
+                @"C:\ProgramData\Microsoft\Windows Defender\Platform\...\MsMpEng.exe", "Microsoft Windows"),
+        ],
+        [
+            new FlaggedProcess(999, "weird", Path.Combine(Path.GetTempPath(), "weird.exe"), null, "sin firma · ejecutable en TEMP"),
+        ],
+        TotalProcesses: 15));
 
     private static SecurityService Service(RawSecurityReading raw) => new(new FakeProbe(raw));
 
@@ -77,6 +91,17 @@ public class SecurityServiceTests
         var mdns = snapshot.UdpEndpoints.Single(e => e.LocalPort == 5353);
         Assert.Equal("svchost", mdns.Process?.Name);
         Assert.Null(mdns.ReviewNote); // proceso del sistema sin ruta: no acusa
+
+        // Task 030: auditoría de persistencia y procesos.
+        Assert.Equal(3, snapshot.Audit.Autostart.Count);
+        Assert.Equal(15, snapshot.Audit.TotalProcesses);
+        Assert.Single(snapshot.Audit.FlaggedProcesses);
+        var oneDrive = snapshot.Audit.Autostart.Single(e => e.Name == "OneDrive");
+        Assert.Equal("Microsoft Corporation", oneDrive.Signer);
+        Assert.Null(oneDrive.ReviewNote); // firmado + fuera de TEMP
+        var backupLnk = snapshot.Audit.Autostart.Single(e => e.Name == "backup.lnk");
+        Assert.Null(backupLnk.Signer); // un .lnk no lleva firma Authenticode
+        Assert.Null(backupLnk.ReviewNote); // sin ruta de exe legible: no acusa
 
         Assert.Equal(SecurityStatuses.Good, snapshot.Firewall.Status);
         Assert.True(snapshot.Firewall.DomainEnabled);
@@ -211,7 +236,8 @@ public class SecurityServiceTests
             System: new SystemRaw(null, null),
             Ports: [],
             Connections: [],
-            UdpEndpoints: []);
+            UdpEndpoints: [],
+            Audit: new SecurityAudit([], [], 0));
 
         var snapshot = await Service(reading).GetStatusAsync();
 

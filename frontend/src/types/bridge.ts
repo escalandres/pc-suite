@@ -996,6 +996,32 @@ export interface UdpEndpointResult {
   reviewNote?: string | null;
 }
 
+/** Una entrada de inicio automático (persistencia, Task 030). */
+export interface AutostartResult {
+  source: string;
+  name: string;
+  command?: string | null;
+  executablePath?: string | null;
+  signer?: string | null;
+  reviewNote?: string | null;
+}
+
+/** Proceso en ejecución que requiere revisión (Task 030). */
+export interface FlaggedProcessResult {
+  pid: number;
+  name?: string | null;
+  executablePath?: string | null;
+  signer?: string | null;
+  reviewNote?: string | null;
+}
+
+/** Task 030: auditoría de persistencia y procesos. */
+export interface SecurityAuditResult {
+  autostart: AutostartResult[];
+  flaggedProcesses: FlaggedProcessResult[];
+  totalProcesses: number;
+}
+
 /** Una línea de diagnóstico de security.getStatus. */
 export interface SecurityCheckResult {
   /** uac | rdp | realtime | signatures. */
@@ -1017,6 +1043,8 @@ export interface SecurityStatusResult {
   connections: ActiveConnectionResult[];
   /** Task 029: endpoints UDP vinculados con proceso dueño. */
   udpEndpoints: UdpEndpointResult[];
+  /** Task 030: auditoría de persistencia y procesos. */
+  audit: SecurityAuditResult;
   diagnostics: SecurityCheckResult[];
   /** Marca de tiempo ISO 8601 de la lectura. */
   scannedAt: string;

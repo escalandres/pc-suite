@@ -48,6 +48,52 @@ public sealed class UdpEndpointResult
     public string? ReviewNote { get; init; }
 }
 
+/// <summary>Una entrada de inicio automático (persistencia).</summary>
+public sealed class AutostartResult
+{
+    /// <summary>Registro (HKCU Run) | Carpeta Startup | Servicio automático…</summary>
+    public string Source { get; init; } = "";
+
+    public string Name { get; init; } = "";
+
+    /// <summary>Comando completo del registro o ruta del archivo.</summary>
+    public string? Command { get; init; }
+
+    /// <summary>Ruta del ejecutable extraída (para tooltip).</summary>
+    public string? ExecutablePath { get; init; }
+
+    /// <summary>CN del certificado de firma; null = sin firma.</summary>
+    public string? Signer { get; init; }
+
+    /// <summary>Hechos para revisar; null = nada.</summary>
+    public string? ReviewNote { get; init; }
+}
+
+/// <summary>Proceso en ejecución que requiere revisión.</summary>
+public sealed class FlaggedProcessResult
+{
+    public int Pid { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? ExecutablePath { get; init; }
+
+    public string? Signer { get; init; }
+
+    public string? ReviewNote { get; init; }
+}
+
+/// <summary>Task 030: auditoría de persistencia y procesos.</summary>
+public sealed class SecurityAuditResult
+{
+    public IReadOnlyList<AutostartResult> Autostart { get; init; } = [];
+
+    public IReadOnlyList<FlaggedProcessResult> FlaggedProcesses { get; init; } = [];
+
+    /// <summary>Total de procesos en ejecución (contexto para el contador de la UI).</summary>
+    public int TotalProcesses { get; init; }
+}
+
 /// <summary>Resultado de security.getStatus: snapshot completo de solo lectura.</summary>
 public sealed class SecurityStatusResult
 {
@@ -68,6 +114,9 @@ public sealed class SecurityStatusResult
 
     /// <summary>Task 029: endpoints UDP vinculados con proceso dueño.</summary>
     public IReadOnlyList<UdpEndpointResult> UdpEndpoints { get; init; } = [];
+
+    /// <summary>Task 030: auditoría de persistencia y procesos.</summary>
+    public SecurityAuditResult Audit { get; init; } = new();
 
     /// <summary>Diagnóstico de seguridad (UAC, RDP, protección en tiempo real…).</summary>
     public IReadOnlyList<SecurityCheckResult> Diagnostics { get; init; } = [];

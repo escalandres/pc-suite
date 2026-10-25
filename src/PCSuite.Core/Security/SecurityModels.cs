@@ -40,6 +40,30 @@ public sealed record DefenderInfo(
     DateTimeOffset? SignatureLastUpdated,
     string? SignatureNote = null);
 
+/// <summary>Una entrada de inicio automático (persistencia): registro Run/RunOnce,
+/// carpeta Startup o servicio con arranque automático. El vector nº1 de malware.</summary>
+public sealed record AutostartEntry(
+    string Source,
+    string Name,
+    string? Command,
+    string? ExecutablePath,
+    string? Signer = null,
+    string? ReviewNote = null);
+
+/// <summary>Proceso en ejecución que requiere revisión (sin firma / en TEMP).</summary>
+public sealed record FlaggedProcess(
+    int Pid,
+    string? Name,
+    string? ExecutablePath,
+    string? Signer,
+    string? ReviewNote);
+
+/// <summary>Task 030: auditoría de persistencia y procesos.</summary>
+public sealed record SecurityAudit(
+    IReadOnlyList<AutostartEntry> Autostart,
+    IReadOnlyList<FlaggedProcess> FlaggedProcesses,
+    int TotalProcesses);
+
 /// <summary>
 /// Firewall por perfil (dominio/privado/público). <c>null</c> en un perfil
 /// significa que el registro no se pudo leer — no que esté desactivado.
@@ -110,5 +134,6 @@ public sealed record SecuritySnapshot(
     IReadOnlyList<ListeningPort> Ports,
     IReadOnlyList<ActiveConnection> Connections,
     IReadOnlyList<UdpEndpoint> UdpEndpoints,
+    SecurityAudit Audit,
     IReadOnlyList<SecurityCheck> Diagnostics,
     DateTimeOffset ScannedAt);

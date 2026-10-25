@@ -47,6 +47,7 @@ public class SecurityOperationTests
         ],
         Connections: [],
         UdpEndpoints: [],
+        Audit: new SecurityAudit([], [], 0),
         ScannedAt: DateTimeOffset.Parse("2026-09-28T10:00:00+00:00"));
 
     private static SecuritySnapshot UnknownSnapshot() => new(
@@ -56,6 +57,7 @@ public class SecurityOperationTests
         Ports: [],
         Connections: [],
         UdpEndpoints: [],
+        Audit: new SecurityAudit([], [], 0),
         Diagnostics: [new SecurityCheck("uac", "Control de cuentas de usuario (UAC)", SecurityStatuses.Unknown, null)],
         ScannedAt: DateTimeOffset.Parse("2026-09-28T10:00:00+00:00"));
 

@@ -88,6 +88,31 @@ public sealed class SecurityGetStatusOperation : IOperation
                     ReviewNote = endpoint.ReviewNote,
                 })
                 .ToList(),
+            Audit = new SecurityAuditResult
+            {
+                Autostart = snapshot.Audit.Autostart
+                    .Select(entry => new AutostartResult
+                    {
+                        Source = entry.Source,
+                        Name = entry.Name,
+                        Command = entry.Command,
+                        ExecutablePath = entry.ExecutablePath,
+                        Signer = entry.Signer,
+                        ReviewNote = entry.ReviewNote,
+                    })
+                    .ToList(),
+                FlaggedProcesses = snapshot.Audit.FlaggedProcesses
+                    .Select(p => new FlaggedProcessResult
+                    {
+                        Pid = p.Pid,
+                        Name = p.Name,
+                        ExecutablePath = p.ExecutablePath,
+                        Signer = p.Signer,
+                        ReviewNote = p.ReviewNote,
+                    })
+                    .ToList(),
+                TotalProcesses = snapshot.Audit.TotalProcesses,
+            },
             Diagnostics = snapshot.Diagnostics
                 .Select(check => new SecurityCheckResult
                 {

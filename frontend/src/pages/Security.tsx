@@ -421,6 +421,7 @@ export function Security() {
                       <th className="px-3 py-2 font-medium">Protocolo</th>
                       <th className="px-3 py-2 font-medium">Dirección</th>
                       <th className="px-3 py-2 font-medium">Puerto</th>
+                      <th className="px-3 py-2 font-medium">Exposición</th>
                       <th className="px-3 py-2 font-medium">PID</th>
                       <th className="px-3 py-2 font-medium">Proceso</th>
                     </tr>
@@ -434,6 +435,42 @@ export function Security() {
                         <td className="px-3 py-1.5 font-mono">{port.protocol}</td>
                         <td className="px-3 py-1.5 font-mono">{port.localAddress}</td>
                         <td className="px-3 py-1.5 font-mono">{port.localPort}</td>
+                        <td className="px-3 py-1.5">
+                          {/* Task 030.3: badge de exposición — 0.0.0.0/:: es
+                              alcanzable desde fuera; 127.0.0.1/::1 es solo
+                              local; una IP específica es de la red. */}
+                          {port.localAddress === '0.0.0.0' || port.localAddress === '::' ? (
+                            <span
+                              className="rounded-full px-1.5 py-0.5 text-xs font-medium"
+                              style={{
+                                background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
+                                color: 'var(--pcs-warning)',
+                              }}
+                              title="Bind 0.0.0.0/:: — alcanzable desde fuera de esta máquina"
+                            >
+                              expuesto
+                            </span>
+                          ) : port.localAddress === '127.0.0.1' || port.localAddress === '::1' ? (
+                            <span
+                              className="rounded-full px-1.5 py-0.5 text-xs font-medium"
+                              style={{
+                                background: 'color-mix(in srgb, var(--pcs-success) 14%, transparent)',
+                                color: 'var(--pcs-success)',
+                              }}
+                              title="Bind local — solo accesible desde esta máquina"
+                            >
+                              local
+                            </span>
+                          ) : (
+                            <span
+                              className="rounded-full px-1.5 py-0.5 text-xs font-medium"
+                              style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text-muted)' }}
+                              title="Bind a IP específica — accesible desde la red local"
+                            >
+                              red
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-1.5 font-mono">{port.pid ?? '—'}</td>
                         <td
                           className="px-3 py-1.5"
@@ -623,6 +660,172 @@ export function Security() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </section>
+
+          {/* Task 030: procesos en ejecución que requieren revisión */}
+          <section
+            className="rounded-lg border p-4"
+            style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+            aria-label="Procesos en revisión"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <HelpCircle size={14} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+                Procesos en revisión
+              </h2>
+              <span
+                className="rounded-full px-2 py-0.5 text-xs font-medium"
+                style={toneStyle(snapshot.audit.flaggedProcesses.length > 0 ? 'warning' : 'muted')}
+              >
+                {snapshot.audit.flaggedProcesses.length} de {snapshot.audit.totalProcesses}
+              </span>
+            </div>
+            {snapshot.audit.flaggedProcesses.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+                <CheckCircle2 size={28} aria-hidden className="mb-2 opacity-40" style={{ color: 'var(--pcs-success)' }} />
+                <h4 className="text-sm font-medium mb-1">Todo en orden</h4>
+                <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                  Ningún proceso legible corre sin firma o desde TEMP.
+                </p>
+              </div>
+            ) : (
+              <div
+                className="mt-3 max-h-60 overflow-auto rounded-md border"
+                style={{ borderColor: 'var(--pcs-border)' }}
+              >
+                <table className="w-full text-left text-xs pcs-tabular-nums">
+                  <thead>
+                    <tr
+                      style={{
+                        background: 'var(--pcs-surface-2)',
+                        color: 'var(--pcs-text-muted)',
+                      }}
+                    >
+                      <th className="px-3 py-2 font-medium">PID</th>
+                      <th className="px-3 py-2 font-medium">Proceso</th>
+                      <th className="px-3 py-2 font-medium">Ruta</th>
+                      <th className="px-3 py-2 font-medium">Revisión</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.audit.flaggedProcesses.map((process, index) => (
+                      <tr
+                        key={`${process.pid}-${index}`}
+                        style={{ borderTop: '1px solid var(--pcs-border)' }}
+                      >
+                        <td className="px-3 py-1.5 font-mono">{process.pid}</td>
+                        <td className="px-3 py-1.5 font-medium">{process.name ?? 'Sin datos'}</td>
+                        <td
+                          className="max-w-64 truncate px-3 py-1.5 font-mono text-xs"
+                          title={process.executablePath ?? undefined}
+                        >
+                          {process.executablePath ?? '—'}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {process.reviewNote && (
+                            <span
+                              className="rounded-full px-2 py-0.5 text-xs font-medium"
+                              style={{
+                                background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
+                                color: 'var(--pcs-warning)',
+                              }}
+                            >
+                              ⚠ {process.reviewNote}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Task 030: inicio automático (persistencia) */}
+          <section
+            className="rounded-lg border p-4"
+            style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+            aria-label="Inicio automático"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <Shield size={14} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+                Inicio automático
+              </h2>
+              <span
+                className="rounded-full px-2 py-0.5 text-xs font-medium"
+                style={toneStyle('muted')}
+              >
+                {snapshot.audit.autostart.length}
+              </span>
+            </div>
+            {snapshot.audit.autostart.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+                <Shield size={28} aria-hidden className="mb-2 opacity-30" style={{ color: 'var(--pcs-accent)' }} />
+                <h4 className="text-sm font-medium mb-1">Sin entradas de inicio automático legibles</h4>
+                <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                  Registro Run, carpetas Startup y servicios automáticos — nada encontrado.
+                </p>
+              </div>
+            ) : (
+              <div
+                className="mt-3 max-h-72 overflow-auto rounded-md border"
+                style={{ borderColor: 'var(--pcs-border)' }}
+              >
+                <table className="w-full text-left text-xs pcs-tabular-nums">
+                  <thead>
+                    <tr
+                      style={{
+                        background: 'var(--pcs-surface-2)',
+                        color: 'var(--pcs-text-muted)',
+                      }}
+                    >
+                      <th className="px-3 py-2 font-medium">Fuente</th>
+                      <th className="px-3 py-2 font-medium">Nombre</th>
+                      <th className="px-3 py-2 font-medium">Comando</th>
+                      <th className="px-3 py-2 font-medium">Revisión</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.audit.autostart.map((entry, index) => (
+                      <tr
+                        key={`${entry.source}-${entry.name}-${index}`}
+                        style={{ borderTop: '1px solid var(--pcs-border)' }}
+                      >
+                        <td className="px-3 py-1.5 text-xs">{entry.source}</td>
+                        <td className="px-3 py-1.5 font-medium">{entry.name}</td>
+                        <td
+                          className="max-w-64 truncate px-3 py-1.5 font-mono text-xs"
+                          title={
+                            entry.executablePath
+                              ? `${entry.executablePath}${entry.signer ? `\nFirmado: ${entry.signer}` : '\nSin firma'}${entry.command && entry.command !== entry.executablePath ? `\nComando: ${entry.command}` : ''}`
+                              : entry.command ?? undefined
+                          }
+                        >
+                          {entry.command ?? '—'}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {entry.reviewNote ? (
+                            <span
+                              className="rounded-full px-2 py-0.5 text-xs font-medium"
+                              style={{
+                                background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
+                                color: 'var(--pcs-warning)',
+                              }}
+                            >
+                              ⚠ {entry.reviewNote}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--pcs-text-muted)' }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>
