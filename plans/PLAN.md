@@ -300,12 +300,12 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 
 #### Sub-tareas
 
-| Tarea | Descripción | Esfuerzo |
+| Tarea | Descripción | Estado |
 |---|---|---|
-| 33.1 — **Proteger con contraseña** | Cifrado AES-256-CBC de archivos: PBKDF2 (SHA-256, 100k iter) deriva la clave de la contraseña, IV aleatorio por archivo. Salida: archivo `.pcsuite-enc` con header mágico + IV + salt + ciphertext. Descifrado con la misma contraseña; borrado seguro del original opcional. Progreso en streaming para archivos grandes | M |
-| 33.2 — **Esteganografía** | Ocultar texto o un archivo pequeño dentro de una imagen PNG usando LSB (Least Significant Bit): el píxel menos significativo de cada canal RGB porta 1 bit del payload. La imagen visualmente no cambia. Extracción con la clave correcta; el payload puede llevar contraseña AES opcional | L |
-| 33.3 — **Borrado seguro** | Sobrescribir un archivo con múltiples pasadas (random → ceros → random) antes de borrarlo — el estándar DoD 5220.22-M simplificado. Progreso por pasada; advertencia de que es irreversible | S |
-| 33.4 — **Hash de archivos** | Multi-algoritmo: SHA-256, SHA-1, MD5, CRC32 en una sola lectura. Copiar al portapapeles (bridge clipboard). Selector de archivos nativo | S |
+| 33.1 — **Proteger con contraseña** | Cifrado AES-256-CBC de archivos: PBKDF2 (SHA-256, 100k iter) deriva la clave de la contraseña, IV aleatorio por archivo. Salida: archivo `.pcsuite-enc` con header mágico + IV + salt + ciphertext. Descifrado con la misma contraseña; borrado seguro del original opcional. Progreso en streaming para archivos grandes | ✅ Completado |
+| 33.2 — **Esteganografía** | Ocultar texto o un archivo pequeño dentro de una imagen PNG usando LSB (Least Significant Bit): el píxel menos significativo de cada canal RGB porta 1 bit del payload. La imagen visualmente no cambia. Extracción con la clave correcta; el payload puede llevar contraseña AES opcional | 🔲 Pendiente |
+| 33.3 — **Borrado seguro** | Sobrescribir un archivo con múltiples pasadas (random → ceros → random) antes de borrarlo — el estándar DoD 5220.22-M simplificado. Progreso por pasada; advertencia de que es irreversible | ✅ Completado |
+| 33.4 — **Hash de archivos** | Multi-algoritmo: SHA-256, SHA-1, MD5, CRC32 en una sola lectura. Copiar al portapapeles (bridge clipboard). Selector de archivos nativo | ✅ Completado |
 
 #### Modelo de datos
 
@@ -318,6 +318,16 @@ files.stegoExtract → { imagePath, password? } → { text? / outputPath? }
 files.shred        → { path, passes } → { shredded: true }
 files.hash         → { path } → { sha256, sha1, md5, crc32 }
 ```
+
+#### Registro de implementación
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 033 - Página "Archivos" en el sidebar (entre Certificados y Seguridad): 3 tabs (Encriptar, Hash, Borrado seguro) + backend `FileSecurityService` | ✅ Completado | 2026-10-26 `eb930a7`. 956/956 tests, 0 warnings, tsc+vite OK |
+| ├ 33.1 - AES-256-CBC en streaming (chunks de 64 KB, TransformFinalBlock por chunk); formato `.pcsuite-enc` = magia PCS1 + salt 16 B + IV 16 B + ciphertext; PBKDF2 SHA-256 100k iter; checkbox de borrado seguro del original | ✅ Completado | Selector nativo `system.pickFiles`; el resultado viaja con SHA-256 del archivo de salida; encriptar/desencriptar comparten contraseña |
+| ├ 33.3 - Borrado seguro: pasadas random…random…ceros (clamp 1-7, por defecto 3), `FlushToDisk` por pasada, `File.Delete` al final | ✅ Completado | Aviso IRREVERSIBLE en la UI antes de ejecutar |
+| ├ 33.4 - Hash en UNA sola lectura: SHA-256 + SHA-1 + MD5 + CRC32 (implementación propia, IEEE 802.3) vía TransformBlock por chunk | ✅ Completado | Copiar al portapapeles vía `system.writeClipboard` |
+| └ 33.2 - Esteganografía LSB en PNG | 🔲 Pendiente | Placeholder `NotImplementedException` en FileSecurityService; requiere librería de manipulación de píxeles PNG (ImageSharp o System.Drawing) |
 
 ---
 
@@ -337,11 +347,11 @@ files.hash         → { path } → { sha256, sha1, md5, crc32 }
 
 #### Sub-tareas
 
-| Tarea | Descripción | Esfuerzo |
+| Tarea | Descripción | Estado |
 |---|---|---|
-| 34.1 — **Codificadores de texto** | Base64 encode/decode, Hex encode/decode, URL encode/decode, ROT13, César (shift configurable), Binario, Morse. Tab con dropdown de algoritmo, dos textareas (entrada/salida) y botones Codificar/Decodificar/Copiar/Limpiar | S |
-| 34.2 — **Hash de texto** | MD5, SHA-1, SHA-256, SHA-512 — el texto se procesa en el acto (sin botón, onchange). Copiar individual | XS |
-| 34.3 — **Cifrado de mensajes** | AES-256-GCM con contraseña (PBKDF2): entrada → ciphertext base64; y el inverso. XOR con clave: entrada → salida base64. Salida con formato claro: "AES-256-GCM(base64): ..." | S |
+| 34.1 — **Codificadores de texto** | Base64 encode/decode, Hex encode/decode, URL encode/decode, ROT13, César (shift configurable), Binario, Morse. Tab con dropdown de algoritmo, dos textareas (entrada/salida) y botones Codificar/Decodificar/Copiar/Limpiar | ✅ Completado |
+| 34.2 — **Hash de texto** | MD5, SHA-1, SHA-256, SHA-512 — el texto se procesa en el acto (sin botón, onchange). Copiar individual | ✅ Completado |
+| 34.3 — **Cifrado de mensajes** | AES-256-GCM con contraseña (PBKDF2): entrada → ciphertext base64; y el inverso. XOR con clave: entrada → salida base64. Salida con formato claro: "AES-256-GCM(base64): ..." | ✅ Completado |
 
 #### Modelo de datos
 
@@ -353,6 +363,15 @@ cipher.encryptAes  → { input, password } → { output }
 cipher.decryptAes  → { input, password } → { output }
 cipher.xor         → { input, key } → { output }
 ```
+
+#### Registro de implementación
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 034 - Página "Cifrador" en el sidebar (después de Archivos): 3 tabs (Codificar, Hash, Cifrar) + backend `CipherService` | ✅ Completado | 2026-10-26 `eb930a7`. 956/956 tests, 0 warnings, tsc+vite OK |
+| ├ 34.1 - Encode/Decode: Base64, Hex, URL, ROT13 (auto-inverso), César (shift configurable 1-25), Binario (8 bits por byte), Morse (tabla ITU con puntuación) | ✅ Completado | UI: dropdown de algoritmo + input de shift para César + dos textareas + botones Codificar/Decodificar/Copiar |
+| ├ 34.2 - Hash instantáneo onchange (useEffect + bridge con cancelación): MD5, SHA-1, SHA-256, SHA-512 en una sola pasada | ✅ Completado | Copiar individual por hash vía `system.writeClipboard` |
+| └ 34.3 - AES-256-GCM con PBKDF2 (100k iter): tag 16 B, nonce 12 B, formato base64(salt + nonce + ciphertext‖tag); constructor `AesGcm(key, tagSizeInBytes: 16)` sin SYSLIB0053. XOR con clave repetida (auto-inversible), salida base64 | ✅ Completado | Ambos modos cifrar/descifrar en el tab |
 
 #### Algoritmos de codificación (34.1)
 
@@ -373,6 +392,23 @@ cipher.xor         → { input, key } → { output }
 | **Certificados** | Identidad y confianza: claves, firmas, CSR | "Necesito que alguien VERIFIQUE que soy yo" |
 | **Archivos** | Protección de archivos: cifrar, ocultar, borrar | "Necesito que ESTE ARCHIVO no lo lea nadie sin la contraseña" |
 | **Cifrador** | Transformación de texto: codificar, hash, cifrar | "Necesito codificar/cifrar ESTE TEXTO rápido" |
+
+### Task 035 - Release 0.9.0
+
+> La 0.8.0 se generó y firmó (hash `4c04a7ee`) pero nunca se desplegó — el
+> sitio sigue sirviendo el manifiesto de la 0.6.0. La 0.9.0 la supersede y
+> agrupa todo lo construido desde entonces: renovación del centro de
+> seguridad (029-032), opciones PGP algoritmo/tamaño (028), fix del modal
+> de actualización vía `createPortal` (`0b25227`) y los módulos nuevos
+> Archivos + Cifrador (033/034).
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 035 - Release 0.9.0: bump de versión, notas, empaquetado, firma PGP y publicación | 🚧 En progreso | Pipeline local COMPLETO. Regla de oro: `latest.json` es inmutable tras publicar.bat — re-publicar exige borrar `releases\0.9.0\` y repetir el pipeline completo. Pendiente (manual, usuario): release de GitHub con los binarios exactos + copia Astro/Vercel |
+| ├ 35.1 - Bump 0.8.0 → 0.9.0 en `Directory.Build.props` | ✅ Completado | Fuente única de verdad de la versión |
+| ├ 35.2 - `docs\landing\notas\0.9.0.md` con el changelog real (hashes reales, no placeholders) | ✅ Completado | Instalador `9649c91d…`, portable `bfb72785…`; publicar.ps1 lo convirtió a `releases\0.9.0\0.9.0.html` |
+| ├ 35.3 - `empaquetar.bat` + ISCC → artefactos autocontenidos | ✅ Completado | Setup 42,3 MB + zip 58,2 MB; el instalador lee la versión del EXE publicado (sin hardcodeo). Estructura Task 022 |
+| └ 35.4 - `publicar.bat`: manifiesto + firma PGP + verificación + `gh release` | ✅ Completado | Firma validada contra la clave EMBEBIDA del updater (si pasa aquí, pasa allí). `gh` CLI no instalado → quedó impreso el comando exacto para crear el release desde la web UI con LOS BINARIOS EXACTOS firmados. `releases\COPIAR-A-ASTRO.md` mapea la copia manual al sitio Astro |
 
 | Tarea | Estado | Notas |
 |---|---|---|

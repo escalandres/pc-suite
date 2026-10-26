@@ -3,7 +3,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Version>0.8.0</Version>
+    <Version>0.9.0</Version>
     <Product>PCSuite</Product>
     <Company>PCSuite</Company>
     <Description>The Swiss Army Knife for Windows developers and power users.</Description>
