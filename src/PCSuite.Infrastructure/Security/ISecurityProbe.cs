@@ -24,8 +24,12 @@ public sealed record DefenderRaw(
 /// <summary>Perfiles de firewall desde el registro (StandardProfile = privado); null = sin datos.</summary>
 public sealed record FirewallRaw(bool? DomainEnabled, bool? PrivateEnabled, bool? PublicEnabled);
 
-/// <summary>UAC (EnableLUA) y RDP (fDenyTSConnections) del registro; null = ilegible.</summary>
-public sealed record SystemRaw(bool? UacEnabled, bool? RdpConnectionsDenied);
+/// <summary>UAC (EnableLUA), RDP (fDenyTSConnections), BitLocker y SMBv1 del registro/sistema; null = ilegible.</summary>
+public sealed record SystemRaw(
+    bool? UacEnabled,
+    bool? RdpConnectionsDenied,
+    bool? BitLockerOn = null,
+    bool? Smb1Disabled = null);
 
 /// <summary>
 /// Lectura cruda completa: <c>null</c>/vacío significa "esa fuente falló",

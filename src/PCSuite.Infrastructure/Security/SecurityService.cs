@@ -13,6 +13,8 @@ public sealed class SecurityService : ISecurityService
 {
     private const string UacLabel = "Control de cuentas de usuario (UAC)";
     private const string RdpLabel = "Escritorio remoto (RDP)";
+    private const string BitLockerLabel = "Cifrado de disco (BitLocker)";
+    private const string Smb1Label = "Protocolo SMBv1 (obsoleto)";
     private const string RealtimeLabel = "Protección en tiempo real";
     private const string SignatureLabel = "Firmas de Windows Defender";
 
@@ -128,6 +130,8 @@ public sealed class SecurityService : ISecurityService
         {
             BuildUacCheck(raw.System),
             BuildRdpCheck(raw.System),
+            BuildBitLockerCheck(raw.System),
+            BuildSmb1Check(raw.System),
             BuildRealtimeCheck(raw.Defender, raw.AntivirusHealth, products),
             BuildSignatureCheck(raw.Defender, now),
         };
@@ -167,6 +171,40 @@ public sealed class SecurityService : ISecurityService
                 null => null,
                 true => "Conexiones entrantes bloqueadas.",
                 false => "Conexiones entrantes permitidas; si no lo usas, conviene bloquearlas.",
+            });
+
+    private static SecurityCheck BuildBitLockerCheck(SystemRaw system) =>
+        new(
+            "bitlocker",
+            BitLockerLabel,
+            system.BitLockerOn switch
+            {
+                null => SecurityStatuses.Unknown,
+                true => SecurityStatuses.Ok,
+                false => SecurityStatuses.Warn,
+            },
+            system.BitLockerOn switch
+            {
+                null => null,
+                true => "Disco del sistema cifrado.",
+                false => "Disco del sistema SIN cifrar — un robo físico expone los archivos.",
+            });
+
+    private static SecurityCheck BuildSmb1Check(SystemRaw system) =>
+        new(
+            "smb1",
+            Smb1Label,
+            system.Smb1Disabled switch
+            {
+                null => SecurityStatuses.Unknown,
+                true => SecurityStatuses.Ok,
+                false => SecurityStatuses.Warn,
+            },
+            system.Smb1Disabled switch
+            {
+                null => null,
+                true => "Desactivado (recomendado).",
+                false => "Activo — vector de propagación de ransomware (WannaCry, NotPetya).",
             });
 
     private static SecurityCheck BuildRealtimeCheck(

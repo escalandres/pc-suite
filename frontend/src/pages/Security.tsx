@@ -15,7 +15,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
-import type { SecurityStatusResult } from '../types/bridge';
+import type { ActiveConnectionResult, SecurityStatusResult } from '../types/bridge';
 
 /**
  * Página "Seguridad" (Task 012 / §14): Centro de seguridad de Windows en
@@ -87,6 +87,50 @@ function boolCell(value: boolean | null | undefined, onText: string, offText: st
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof BridgeError ? error.message : fallback;
+}
+
+/** Task 032: fila de conexión TCP (extraída para el filtro por proceso). */
+function renderConnectionRow(connection: ActiveConnectionResult, index: number) {
+  return (
+    <tr
+      key={`${connection.localAddress}-${connection.localPort}-${connection.remoteAddress}-${connection.remotePort}-${index}`}
+      style={{ borderTop: '1px solid var(--pcs-border)' }}
+    >
+      <td className="px-3 py-1.5 font-mono">
+        {connection.localAddress}:{connection.localPort}
+      </td>
+      <td className="px-3 py-1.5 font-mono">
+        {connection.remoteAddress}:{connection.remotePort}
+      </td>
+      <td className="px-3 py-1.5 font-mono">{connection.pid ?? '—'}</td>
+      <td
+        className="px-3 py-1.5"
+        title={
+          connection.process?.executablePath
+            ? `${connection.process.executablePath}${connection.process.signer ? `\nFirmado: ${connection.process.signer}` : '\nSin firma'}`
+            : undefined
+        }
+      >
+        {connection.process?.name ?? 'Sin datos'}
+      </td>
+      <td className="px-3 py-1.5">
+        {connection.reviewNote ? (
+          <span
+            className="rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{
+              background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
+              color: 'var(--pcs-warning)',
+            }}
+            title="Hechos para revisar esta conexión — el veredicto es tuyo"
+          >
+            ⚠ {connection.reviewNote}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--pcs-text-muted)' }}>—</span>
+        )}
+      </td>
+    </tr>
+  );
 }
 
 function StatusBadge(props: { status: string }) {
@@ -197,6 +241,10 @@ export function Security() {
   const [snapshot, setSnapshot] = useState<SecurityStatusResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Task 032: filtro por proceso en las conexiones TCP */
+  const [connectionFilter, setConnectionFilter] = useState<string>('all');
+  /** Task 032: diff temporal de conexiones desde la última lectura */
+  const [connDiff, setConnDiff] = useState<{ added: number; removed: number } | null>(null);
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -207,6 +255,37 @@ export function Security() {
         undefined,
         READ_TIMEOUT_MS,
       );
+
+      // Task 032: diff temporal — comparar contra la lectura previa (si existe)
+      const prevKey = sessionStorage.getItem('pcsuite.security.connections');
+      if (prevKey && result.connections.length > 0) {
+        try {
+          const prev = new Set(JSON.parse(prevKey) as string[]);
+          const current = new Set(result.connections.map(
+            (c) => `${c.localAddress}:${c.localPort}->${c.remoteAddress}:${c.remotePort}`,
+          ));
+          let added = 0;
+          let removed = 0;
+          for (const key of current) { if (!prev.has(key)) added++; }
+          for (const key of prev) { if (!current.has(key)) removed++; }
+          if (added > 0 || removed > 0) {
+            setConnDiff({ added, removed });
+          } else {
+            setConnDiff(null);
+          }
+        } catch {
+          setConnDiff(null);
+        }
+      }
+
+      // Guardar las conexiones actuales para el próximo diff
+      sessionStorage.setItem(
+        'pcsuite.security.connections',
+        JSON.stringify(result.connections.map(
+          (c) => `${c.localAddress}:${c.localPort}->${c.remoteAddress}:${c.remotePort}`,
+        )),
+      );
+
       setSnapshot(result);
     } catch (caught) {
       setError(errorMessage(caught, 'No se pudo leer el Centro de seguridad de Windows.'));
@@ -504,12 +583,44 @@ export function Security() {
                 <Globe size={14} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
                 Conexiones activas
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Task 032: diff temporal */}
+                {connDiff && (connDiff.added > 0 || connDiff.removed > 0) && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
+                      color: 'var(--pcs-warning)',
+                    }}
+                    title="Cambios desde la última lectura"
+                  >
+                    {connDiff.added > 0 && `+${connDiff.added} nuevas`}
+                    {connDiff.added > 0 && connDiff.removed > 0 && ' · '}
+                    {connDiff.removed > 0 && `-${connDiff.removed} cerradas`}
+                  </span>
+                )}
+                {/* Task 032: filtro por proceso */}
+                <select
+                  value={connectionFilter}
+                  onChange={(e) => setConnectionFilter(e.target.value)}
+                  className="rounded-md border px-2 py-0.5 text-xs"
+                  style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)', background: 'var(--pcs-surface)' }}
+                  aria-label="Filtrar conexiones por proceso"
+                >
+                  <option value="all">Todos los procesos</option>
+                  {[...new Set(snapshot.connections.map((c) => c.process?.name).filter((n): n is string => Boolean(n)))]
+                    .sort()
+                    .map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                </select>
                 <span
                   className="rounded-full px-2 py-0.5 text-xs font-medium"
                   style={toneStyle('muted')}
                 >
-                  {snapshot.connections.length} TCP · {snapshot.udpEndpoints.length} UDP
+                  {connectionFilter === 'all'
+                    ? `${snapshot.connections.length} TCP · ${snapshot.udpEndpoints.length} UDP`
+                    : `${snapshot.connections.filter((c) => c.process?.name === connectionFilter).length} TCP filtradas`}
                 </span>
               </div>
             </div>
@@ -549,46 +660,11 @@ export function Security() {
                           </tr>
                         </thead>
                         <tbody>
-                          {snapshot.connections.map((connection, index) => (
-                            <tr
-                              key={`${connection.localAddress}-${connection.localPort}-${connection.remoteAddress}-${connection.remotePort}-${index}`}
-                              style={{ borderTop: '1px solid var(--pcs-border)' }}
-                            >
-                              <td className="px-3 py-1.5 font-mono">
-                                {connection.localAddress}:{connection.localPort}
-                              </td>
-                              <td className="px-3 py-1.5 font-mono">
-                                {connection.remoteAddress}:{connection.remotePort}
-                              </td>
-                              <td className="px-3 py-1.5 font-mono">{connection.pid ?? '—'}</td>
-                              <td
-                                className="px-3 py-1.5"
-                                title={
-                                  connection.process?.executablePath
-                                    ? `${connection.process.executablePath}${connection.process.signer ? `\nFirmado: ${connection.process.signer}` : '\nSin firma'}`
-                                    : undefined
-                                }
-                              >
-                                {connection.process?.name ?? 'Sin datos'}
-                              </td>
-                              <td className="px-3 py-1.5">
-                                {connection.reviewNote ? (
-                                  <span
-                                    className="rounded-full px-2 py-0.5 text-xs font-medium"
-                                    style={{
-                                      background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
-                                      color: 'var(--pcs-warning)',
-                                    }}
-                                    title="Hechos para revisar esta conexión — el veredicto es tuyo"
-                                  >
-                                    ⚠ {connection.reviewNote}
-                                  </span>
-                                ) : (
-                                  <span style={{ color: 'var(--pcs-text-muted)' }}>—</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
+                  {connectionFilter === 'all'
+                    ? snapshot.connections.map((connection, index) => renderConnectionRow(connection, index))
+                    : snapshot.connections
+                        .filter((c) => c.process?.name === connectionFilter)
+                        .map((connection, index) => renderConnectionRow(connection, index))}
                         </tbody>
                       </table>
                     </div>

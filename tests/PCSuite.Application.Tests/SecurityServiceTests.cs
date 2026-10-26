@@ -25,7 +25,11 @@ public class SecurityServiceTests
         Defender: new DefenderRaw(true, true, DateTimeOffset.UtcNow.AddDays(-1)),
         AntivirusProducts: ["Windows Defender"],
         Firewall: new FirewallRaw(true, true, false),
-        System: new SystemRaw(UacEnabled: true, RdpConnectionsDenied: true),
+        System: new SystemRaw(
+            UacEnabled: true,
+            RdpConnectionsDenied: true,
+            BitLockerOn: true,
+            Smb1Disabled: true),
         Ports:
         [
             new ListeningPort("UDP", "0.0.0.0", 5353, null, null),
@@ -138,7 +142,7 @@ public class SecurityServiceTests
         Assert.Equal(["Windows Defender"], snapshot.Antivirus.Products);
 
         // Con la lectura completa todos los checks quedan en verde.
-        Assert.Equal(["uac", "rdp", "realtime", "signatures"], snapshot.Diagnostics.Select(c => c.Id));
+        Assert.Equal(["uac", "rdp", "bitlocker", "smb1", "realtime", "signatures"], snapshot.Diagnostics.Select(c => c.Id));
         Assert.All(snapshot.Diagnostics, c => Assert.Equal(SecurityStatuses.Ok, c.Status));
     }
 
@@ -259,7 +263,7 @@ public class SecurityServiceTests
             Defender: null,
             AntivirusProducts: null,
             Firewall: new FirewallRaw(null, null, null),
-            System: new SystemRaw(null, null),
+            System: new SystemRaw(null, null, null, null),
             Ports: [],
             Connections: [],
             UdpEndpoints: [],
@@ -275,7 +279,7 @@ public class SecurityServiceTests
         Assert.Equal(SecurityStatuses.Unknown, snapshot.Antivirus.Status);
         Assert.Empty(snapshot.Antivirus.Products);
         Assert.Empty(snapshot.Ports);
-        Assert.Equal(4, snapshot.Diagnostics.Count);
+        Assert.Equal(6, snapshot.Diagnostics.Count);
         Assert.All(snapshot.Diagnostics, c => Assert.Equal(SecurityStatuses.Unknown, c.Status));
     }
 
@@ -288,7 +292,7 @@ public class SecurityServiceTests
         Assert.Equal(SecurityStatuses.Unknown, snapshot.Firewall.Status);
         Assert.Empty(snapshot.Ports);
         Assert.Empty(snapshot.Antivirus.Products);
-        Assert.Equal(4, snapshot.Diagnostics.Count);
+        Assert.Equal(6, snapshot.Diagnostics.Count);
     }
 
     [Fact]

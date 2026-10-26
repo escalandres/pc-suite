@@ -246,7 +246,9 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
 
     private static SystemRaw ReadSystemFlags() => new(
         UacEnabled: ReadEnabled(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLUA"),
-        RdpConnectionsDenied: ReadEnabled(@"SYSTEM\CurrentControlSet\Control\Terminal Server", "fDenyTSConnections"));
+        RdpConnectionsDenied: ReadEnabled(@"SYSTEM\CurrentControlSet\Control\Terminal Server", "fDenyTSConnections"),
+        BitLockerOn: ReadBitLockerStatus(),
+        Smb1Disabled: ReadSmb1Disabled());
 
     /// <summary>DWORD del registro; null si la clave/valor falta o HKLM no se pudo leer.</summary>
     private static bool? ReadEnabled(string subKey, string valueName)
@@ -255,6 +257,93 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         {
             using var key = Registry.LocalMachine.OpenSubKey(subKey);
             return key?.GetValue(valueName) is int dword ? dword != 0 : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Task 032: BitLocker en el disco del sistema. manage-bde -status C:
+    /// funciona sin elevación para lectura; su salida "Protection Status:
+    /// Protection On/Off" es la línea que se parsea.
+    /// </summary>
+    private static bool? ReadBitLockerStatus()
+    {
+        try
+        {
+            var start = new ProcessStartInfo
+            {
+                FileName = "manage-bde.exe",
+                Arguments = "-status C:",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            };
+
+            using var process = Process.Start(start);
+            if (process is null)
+            {
+                return null;
+            }
+
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(10_000);
+
+            // "Protection Status: Protection On" = cifrado activo
+            // "Protection Status: Protection Off" = disco legible sin contraseña
+            if (output.Contains("Protection Status: Protection On", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (output.Contains("Protection Status: Protection Off", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // "Conversion Status: Fully Encrypted" también cuenta
+            if (output.Contains("Fully Encrypted", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return null; // salida no reconocida (¿BitLocker no instalado?)
+        }
+        catch (Exception)
+        {
+            return null; // manage-bde ausente o falló: sin datos
+        }
+    }
+
+    /// <summary>
+    /// Task 032: SMBv1. El registro puede desactivarlo en DOS claves:
+    /// - LanmanServer\Parameters\SMB1 (0 = desactivado)
+    /// - mrxsmb10\Start (4 = deshabilitado, 1-3 = activo)
+    /// Cualquier desactivación cuenta como "desactivado".
+    /// </summary>
+    private static bool? ReadSmb1Disabled()
+    {
+        try
+        {
+            // Camino 1: parámetros del servidor
+            using var serverKey = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters");
+            if (serverKey?.GetValue("SMB1") is int smb1)
+            {
+                return smb1 == 0;
+            }
+
+            // Camino 2: driver mrxsmb10
+            using var driverKey = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Services\mrxsmb10");
+            if (driverKey?.GetValue("Start") is int startType)
+            {
+                return startType == 4; // 4 = SERVICE_DISABLED
+            }
+
+            return null; // ninguna clave: default del SO (enabled en viejos, off en nuevos)
         }
         catch (Exception)
         {
