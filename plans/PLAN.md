@@ -233,6 +233,55 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 29.1 - Probe: GetExtendedTcpTable con la clase OWNER_PID_CONNECTIONS (la misma iphlpapi que ya se usaba para listeners — los structs MIB ya traían State/Remote/RemotePort, solo se leían listeners). Filtra estado ESTABLISHED (5) y ordena por remoto. Enriquecimiento por PID: una sola consulta WMI Win32_Process para TODAS las rutas + X509Certificate.CreateFromSignedFile para el CN del firmante (sin firma = un HECHO, no un error). Los listeners también ganan tooltip con ruta+firma | ✅ Completado | Procesos del sistema protegen lo que quieren — degradación sin acusar (svchost sin ruta no marca nada) |
 | └ 29.2 - Service: BuildReviewNote (PURO, testeado) computa los marcadores FACTUALES: "sin firma" cuando la ruta es legible y no hay certificado + "ejecutable en TEMP" cuando corre desde la carpeta temporal. Rutas ilegibles (procesos protegidos) NO acusan — el usuario juzga, jamás veredictos | ✅ Completado | UI: columna "Revisión" con chip ámbar ⚠ + tooltip "el veredicto es tuyo"; tooltip de proceso con ruta + firmante en ambas tablas |
 
+### Task 029 - Seguridad: conexiones activas + enriquecimiento por PID
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 029 - Nueva sección "Conexiones activas": TCP establecidas con remoto + UDP vinculados, proceso dueño enriquecido (ruta WMI + firma), chips de revisión | ✅ Completado | 956/956, 0 warnings, tsc+vite OK |
+| ├ 29.1 - Probe: GetExtendedTcpTable clase OWNER_PID_CONNECTIONS + GetExtendedUdpTable, enrich con BuildProcessDetails (WMI Win32_Process ruta + X509CertificateLoader firma) | ✅ Completado | MIB structs ya traían State/Remote — solo se pedía la clase correcta |
+| └ 29.2 - Service: BuildReviewNote (PURO, testeado): "sin firma" cuando la ruta es legible y no hay certificado + "ejecutable en TEMP" | ✅ Completado | UI: columna Revisión con chip ámbar ⚠ |
+
+### Task 029.1 - Endpoints UDP en conexiones activas
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 029.1 - Sub-tabla "Endpoints UDP vinculados" dentro de Conexiones activas: local, PID, proceso (tooltip) + chips | ✅ Completado | Reporte del usuario: "faltan las UDP". 956/956, 0 warnings |
+
+### Task 030 - Persistencia, procesos en revisión y exposición de puertos
+
+> Primeros 3 puntos de la propuesta de seguridad (el triángulo de auditoría:
+> qué corre, qué escucha, qué arranca solo).
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 030 - Auditoría de persistencia + procesos en revisión + badge de exposición de puertos | ✅ Completado | 956/956, 0 warnings, tsc+vite OK |
+| ├ 30.1 - Inicio automático: registro Run/RunOnce (HKCU+HKLM+Wow6432Node) + carpetas Startup + servicios StartMode=Auto via WMI. Cada entrada con ExtractExecutablePath + firma | ✅ Completado | ExtractExecutablePath maneja comillas y sin comillas |
+| ├ 30.2 - Procesos en revisión: lista de TODOS los procesos filtrada a los que tienen marcadores (sin firma / TEMP) + contador "N de M" | ✅ Completado | Solo los marcados — no los 200 svchost que nadie mira |
+| └ 30.3 - Exposición de puertos: badge expuesto (0.0.0.0/::) / local (127.0.0.1/::1) / red (IP específica) | ✅ Completado | Cero backend — lectura del dato que ya viajaba |
+
+### Task 031 - Descubrimiento de actividad (DNS, tareas, shares, hosts)
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 031 - Caché DNS + tareas programadas + shares de red + hosts file | ✅ Completado | 956/956, 0 warnings, tsc+vite OK |
+| ├ 31.1 - Caché DNS: DnsGetCacheDataTable (dnsapi.dll P/Invoke de la linked list) — dominios resueltos + tipos A/CNAME/AAAA/SRV… | ✅ Completado | Los C2 beacons dejan rastros aquí |
+| ├ 31.2 - Tareas programadas: schtasks /query /fo csv /v /nh (una pasada, sin elevación) + SplitCsvLine con comillas escapadas | ✅ Completado | La columna COMANDO revela el ejecutable |
+| ├ 31.3 - Shares de red: WMI Win32_Share — admin shares (C$, IPC$) etiquetados por el bit 0x80000000 | ✅ Completado | |
+| └ 31.4 - Hosts file: entradas no-comentario de drivers\etc\hosts | ✅ Completado | Redirección de dominios = vector de phishing |
+
+### Task 032 - BitLocker, SMBv1, filtro por proceso y diff temporal
+
+> Últimos puntos de la propuesta de seguridad (geo IP deferred por privacidad).
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 032 - BitLocker + SMBv1 como checks de diagnóstico + filtro por proceso + diff temporal de conexiones | ✅ Completado | 956/956, 0 warnings, tsc+vite OK |
+| ├ 32.1 - BitLocker: manage-bde -status C: parsea "Protection Status: On/Off" (sin elevación). Check Warn = disco sin cifrar | ✅ Completado | |
+| ├ 32.2 - SMBv1: registro LanmanServer\Parameters\SMB1 (0=off) o mrxsmb10\Start (4=disabled). Check Warn = activo (vector WannaCry) | ✅ Completado | |
+| ├ 32.3 - Conexiones por proceso: dropdown que lista procesos únicos de las TCP y filtra la tabla al seleccionar | ✅ Completado | Contador refleja el filtro |
+| ├ 32.4 - Diff temporal: conexiones guardadas en sessionStorage; al refrescar, chip "+N nuevas · -M cerradas" en el header | ✅ Completado | Detecta qué cambió entre lecturas |
+| └ 32.5 - Geo IP: DEFERRED por privacidad (enviaría IPs a un API externo; PCSuite no envía datos a terceros sin consentimiento explícito) | 🔲 Deferred | Si se agrega: toggle "Consultar geolocalización" desactivado por defecto |
+
 ### Task 017 — Landing page + gestión de actualizaciones
 
 | Tarea | Estado | Notas |

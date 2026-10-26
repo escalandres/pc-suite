@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCSuite 0.8.0 — Notas de versión</title>
+  <link rel="stylesheet" href="/pcsuite/assets/styles.css">
+  <link rel="icon" type="image/svg+xml" href="/pcsuite/assets/logo.svg">
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/pcsuite/">
+      <img src="/pcsuite/assets/logo.svg" alt="PCSuite" width="28" height="28">
+      <span>PCSuite</span>
+    </a>
+    <div class="nav-links">
+      <a href="/pcsuite/#descarga">Descarga</a>
+      <a href="/pcsuite/#actualizar">Actualizar</a>
+    </div>
+    <span class="nav-studio">AES Studio</span>
+  </nav>
+  <main class="section">
+    <h1>PCSuite 0.8.0</h1>
+    <p class="section-sub">Publicado el 25 de octubre de 2026</p>
+
+    <article class="notes-content">
+<h1>PCSuite 0.8.0 — Notas de versión</h1>\n\n<blockquote><p>Tag: <code>pcsuite-v0.8.0</code></p></blockquote>
+<blockquote><p>SHA-256: instalador <code>4c04a7ee936d6dbf51c35d6e4bfcf364635181c01e62295ead6d4b899f40d7b1</code> — portable <code>c0f80554bd884aa719645e4bd7bfe96c640b5606f934740b8809c336f6ef71d2</code></p></blockquote>\n\n<hr>\n\n<h2>Title</h2>\n\n<p>`<code><code>
+PCSuite 0.8.0
+</code></code><code></p>\n\n<h2>Description (Markdown)</h2>\n\n<p></code>`<code><code>markdown
+<h3>🛡️ Centro de Seguridad renovado</h3></p>\n\n<p>La página de Seguridad pasa de tarjetas de estado a un <strong>centro de auditoría completo</strong> — todo de solo lectura, sin elevación, con degradación elegante:</p>\n\n<ul><li><strong>Conexiones activas</strong>: quién habla con quién — TCP establecidas con extremo remoto + endpoints UDP vinculados, con el proceso dueño enriquecido (ruta + firma). Chips de revisión ⚠ cuando el ejecutable está sin firma o corre desde TEMP</li>
+<li><strong>Filtros por proceso y diff temporal</strong>: filtra las conexiones por proceso específico, y un chip "+N nuevas · -M cerradas" detecta qué cambió entre lecturas</li>
+<li><strong>Puertos abiertos con badge de exposición</strong>: </code>expuesto<code> (0.0.0.0 — alcanzable desde fuera), </code>local<code> (127.0.0.1), </code>red<code> (IP de la red)</li>
+<li><strong>Procesos en revisión</strong>: solo los que requieren atención (sin firma o en TEMP), con contador "N de M"</li>
+<li><strong>Inicio automático</strong>: registro Run/RunOnce, carpetas Startup y servicios automáticos — el vector nº1 de persistencia de malware, con firma y chips</li>
+<li><strong>Caché DNS</strong>: los dominios que tu máquina resolvió recientemente — donde los C2 beacons dejan rastro</li>
+<li><strong>Tareas programadas</strong>: nombre, estado, próxima ejecución y el COMANDO que ejecuta (lo que el auditor busca)</li>
+<li><strong>Recursos compartidos</strong>: shares de red, con los administrativos (C$, IPC$) etiquetados</li>
+<li><strong>Hosts file</strong>: redirecciones de dominios activas — vector clásico de phishing</li>
+<li><strong>Nuevos checks de diagnóstico</strong>: BitLocker (disco cifrado) y SMBv1 (protocolo obsoleto, vector de WannaCry)</li>
+</ul>
+<h3>🔐 PGP con algoritmo y tamaño</h3>\n\n<p>El generador de claves PGP ahora permite elegir <strong>Ed25519 (recomendada)</strong> o <strong>RSA 2048/3072/4096</strong> — antes solo Ed25519.</p>\n\n<h3>🛡️ Windows Defender en Windows 11</h3>\n\n<p>Fix: Windows 11 actual eliminó el namespace WMI que usábamos para leer Defender — la tarjeta quedaba en "Sin datos". Ahora lee del Centro de seguridad (root\SecurityCenter2) como fallback instantáneo.</p>\n\n<h3>🔄 Avisos de actualización al arrancar</h3>\n\n<p>Si al abrir PCSuite hay versión nueva, aparece un diálogo con la versión y el tamaño — antes solo un badge en la barra lateral. "Actualizar" lleva directo al panel con SHA-256 y UAC.</p>\n\n<h3>🖱️ Drag-and-drop real</h3>\n\n<p>Arrastrá un archivo sobre PCSuite y el escaneo de ClamAV arranca al soltarlo — la zona se ilumina con bordes azules mientras el drag pasa por encima. También funciona para Local Share: arrastrá para enviar.</p>\n\n<h3>🔗 Enlaces externos</h3>\n\n<p>El botón "Notas de versión" ahora abre el navegador del sistema (antes quedaba bloqueado por el popup blocker interno).</p>\n\n<p>#### Nota de compatibilidad</p>\n\n<p>Todos los cambios de protocolo son aditivos: un PCSuite 0.7.x que reciba transferencias o mensajes de un 0.8.0 los procesa igual que siempre.
+</code></code><code><code></p>\n\n<h2>Crear el release</h2>\n\n<p></code></code><code>powershell
+gh release create pcsuite-v0.8.0 </code>
+  --repo escalandres/pc-suite <code>
+  --title "PCSuite 0.8.0" </code>
+  --notes-file docs\landing\notas\0.8.0.md <code>
+  dist\instalador\PCSuite-Setup-0.8.0-win64.exe </code>
+  dist\PCSuite-0.8.0-win-x64.zip
+```</p>\n\n
+    </article>
+  </main>
+  <footer>
+    <p>Requiere Windows 10/11 x64 · WebView2 Runtime (preinstalado con Edge)</p>
+    <p>Sin telemetría: PCSuite no envía nada a ningún servidor salvo la consulta de actualizaciones (y con tu consentimiento para instalar).</p>
+    <p class="copyright">© 2026 AES Studio · sha256 por versión publicado en el manifiesto</p>
+  </footer>
+</body>
+</html>
