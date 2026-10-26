@@ -8,6 +8,8 @@ import { Winget } from './pages/Winget';
 import { Wsl } from './pages/Wsl';
 import { Clamav } from './pages/Clamav';
 import { Certificates } from './pages/Certificates';
+import { FileTools } from './pages/FileTools';
+import { Cipher } from './pages/Cipher';
 import { Cleaner } from './pages/Cleaner';
 import { Security } from './pages/Security';
 import { Settings } from './pages/Settings';
@@ -223,6 +225,10 @@ function renderPage(
       return <Clamav />;
     case 'certificates':
       return <Certificates />;
+    case 'files':
+      return <FileTools />;
+    case 'cipher':
+      return <Cipher />;
     case 'security':
       return <Security />;
     case 'cleaner':

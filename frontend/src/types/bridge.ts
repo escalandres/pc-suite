@@ -53,6 +53,19 @@ export const OperationIds = {
   systemPickFolder: 'system.pickFolder',
   /** Portapapeles nativo del host — navigator.clipboard falla en WebView2 sin permiso. */
   systemWriteClipboard: 'system.writeClipboard',
+  /** Task 033: Archivos — encriptar, hash, shredder, esteganografía. */
+  filesEncrypt: 'files.encrypt',
+  filesDecrypt: 'files.decrypt',
+  filesStegoEmbed: 'files.stegoEmbed',
+  filesStegoExtract: 'files.stegoExtract',
+  filesShred: 'files.shred',
+  filesHash: 'files.hash',
+  /** Task 034: Cifrador — codificadores, hash de texto, AES, XOR. */
+  cipherEncode: 'cipher.encode',
+  cipherHash: 'cipher.hash',
+  cipherEncryptAes: 'cipher.encryptAes',
+  cipherDecryptAes: 'cipher.decryptAes',
+  cipherXor: 'cipher.xor',
   toolsList: 'tools.list',
   toolsSearch: 'tools.search',
   toolExecute: 'tool.execute',

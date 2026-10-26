@@ -329,6 +329,43 @@ public static class OperationIds
     /// </summary>
     public const string UpdateInstall = "update.install";
 
+    // ---------------- Task 033: Archivos ----------------
+
+    /// <summary>Encripta un archivo con AES-256-CBC + PBKDF2 (Task 033).</summary>
+    public const string FilesEncrypt = "files.encrypt";
+
+    /// <summary>Desencripta un archivo .pcsuite-enc (Task 033).</summary>
+    public const string FilesDecrypt = "files.decrypt";
+
+    /// <summary>Oculta texto o un archivo dentro de una imagen PNG (LSB, Task 033).</summary>
+    public const string FilesStegoEmbed = "files.stegoEmbed";
+
+    /// <summary>Extrae el payload oculto de una imagen PNG (Task 033).</summary>
+    public const string FilesStegoExtract = "files.stegoExtract";
+
+    /// <summary>Sobrescribe y borra un archivo de forma segura (Task 033).</summary>
+    public const string FilesShred = "files.shred";
+
+    /// <summary>Hash multi-algoritmo de un archivo (Task 033).</summary>
+    public const string FilesHash = "files.hash";
+
+    // ---------------- Task 034: Cifrador ----------------
+
+    /// <summary>Codifica/decodifica texto con el algoritmo elegido (Task 034).</summary>
+    public const string CipherEncode = "cipher.encode";
+
+    /// <summary>Hash multi-algoritmo de texto (Task 034).</summary>
+    public const string CipherHash = "cipher.hash";
+
+    /// <summary>Cifra texto con AES-256-GCM (Task 034).</summary>
+    public const string CipherEncryptAes = "cipher.encryptAes";
+
+    /// <summary>Descifra texto AES-256-GCM (Task 034).</summary>
+    public const string CipherDecryptAes = "cipher.decryptAes";
+
+    /// <summary>Cifra/decifra texto con XOR (Task 034).</summary>
+    public const string CipherXor = "cipher.xor";
+
     // ---------------- Task 019: certificados ----------------
 
     /// <summary>Genera un certificado X.509 autofirmado (Task 19.1).</summary>

@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
 import {
   Activity,
+  Binary,
+  FolderOpen,
   Home,
   MonitorSmartphone,
   ShieldCheck,
@@ -38,6 +40,8 @@ export type PageId =
   | 'wsl'
   | 'clamav'
   | 'certificates'
+  | 'files'
+  | 'cipher'
   | 'activity'
   | 'settings';
 
@@ -73,6 +77,8 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'clamav', label: 'ClamAV', icon: Bug, enabled: true },
   { id: 'cleaner', label: 'Limpiador', icon: Sparkles, enabled: true },
   { id: 'certificates', label: 'Certificados', icon: FileKey, enabled: true },
+  { id: 'files', label: 'Archivos', icon: FolderOpen, enabled: true },
+  { id: 'cipher', label: 'Cifrador', icon: Binary, enabled: true },
   { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: true },
   { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: true },
   { id: 'plugins', label: 'Plugins', icon: Puzzle, enabled: true },

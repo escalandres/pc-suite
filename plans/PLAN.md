@@ -284,6 +284,96 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 
 ### Task 017 — Landing page + gestión de actualizaciones
 
+(El contenido de Task 017 sigue aquí — se movió Task 022/023/024/025/026/027/028/029/030/031/032 arriba)
+
+### Task 033 — Módulo "Archivos": utilidades de seguridad de archivos
+
+> Pedido del usuario (2026-10-26): nuevo menú top-level para proteger
+> archivos con contraseña, esteganografía y más.
+
+#### Arquitectura
+
+- **Página**: `Archivos.tsx` — top-level en el sidebar, 4 pestañas
+- **Backend**: `FileSecurityService` (Infrastructure) + ops bridge
+- **Sin elevación**: todo local, sin red, sin telemetría
+- **Contrato**: todos los resultados viajan con hashes SHA-256 del input/output
+
+#### Sub-tareas
+
+| Tarea | Descripción | Esfuerzo |
+|---|---|---|
+| 33.1 — **Proteger con contraseña** | Cifrado AES-256-CBC de archivos: PBKDF2 (SHA-256, 100k iter) deriva la clave de la contraseña, IV aleatorio por archivo. Salida: archivo `.pcsuite-enc` con header mágico + IV + salt + ciphertext. Descifrado con la misma contraseña; borrado seguro del original opcional. Progreso en streaming para archivos grandes | M |
+| 33.2 — **Esteganografía** | Ocultar texto o un archivo pequeño dentro de una imagen PNG usando LSB (Least Significant Bit): el píxel menos significativo de cada canal RGB porta 1 bit del payload. La imagen visualmente no cambia. Extracción con la clave correcta; el payload puede llevar contraseña AES opcional | L |
+| 33.3 — **Borrado seguro** | Sobrescribir un archivo con múltiples pasadas (random → ceros → random) antes de borrarlo — el estándar DoD 5220.22-M simplificado. Progreso por pasada; advertencia de que es irreversible | S |
+| 33.4 — **Hash de archivos** | Multi-algoritmo: SHA-256, SHA-1, MD5, CRC32 en una sola lectura. Copiar al portapapeles (bridge clipboard). Selector de archivos nativo | S |
+
+#### Modelo de datos
+
+```csharp
+// Operaciones bridge
+files.encrypt      → { path, password, deleteOriginal? } → { outputPath, sha256 }
+files.decrypt      → { path, password } → { outputPath, sha256 }
+files.stegoEmbed   → { imagePath, payloadPath?, text?, password? } → { outputPath }
+files.stegoExtract → { imagePath, password? } → { text? / outputPath? }
+files.shred        → { path, passes } → { shredded: true }
+files.hash         → { path } → { sha256, sha1, md5, crc32 }
+```
+
+---
+
+### Task 034 — Módulo "Cifrador": codificación y cifrado de mensajes
+
+> Pedido del usuario (2026-10-26): nuevo menú top-level para codificar
+> mensajes con varios algoritmos.
+
+#### Arquitectura
+
+- **Página**: `Cifrador.tsx` — top-level en el sidebar, 3 pestañas:
+  Codificar, Hash, Cifrar
+- **Backend**: `CipherService` (Infrastructure) + ops bridge
+- **Sin elevación**: todo local, sin red
+- **UI**: dos textareas (input/output) con botones de acción;
+  el resultado copiable con un clic (bridge clipboard)
+
+#### Sub-tareas
+
+| Tarea | Descripción | Esfuerzo |
+|---|---|---|
+| 34.1 — **Codificadores de texto** | Base64 encode/decode, Hex encode/decode, URL encode/decode, ROT13, César (shift configurable), Binario, Morse. Tab con dropdown de algoritmo, dos textareas (entrada/salida) y botones Codificar/Decodificar/Copiar/Limpiar | S |
+| 34.2 — **Hash de texto** | MD5, SHA-1, SHA-256, SHA-512 — el texto se procesa en el acto (sin botón, onchange). Copiar individual | XS |
+| 34.3 — **Cifrado de mensajes** | AES-256-GCM con contraseña (PBKDF2): entrada → ciphertext base64; y el inverso. XOR con clave: entrada → salida base64. Salida con formato claro: "AES-256-GCM(base64): ..." | S |
+
+#### Modelo de datos
+
+```csharp
+// Operaciones bridge
+cipher.encode      → { algorithm, input, shift?, key? } → { output }
+cipher.hash        → { input } → { md5, sha1, sha256, sha512 }
+cipher.encryptAes  → { input, password } → { output }
+cipher.decryptAes  → { input, password } → { output }
+cipher.xor         → { input, key } → { output }
+```
+
+#### Algoritmos de codificación (34.1)
+
+| Algoritmo | Codificar | Decodificar | Nota |
+|---|---|---|---|
+| Base64 | texto → base64 | base64 → texto | Estándar |
+| Hex | texto → hex | hex → texto | 1 byte = 2 chars |
+| URL | texto → %XX | %XX → texto | Componente URL |
+| ROT13 | shift 13 | shift 13 | Auto-inverso |
+| César | shift N configurable | shift -N | Clásico |
+| Binario | texto → 1/0 espacios | 1/0 → texto | 8 bits por byte |
+| Morse | texto → dots/dashes | dots/dashes → texto | ITU estándar |
+
+#### Diferencia con Certificados
+
+| Módulo | Qué hace | Cuándo usar |
+|---|---|---|
+| **Certificados** | Identidad y confianza: claves, firmas, CSR | "Necesito que alguien VERIFIQUE que soy yo" |
+| **Archivos** | Protección de archivos: cifrar, ocultar, borrar | "Necesito que ESTE ARCHIVO no lo lea nadie sin la contraseña" |
+| **Cifrador** | Transformación de texto: codificar, hash, cifrar | "Necesito codificar/cifrar ESTE TEXTO rápido" |
+
 | Tarea | Estado | Notas |
 |---|---|---|
 | Task 017 - Landing page (descarga de la app), sistema de actualizaciones desde la app (manifiesto latest.json + SHA-256 en streaming + ejecución del Setup existente), publicación con publicar.bat - ver `docs/landing/PCSuite_Landing_Propuesta.md` | 🚧 En progreso | 17.1-17.4 + 17.6 + sitio desplegado ✅. Pendiente: 17.5 (changelog en la página) y la validación end-to-end del ciclo con firma en un release real (0.5.2). Decisiones: dominio aes-studio.dev con URLs por producto (/pcsuite/); binarios en GitHub Releases del repo público escalandres/pc-suite; el sitio (Astro/Vercel) solo sirve KBs |
