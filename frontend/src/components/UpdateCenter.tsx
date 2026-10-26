@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -96,10 +97,18 @@ export function UpdateStartupModal({ check }: { check: AppUpdateCheckResult | nu
 
   if (!check?.available || check.keyRotationWarning || dismissed) return null;
 
-  return (
+  // createPortal: el diálogo se renderiza DIRECTO en <body>, fuera del
+  // layout del AppLayout (flex container). position:fixed + z-[9999]
+  // garantizan que flote sobre TODO — sidebar, contenido, cualquier cosa.
+  // Sin esto, el modal puede quedar atrapado en el stacking context del
+  // WebView2 (reporte del usuario: "solo aparece como un div en el sidebar").
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0, 0, 0, 0.55)' }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{
+        background: 'rgba(0, 0, 0, 0.55)',
+        backdropFilter: 'blur(2px)',
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="update-modal-title"
@@ -184,7 +193,8 @@ export function UpdateStartupModal({ check }: { check: AppUpdateCheckResult | nu
           SHA-256 y Windows puede pedir permiso (UAC) al instalar.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
