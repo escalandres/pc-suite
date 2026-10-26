@@ -10,6 +10,7 @@ import {
   Server,
   Shield,
   ShieldCheck,
+  Wrench,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
@@ -822,6 +823,216 @@ export function Security() {
                             <span style={{ color: 'var(--pcs-text-muted)' }}>—</span>
                           )}
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Task 031: descubrimiento de actividad */}
+          <section
+            className="rounded-lg border p-4"
+            style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+            aria-label="Actividad de red y programación"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <Network size={14} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+                Actividad de red
+              </h2>
+              <span
+                className="rounded-full px-2 py-0.5 text-xs font-medium"
+                style={toneStyle('muted')}
+              >
+                {snapshot.discovery.dnsCache.length} DNS · {snapshot.discovery.hostsEntries.length} hosts
+              </span>
+            </div>
+
+            {/* Caché DNS */}
+            {snapshot.discovery.dnsCache.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-2 text-xs font-medium" style={{ color: 'var(--pcs-text-muted)' }}>
+                  Caché DNS — dominios resueltos recientemente
+                </p>
+                <div
+                  className="max-h-56 overflow-auto rounded-md border"
+                  style={{ borderColor: 'var(--pcs-border)' }}
+                >
+                  <table className="w-full text-left text-xs pcs-tabular-nums">
+                    <thead>
+                      <tr style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text-muted)' }}>
+                        <th className="px-3 py-2 font-medium">Dominio</th>
+                        <th className="px-3 py-2 font-medium">Tipo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {snapshot.discovery.dnsCache.map((entry, index) => (
+                        <tr
+                          key={`${entry.domain}-${index}`}
+                          style={{ borderTop: '1px solid var(--pcs-border)' }}
+                        >
+                          <td className="px-3 py-1 font-mono">{entry.domain}</td>
+                          <td className="px-3 py-1 font-mono">{entry.recordType}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Hosts file */}
+            {snapshot.discovery.hostsEntries.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-2 text-xs font-medium" style={{ color: 'var(--pcs-text-muted)' }}>
+                  Hosts file — redirecciones de dominios
+                </p>
+                <div
+                  className="max-h-48 overflow-auto rounded-md border"
+                  style={{ borderColor: 'var(--pcs-border)' }}
+                >
+                  <table className="w-full text-left text-xs pcs-tabular-nums">
+                    <thead>
+                      <tr style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text-muted)' }}>
+                        <th className="px-3 py-2 font-medium">IP</th>
+                        <th className="px-3 py-2 font-medium">Hostname</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {snapshot.discovery.hostsEntries.map((entry, index) => (
+                        <tr
+                          key={`${entry.ip}-${entry.hostnames}-${index}`}
+                          style={{ borderTop: '1px solid var(--pcs-border)' }}
+                        >
+                          <td className="px-3 py-1 font-mono">{entry.ip}</td>
+                          <td className="px-3 py-1 font-mono">{entry.hostnames}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Tareas programadas */}
+          <section
+            className="rounded-lg border p-4"
+            style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+            aria-label="Tareas programadas"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <Wrench size={14} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+                Tareas programadas
+              </h2>
+              <span
+                className="rounded-full px-2 py-0.5 text-xs font-medium"
+                style={toneStyle('muted')}
+              >
+                {snapshot.discovery.scheduledTasks.length}
+              </span>
+            </div>
+            {snapshot.discovery.scheduledTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+                <Wrench size={28} aria-hidden className="mb-2 opacity-30" style={{ color: 'var(--pcs-accent)' }} />
+                <h4 className="text-sm font-medium mb-1">Sin tareas programadas legibles</h4>
+                <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                  No se encontraron tareas en el Programador de Windows.
+                </p>
+              </div>
+            ) : (
+              <div
+                className="mt-3 max-h-72 overflow-auto rounded-md border"
+                style={{ borderColor: 'var(--pcs-border)' }}
+              >
+                <table className="w-full text-left text-xs pcs-tabular-nums">
+                  <thead>
+                    <tr style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text-muted)' }}>
+                      <th className="px-3 py-2 font-medium">Nombre</th>
+                      <th className="px-3 py-2 font-medium">Estado</th>
+                      <th className="px-3 py-2 font-medium">Próxima</th>
+                      <th className="px-3 py-2 font-medium">Comando</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.discovery.scheduledTasks.map((task, index) => (
+                      <tr
+                        key={`${task.name}-${index}`}
+                        style={{ borderTop: '1px solid var(--pcs-border)' }}
+                      >
+                        <td className="px-3 py-1.5 font-medium">{task.name}</td>
+                        <td className="px-3 py-1.5">{task.status ?? '—'}</td>
+                        <td className="px-3 py-1.5 text-xs">{task.nextRun ?? '—'}</td>
+                        <td
+                          className="max-w-56 truncate px-3 py-1.5 font-mono text-xs"
+                          title={task.command ?? undefined}
+                        >
+                          {task.command ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Recursos compartidos */}
+          <section
+            className="rounded-lg border p-4"
+            style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+            aria-label="Recursos compartidos"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <Server size={14} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+                Recursos compartidos
+              </h2>
+              <span
+                className="rounded-full px-2 py-0.5 text-xs font-medium"
+                style={toneStyle('muted')}
+              >
+                {snapshot.discovery.networkShares.length}
+              </span>
+            </div>
+            {snapshot.discovery.networkShares.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+                <Server size={28} aria-hidden className="mb-2 opacity-30" style={{ color: 'var(--pcs-accent)' }} />
+                <h4 className="text-sm font-medium mb-1">Sin recursos compartidos</h4>
+                <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                  Ninguna carpeta o impresora expuesta a la red.
+                </p>
+              </div>
+            ) : (
+              <div
+                className="mt-3 max-h-56 overflow-auto rounded-md border"
+                style={{ borderColor: 'var(--pcs-border)' }}
+              >
+                <table className="w-full text-left text-xs pcs-tabular-nums">
+                  <thead>
+                    <tr style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text-muted)' }}>
+                      <th className="px-3 py-2 font-medium">Nombre</th>
+                      <th className="px-3 py-2 font-medium">Ruta</th>
+                      <th className="px-3 py-2 font-medium">Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshot.discovery.networkShares.map((share, index) => (
+                      <tr
+                        key={`${share.name}-${index}`}
+                        style={{ borderTop: '1px solid var(--pcs-border)' }}
+                      >
+                        <td className="px-3 py-1.5 font-medium">{share.name}</td>
+                        <td
+                          className="max-w-56 truncate px-3 py-1.5 font-mono text-xs"
+                          title={share.path ?? share.description ?? undefined}
+                        >
+                          {share.path ?? '—'}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs">{share.shareType}</td>
                       </tr>
                     ))}
                   </tbody>

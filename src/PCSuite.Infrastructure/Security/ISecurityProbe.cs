@@ -41,7 +41,8 @@ public sealed record RawSecurityReading(
     IReadOnlyList<ListeningPort> Ports,
     IReadOnlyList<ActiveConnection> Connections,
     IReadOnlyList<UdpEndpoint> UdpEndpoints,
-    SecurityAudit Audit);
+    SecurityAudit Audit,
+    SecurityDiscovery Discovery);
 
 public interface ISecurityProbe
 {

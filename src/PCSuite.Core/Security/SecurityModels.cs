@@ -64,6 +64,34 @@ public sealed record SecurityAudit(
     IReadOnlyList<FlaggedProcess> FlaggedProcesses,
     int TotalProcesses);
 
+/// <summary>Entrada del caché DNS de Windows (dominios resueltos recientemente).</summary>
+public sealed record DnsCacheEntry(string Domain, string RecordType);
+
+/// <summary>Una tarea programada del Programador de Windows (persistencia).</summary>
+public sealed record ScheduledTaskEntry(
+    string Name,
+    string? Status,
+    string? Command,
+    string? NextRun,
+    string? ReviewNote = null);
+
+/// <summary>Un recurso compartido de red (carpeta expuesta al dominio/localhost).</summary>
+public sealed record NetworkShareEntry(
+    string Name,
+    string? Path,
+    string? Description,
+    string ShareType);
+
+/// <summary>Una entrada no-comentario del archivo hosts (redirección de dominios).</summary>
+public sealed record HostsFileEntry(string Ip, string Hostnames);
+
+/// <summary>Task 031: descubrimiento de actividad — DNS, tareas, shares, hosts.</summary>
+public sealed record SecurityDiscovery(
+    IReadOnlyList<DnsCacheEntry> DnsCache,
+    IReadOnlyList<ScheduledTaskEntry> ScheduledTasks,
+    IReadOnlyList<NetworkShareEntry> NetworkShares,
+    IReadOnlyList<HostsFileEntry> HostsEntries);
+
 /// <summary>
 /// Firewall por perfil (dominio/privado/público). <c>null</c> en un perfil
 /// significa que el registro no se pudo leer — no que esté desactivado.
@@ -135,5 +163,6 @@ public sealed record SecuritySnapshot(
     IReadOnlyList<ActiveConnection> Connections,
     IReadOnlyList<UdpEndpoint> UdpEndpoints,
     SecurityAudit Audit,
+    SecurityDiscovery Discovery,
     IReadOnlyList<SecurityCheck> Diagnostics,
     DateTimeOffset ScannedAt);

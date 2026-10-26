@@ -1022,6 +1022,42 @@ export interface SecurityAuditResult {
   totalProcesses: number;
 }
 
+/** Entrada del caché DNS de Windows (Task 031). */
+export interface DnsCacheEntryResult {
+  domain: string;
+  recordType: string;
+}
+
+/** Una tarea programada del Programador de Windows (Task 031). */
+export interface ScheduledTaskResult {
+  name: string;
+  status?: string | null;
+  command?: string | null;
+  nextRun?: string | null;
+}
+
+/** Un recurso compartido de red (Task 031). */
+export interface NetworkShareResult {
+  name: string;
+  path?: string | null;
+  description?: string | null;
+  shareType: string;
+}
+
+/** Una entrada del hosts file (Task 031). */
+export interface HostsFileEntryResult {
+  ip: string;
+  hostnames: string;
+}
+
+/** Task 031: descubrimiento de actividad (DNS, tareas, shares, hosts). */
+export interface SecurityDiscoveryResult {
+  dnsCache: DnsCacheEntryResult[];
+  scheduledTasks: ScheduledTaskResult[];
+  networkShares: NetworkShareResult[];
+  hostsEntries: HostsFileEntryResult[];
+}
+
 /** Una línea de diagnóstico de security.getStatus. */
 export interface SecurityCheckResult {
   /** uac | rdp | realtime | signatures. */
@@ -1045,6 +1081,8 @@ export interface SecurityStatusResult {
   udpEndpoints: UdpEndpointResult[];
   /** Task 030: auditoría de persistencia y procesos. */
   audit: SecurityAuditResult;
+  /** Task 031: descubrimiento de actividad (DNS, tareas, shares, hosts). */
+  discovery: SecurityDiscoveryResult;
   diagnostics: SecurityCheckResult[];
   /** Marca de tiempo ISO 8601 de la lectura. */
   scannedAt: string;

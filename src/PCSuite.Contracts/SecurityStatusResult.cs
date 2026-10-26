@@ -94,6 +94,63 @@ public sealed class SecurityAuditResult
     public int TotalProcesses { get; init; }
 }
 
+/// <summary>Entrada del caché DNS de Windows (Task 031).</summary>
+public sealed class DnsCacheEntryResult
+{
+    /// <summary>Dominio resuelto.</summary>
+    public string Domain { get; init; } = "";
+
+    /// <summary>Tipo de registro (A, CNAME, AAAA, SRV…).</summary>
+    public string RecordType { get; init; } = "";
+}
+
+/// <summary>Una tarea programada del Programador de Windows (Task 031).</summary>
+public sealed class ScheduledTaskResult
+{
+    public string Name { get; init; } = "";
+
+    public string? Status { get; init; }
+
+    /// <summary>Comando que ejecuta la tarea (si es legible).</summary>
+    public string? Command { get; init; }
+
+    public string? NextRun { get; init; }
+}
+
+/// <summary>Un recurso compartido de red (Task 031).</summary>
+public sealed class NetworkShareResult
+{
+    public string Name { get; init; } = "";
+
+    public string? Path { get; init; }
+
+    public string? Description { get; init; }
+
+    /// <summary>Disco | Impresora | IPC | Admin (Disco)…</summary>
+    public string ShareType { get; init; } = "";
+}
+
+/// <summary>Una entrada del hosts file (Task 031).</summary>
+public sealed class HostsFileEntryResult
+{
+    public string Ip { get; init; } = "";
+
+    /// <summary>Hostnames que apuntan a esta IP (uno o más).</summary>
+    public string Hostnames { get; init; } = "";
+}
+
+/// <summary>Task 031: descubrimiento de actividad — DNS, tareas, shares, hosts.</summary>
+public sealed class SecurityDiscoveryResult
+{
+    public IReadOnlyList<DnsCacheEntryResult> DnsCache { get; init; } = [];
+
+    public IReadOnlyList<ScheduledTaskResult> ScheduledTasks { get; init; } = [];
+
+    public IReadOnlyList<NetworkShareResult> NetworkShares { get; init; } = [];
+
+    public IReadOnlyList<HostsFileEntryResult> HostsEntries { get; init; } = [];
+}
+
 /// <summary>Resultado de security.getStatus: snapshot completo de solo lectura.</summary>
 public sealed class SecurityStatusResult
 {
@@ -117,6 +174,9 @@ public sealed class SecurityStatusResult
 
     /// <summary>Task 030: auditoría de persistencia y procesos.</summary>
     public SecurityAuditResult Audit { get; init; } = new();
+
+    /// <summary>Task 031: descubrimiento de actividad (DNS, tareas, shares, hosts).</summary>
+    public SecurityDiscoveryResult Discovery { get; init; } = new();
 
     /// <summary>Diagnóstico de seguridad (UAC, RDP, protección en tiempo real…).</summary>
     public IReadOnlyList<SecurityCheckResult> Diagnostics { get; init; } = [];

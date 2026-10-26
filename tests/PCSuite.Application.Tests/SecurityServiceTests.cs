@@ -59,7 +59,23 @@ public class SecurityServiceTests
         [
             new FlaggedProcess(999, "weird", Path.Combine(Path.GetTempPath(), "weird.exe"), null, "sin firma · ejecutable en TEMP"),
         ],
-        TotalProcesses: 15));
+        TotalProcesses: 15),
+        Discovery: new SecurityDiscovery(
+        [
+            new DnsCacheEntry("aes-studio.dev", "A"),
+            new DnsCacheEntry("github.com", "A"),
+        ],
+        [
+            new ScheduledTaskEntry("GoogleUpdateTaskMachineUA", "Listo", @"C:\Program Files\Google\Update\GoogleUpdate.exe /ua /installbackground", "2026-10-26 02:00"),
+        ],
+        [
+            new NetworkShareEntry("C$", @"C:\", "Recurso compartido predeterminado", "Admin (Disco)"),
+            new NetworkShareEntry("IPC$", null, "Canalización remota", "Admin (IPC)"),
+        ],
+        [
+            new HostsFileEntry("127.0.0.1", "localhost"),
+            new HostsFileEntry("::1", "localhost"),
+        ]));
 
     private static SecurityService Service(RawSecurityReading raw) => new(new FakeProbe(raw));
 
@@ -102,6 +118,16 @@ public class SecurityServiceTests
         var backupLnk = snapshot.Audit.Autostart.Single(e => e.Name == "backup.lnk");
         Assert.Null(backupLnk.Signer); // un .lnk no lleva firma Authenticode
         Assert.Null(backupLnk.ReviewNote); // sin ruta de exe legible: no acusa
+
+        // Task 031: descubrimiento de actividad.
+        Assert.Equal(2, snapshot.Discovery.DnsCache.Count);
+        Assert.Equal("aes-studio.dev", snapshot.Discovery.DnsCache[0].Domain);
+        Assert.Equal("A", snapshot.Discovery.DnsCache[0].RecordType);
+        Assert.Single(snapshot.Discovery.ScheduledTasks);
+        Assert.Equal(2, snapshot.Discovery.NetworkShares.Count);
+        var cShare = snapshot.Discovery.NetworkShares.Single(s => s.Name == "C$");
+        Assert.Contains("Admin", cShare.ShareType);
+        Assert.Equal(2, snapshot.Discovery.HostsEntries.Count);
 
         Assert.Equal(SecurityStatuses.Good, snapshot.Firewall.Status);
         Assert.True(snapshot.Firewall.DomainEnabled);
@@ -237,7 +263,8 @@ public class SecurityServiceTests
             Ports: [],
             Connections: [],
             UdpEndpoints: [],
-            Audit: new SecurityAudit([], [], 0));
+            Audit: new SecurityAudit([], [], 0),
+            Discovery: new SecurityDiscovery([], [], [], []));
 
         var snapshot = await Service(reading).GetStatusAsync();
 

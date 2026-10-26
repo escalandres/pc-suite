@@ -64,7 +64,8 @@ public sealed class SecurityService : ISecurityService
         Ports: [],
         Connections: [],
         UdpEndpoints: [],
-        Audit: new SecurityAudit([], [], 0));
+        Audit: new SecurityAudit([], [], 0),
+        Discovery: new SecurityDiscovery([], [], [], []));
 
     private static SecuritySnapshot Build(RawSecurityReading raw, DateTimeOffset now)
     {
@@ -131,7 +132,7 @@ public sealed class SecurityService : ISecurityService
             BuildSignatureCheck(raw.Defender, now),
         };
 
-        return new SecuritySnapshot(defender, firewall, antivirus, ports, connections, udpEndpoints, audit, diagnostics, now);
+        return new SecuritySnapshot(defender, firewall, antivirus, ports, connections, udpEndpoints, audit, raw.Discovery, diagnostics, now);
     }
 
     private static SecurityCheck BuildUacCheck(SystemRaw system) =>

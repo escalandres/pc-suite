@@ -113,6 +113,33 @@ public sealed class SecurityGetStatusOperation : IOperation
                     .ToList(),
                 TotalProcesses = snapshot.Audit.TotalProcesses,
             },
+            Discovery = new SecurityDiscoveryResult
+            {
+                DnsCache = snapshot.Discovery.DnsCache
+                    .Select(e => new DnsCacheEntryResult { Domain = e.Domain, RecordType = e.RecordType })
+                    .ToList(),
+                ScheduledTasks = snapshot.Discovery.ScheduledTasks
+                    .Select(t => new ScheduledTaskResult
+                    {
+                        Name = t.Name,
+                        Status = t.Status,
+                        Command = t.Command,
+                        NextRun = t.NextRun,
+                    })
+                    .ToList(),
+                NetworkShares = snapshot.Discovery.NetworkShares
+                    .Select(s => new NetworkShareResult
+                    {
+                        Name = s.Name,
+                        Path = s.Path,
+                        Description = s.Description,
+                        ShareType = s.ShareType,
+                    })
+                    .ToList(),
+                HostsEntries = snapshot.Discovery.HostsEntries
+                    .Select(h => new HostsFileEntryResult { Ip = h.Ip, Hostnames = h.Hostnames })
+                    .ToList(),
+            },
             Diagnostics = snapshot.Diagnostics
                 .Select(check => new SecurityCheckResult
                 {

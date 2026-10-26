@@ -38,7 +38,8 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
         Ports: ReadPorts(),
         Connections: ReadConnections(),
         UdpEndpoints: ReadUdpEndpoints(),
-        Audit: ReadAudit());
+        Audit: ReadAudit(),
+        Discovery: ReadDiscovery());
 
     // --- Centro de seguridad (WSC) ---------------------------------------
 
@@ -717,7 +718,192 @@ public sealed class WindowsSecurityProbe : ISecurityProbe
             return (0, []);
         }
     }
-    /// ruta del ejecutable y firma del certificado (si firma). Procesos del
+    // --- Descubrimiento de actividad (Task 031) ------------------------------
+
+    private static SecurityDiscovery ReadDiscovery() => new(
+        ReadDnsCache(), ReadScheduledTasks(), ReadNetworkShares(), ReadHostsFile());
+
+    private static IReadOnlyList<DnsCacheEntry> ReadDnsCache()
+    {
+        try
+        {
+            var entries = new List<(string Domain, ushort Type)>();
+            if (DnsGetCacheDataTable(out var head) == 0)
+            {
+                var current = head;
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                while (current != IntPtr.Zero)
+                {
+                    var entry = Marshal.PtrToStructure<DnsCacheEntryStruct>(current);
+                    if (entry.Name is not null && seen.Add(entry.Name))
+                    {
+                        entries.Add((entry.Name, entry.Type));
+                    }
+                    current = entry.Next;
+                }
+            }
+
+            return [.. entries
+                .Select(e => new DnsCacheEntry(e.Domain, DnsTypeLabel(e.Type)))
+                .OrderBy(e => e.Domain, StringComparer.OrdinalIgnoreCase)];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    private static string DnsTypeLabel(ushort type) => type switch
+    {
+        1 => "A", 5 => "CNAME", 6 => "SOA", 12 => "PTR", 15 => "MX", 16 => "TXT",
+        28 => "AAAA", 33 => "SRV", 65 => "HTTPS", _ => $"T{type}",
+    };
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DnsCacheEntryStruct
+    {
+        public IntPtr Next;
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string Name;
+        public ushort Type;
+        public ushort DataLength;
+        public uint Flags;
+    }
+
+    [DllImport("dnsapi.dll", SetLastError = true)]
+    private static extern int DnsGetCacheDataTable(out IntPtr ppEntry);
+
+    private static IReadOnlyList<ScheduledTaskEntry> ReadScheduledTasks()
+    {
+        try
+        {
+            var start = new ProcessStartInfo
+            {
+                FileName = "schtasks.exe",
+                Arguments = "/query /fo csv /v /nh",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            using var process = Process.Start(start);
+            if (process is null) return [];
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(10_000);
+            return ParseScheduledTasks(output);
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    private static IReadOnlyList<ScheduledTaskEntry> ParseScheduledTasks(string csv)
+    {
+        var result = new List<ScheduledTaskEntry>();
+        foreach (var rawLine in csv.Split('\n'))
+        {
+            var line = rawLine.Trim('\r');
+            if (line.Length == 0 || line.StartsWith("\"HostName", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var fields = SplitCsvLine(line);
+            if (fields.Length < 9) continue;
+
+            result.Add(new ScheduledTaskEntry(
+                fields[1].Trim('\\', '"'), fields[3], fields[8], fields[2]));
+        }
+        return result;
+    }
+
+    internal static string[] SplitCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        var inQuotes = false;
+        foreach (var c in line)
+        {
+            if (c == '"') inQuotes = !inQuotes;
+            else if (c == ',' && !inQuotes) { fields.Add(sb.ToString()); sb.Clear(); }
+            else sb.Append(c);
+        }
+        fields.Add(sb.ToString());
+        return [.. fields];
+    }
+
+    private static IReadOnlyList<NetworkShareEntry> ReadNetworkShares()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                @"root\CIMV2", "SELECT Name, Path, Description, Type FROM Win32_Share");
+            using var results = searcher.Get();
+
+            var shares = new List<NetworkShareEntry>();
+            foreach (ManagementObject item in results)
+            {
+                using (item)
+                {
+                    if (item["Name"] is string name)
+                    {
+                        shares.Add(new NetworkShareEntry(
+                            name, item["Path"] as string, item["Description"] as string,
+                            ShareTypeLabel(item["Type"])));
+                    }
+                }
+            }
+            return [.. shares.OrderBy(s => s.Name, StringComparer.Ordinal)];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    private static string ShareTypeLabel(object? typeValue)
+    {
+        if (typeValue is not uint type) return "Desconocido";
+        return (type & 0x80000000) != 0
+            ? $"Admin ({BaseShareType(type & 0x7FFFFFFF)})"
+            : BaseShareType(type);
+    }
+
+    private static string BaseShareType(uint type) => type switch
+    {
+        0 => "Disco", 1 => "Impresora", 2 => "Dispositivo", 3 => "IPC", _ => $"Tipo {type}",
+    };
+
+    private static IReadOnlyList<HostsFileEntry> ReadHostsFile()
+    {
+        try
+        {
+            var path = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System), @"drivers\etc\hosts");
+            if (!File.Exists(path)) return [];
+
+            var entries = new List<HostsFileEntry>();
+            foreach (var raw in File.ReadAllLines(path))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith('#')) continue;
+                var parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 2)
+                {
+                    entries.Add(new HostsFileEntry(parts[0], string.Join(" ", parts[1..])));
+                }
+            }
+            return entries;
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>ruta del ejecutable y firma del certificado (si firma). Procesos del
     /// sistema/ protegidos devuelven lo que dejen leer — nunca lanza.
     /// </summary>
     private static Dictionary<int, PortProcessInfo> BuildProcessDetails(IReadOnlyList<int> pids)
