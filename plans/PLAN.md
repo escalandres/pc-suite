@@ -406,9 +406,9 @@ cipher.xor         → { input, key } → { output }
 
 | Tarea | Estado | Notas |
 |---|---|---|
-| Task 035 - Release 0.9.0: bump de versión, notas, empaquetado, firma PGP y publicación | 🚧 En progreso | Pipeline local COMPLETO. Regla de oro: `latest.json` es inmutable tras publicar.bat — re-publicar exige borrar `releases\0.9.0\` y repetir el pipeline completo. Pendiente (manual, usuario): release de GitHub con los binarios exactos + copia Astro/Vercel |
+| Task 035 - Release 0.9.0: bump de versión, notas, empaquetado, firma PGP y publicación | 🚧 En progreso | Pipeline local COMPLETO; RE-publicado 2026-10-26 tras el fix del Cifrador (el bug nunca llegó al canal público — el sitio seguía en 0.6.0; regla de oro aplicada: releases\0.9.0\ borrada + pipeline completo re-ejecutado). Pendiente (manual, usuario): release de GitHub con los binarios EXACTOS + copia Astro/Vercel |
 | ├ 35.1 - Bump 0.8.0 → 0.9.0 en `Directory.Build.props` | ✅ Completado | Fuente única de verdad de la versión |
-| ├ 35.2 - `docs\landing\notas\0.9.0.md` con el changelog real (hashes reales, no placeholders) | ✅ Completado | Instalador `9649c91d…`, portable `bfb72785…`; publicar.ps1 lo convirtió a `releases\0.9.0\0.9.0.html` |
+| ├ 35.2 - `docs\landing\notas\0.9.0.md` con el changelog real (hashes reales, no placeholders) | ✅ Completado | Instalador `1d966cd5…`, portable `ce84dc7d…` (los de la re-publicación post-fix); publicar.ps1 lo convirtió a `releases\0.9.0\0.9.0.html` |
 | ├ 35.3 - `empaquetar.bat` + ISCC → artefactos autocontenidos | ✅ Completado | Setup 42,3 MB + zip 58,2 MB; el instalador lee la versión del EXE publicado (sin hardcodeo). Estructura Task 022 |
 | └ 35.4 - `publicar.bat`: manifiesto + firma PGP + verificación + `gh release` | ✅ Completado | Firma validada contra la clave EMBEBIDA del updater (si pasa aquí, pasa allí). `gh` CLI no instalado → quedó impreso el comando exacto para crear el release desde la web UI con LOS BINARIOS EXACTOS firmados. `releases\COPIAR-A-ASTRO.md` mapea la copia manual al sitio Astro |
 
