@@ -50,26 +50,54 @@ public sealed class FileSecurityServiceTests : IDisposable
 
         var decrypted = await _service.DecryptAsync(new FileDecryptRequest(encrypted.OutputPath, "clave-de-prueba"));
         Assert.Equal(content, await File.ReadAllBytesAsync(decrypted.OutputPath));
-        Assert.Equal(inputPath, decrypted.OutputPath);
+
+        // Con el original aún en disco, el desencriptado NO lo pisa:
+        // aterriza en "documento (1).txt" (guard del incidente 2026-10-26).
+        Assert.Equal(Path.Combine(_temp.DirectoryPath, "documento (1).txt"), decrypted.OutputPath);
+        Assert.Equal(content, await File.ReadAllBytesAsync(inputPath));
 
         // El original sigue intacto (no se pidió borrado seguro).
         Assert.True(File.Exists(inputPath));
     }
 
     [Fact]
-    public async Task Decrypt_WrongPassword_ThrowsAndLeavesNoPartialOutput()
+    public async Task Decrypt_WrongPassword_ThrowsAndPreservesEveryExistingFile()
     {
         var inputPath = CreateFile("secreto.txt", "contenido"u8.ToArray());
         var encrypted = await _service.EncryptAsync(new FileEncryptRequest(inputPath, "correcta"));
-        var expectedOutput = Path.Combine(_temp.DirectoryPath, "secreto.txt");
 
         var exception = await Assert.ThrowsAsync<FileSecurityException>(
             () => _service.DecryptAsync(new FileDecryptRequest(encrypted.OutputPath, "erronea")));
 
         Assert.Contains("contraseña incorrecta", exception.Message);
 
-        // Sin salida parcial: un archivo a medias solo confundiría.
-        Assert.False(File.Exists(expectedOutput));
+        // El original SOBREVIVE byte-exacto: la salida se deriva a una ruta
+        // libre ANTES de crear nada, y el fallo borra solo esa ruta derivada.
+        // (Bug del incidente 2026-10-26: File.Create truncaba el original y
+        // el TryDelete del catch lo borraba del disco.)
+        Assert.True(File.Exists(inputPath));
+        Assert.Equal("contenido"u8.ToArray(), await File.ReadAllBytesAsync(inputPath));
+        Assert.False(File.Exists(Path.Combine(_temp.DirectoryPath, "secreto (1).txt")));
+    }
+
+    [Fact]
+    public async Task Decrypt_OriginalStillPresent_NeverOverwritesIt()
+    {
+        // El caso real del usuario: encripta SIN borrar el original y luego
+        // desencripta — el nombre derivado es exactamente la ruta del
+        // original. El desencriptado debe aterrizar al lado, nunca encima.
+        var content = RandomNumberGenerator.GetBytes(50_000);
+        var inputPath = CreateFile("cv.pdf.pdf", content);
+        var encrypted = await _service.EncryptAsync(new FileEncryptRequest(inputPath, "clave"));
+
+        var decrypted = await _service.DecryptAsync(new FileDecryptRequest(encrypted.OutputPath, "clave"));
+
+        Assert.Equal(Path.Combine(_temp.DirectoryPath, "cv.pdf (1).pdf"), decrypted.OutputPath);
+        Assert.Equal(content, await File.ReadAllBytesAsync(decrypted.OutputPath));
+
+        // El original quedó BYTE-EXACTO: ambas copias coexisten y el usuario
+        // puede compararlas.
+        Assert.Equal(content, await File.ReadAllBytesAsync(inputPath));
     }
 
     [Fact]

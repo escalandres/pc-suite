@@ -149,6 +149,13 @@ public sealed class FileSecurityService : IFileSecurityService
             outputPath += ".decrypted";
         }
 
+        // NUNCA sobrescribir: el nombre derivado suele ser la ruta del
+        // ORIGINAL todavía presente (encrypt sin "borrar original" y decrypt
+        // comparten carpeta). Incidente 2026-10-26: el descifrado pisó el
+        // PDF original y el usuario perdió la única copia no encriptada —
+        // de aquí en adelante el desencriptado aterriza en "nombre (1).ext".
+        outputPath = DeriveNonCollidingPath(outputPath);
+
         using var aes = Aes.Create();
         aes.Key = key;
         aes.IV = iv;
@@ -339,6 +346,31 @@ public sealed class FileSecurityService : IFileSecurityService
         }
         catch (UnauthorizedAccessException)
         {
+        }
+    }
+
+    /// <summary>
+    /// Ruta libre de colisiones: inserta " (1)", " (2)"… antes de la
+    /// extensión mientras el destino exista. El desencriptado jamás
+    /// destruye un archivo que ya estaba en disco.
+    /// </summary>
+    private static string DeriveNonCollidingPath(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return path;
+        }
+
+        var directory = Path.GetDirectoryName(path) ?? ".";
+        var name = Path.GetFileNameWithoutExtension(path);
+        var extension = Path.GetExtension(path);
+        for (var i = 1; ; i++)
+        {
+            var candidate = Path.Combine(directory, $"{name} ({i}){extension}");
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
         }
     }
 

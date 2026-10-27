@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { AppLayout } from './layouts/AppLayout';
+import { AppLayout, NAV_ITEMS } from './layouts/AppLayout';
 import type { PageId } from './layouts/AppLayout';
 import { Home } from './pages/Home';
 import { Tools } from './pages/Tools';
@@ -30,6 +30,13 @@ import type { AppReadyEvent, SystemInfoResult } from './types/bridge';
 import { EventIds, OperationIds } from './types/bridge';
 import { usePreference, PREF_DENSITY } from './prefs';
 
+/** Páginas válidas para deep-link: EL MISMO registro del sidebar.
+ *  (Fix 2026-10-26: la lista manual olvidó files/cipher — al navegar se
+ *  escribía #/files, el hashchange no lo reconocía y rebotaba a Inicio.
+ *  Derivado de NAV_ITEMS, cualquier página nueva es deep-linkable por
+ *  construcción.) */
+const VALID_PAGES: PageId[] = NAV_ITEMS.filter((item) => item.enabled).map((item) => item.id);
+
 /** Parsea el hash de la URL: #/page o #/tools/tool-id */
 function parseHash(): { page: PageId; toolId?: string } {
   const hash = window.location.hash.slice(1); // quita '#'
@@ -37,12 +44,7 @@ function parseHash(): { page: PageId; toolId?: string } {
   const parts = hash.split('/').filter(Boolean);
   const page = parts[0] as PageId;
   const toolId = parts[1];
-  // Validar que la página existe
-  const validPages: PageId[] = [
-    'home', 'tools', 'localshare', 'cleaner', 'security',
-    'devtools', 'plugins', 'winget', 'wsl', 'clamav', 'certificates', 'activity', 'settings'
-  ];
-  if (!validPages.includes(page)) return { page: 'home' };
+  if (!VALID_PAGES.includes(page)) return { page: 'home' };
   return { page, toolId };
 }
 
