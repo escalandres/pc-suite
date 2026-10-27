@@ -328,6 +328,7 @@ files.hash         → { path } → { sha256, sha1, md5, crc32 }
 | ├ 33.3 - Borrado seguro: pasadas random…random…ceros (clamp 1-7, por defecto 3), `FlushToDisk` por pasada, `File.Delete` al final | ✅ Completado | Aviso IRREVERSIBLE en la UI antes de ejecutar |
 | ├ 33.4 - Hash en UNA sola lectura: SHA-256 + SHA-1 + MD5 + CRC32 (implementación propia, IEEE 802.3) vía TransformBlock por chunk | ✅ Completado | Copiar al portapapeles vía `system.writeClipboard` |
 | └ 33.2 - Esteganografía LSB en PNG | 🔲 Pendiente | Placeholder `NotImplementedException` en FileSecurityService; requiere librería de manipulación de píxeles PNG (ImageSharp o System.Drawing) |
+| └ FIX 2026-10-26 (post-empaquetado 0.9.0) — "Unknown operation 'cipher.encode'" reportado por el usuario | ✅ Completado | Las ops tenían contratos y servicios pero NUNCA se registraron en el CommandRouter de MainForm. Fix: FileOperations + CipherOperations (Infrastructure\Operations) + registro de las 9 ops. Tests nuevos cazaron 3 bugs latentes: AES-GCM descartaba el tag (descifrar fallaba SIEMPRE), CBC rellenaba CADA chunk de 64 KB (archivos grandes se corrompían — ahora CryptoStream), CRC32 devolvía el registro crudo (acumulador propio; vector "123456789" → 0xCBF43926). DeleteOriginal fallaba por el handle de lectura abierto. +39 tests (995/995) incluida la guardia por reflexión: toda constante OperationIds.Files*/Cipher* debe tener su clase IOperation |
 
 ---
 
@@ -372,6 +373,7 @@ cipher.xor         → { input, key } → { output }
 | ├ 34.1 - Encode/Decode: Base64, Hex, URL, ROT13 (auto-inverso), César (shift configurable 1-25), Binario (8 bits por byte), Morse (tabla ITU con puntuación) | ✅ Completado | UI: dropdown de algoritmo + input de shift para César + dos textareas + botones Codificar/Decodificar/Copiar |
 | ├ 34.2 - Hash instantáneo onchange (useEffect + bridge con cancelación): MD5, SHA-1, SHA-256, SHA-512 en una sola pasada | ✅ Completado | Copiar individual por hash vía `system.writeClipboard` |
 | └ 34.3 - AES-256-GCM con PBKDF2 (100k iter): tag 16 B, nonce 12 B, formato base64(salt + nonce + ciphertext‖tag); constructor `AesGcm(key, tagSizeInBytes: 16)` sin SYSLIB0053. XOR con clave repetida (auto-inversible), salida base64 | ✅ Completado | Ambos modos cifrar/descifrar en el tab |
+| └ FIX 2026-10-26 (post-empaquetado 0.9.0) — XOR sin dirección + AES-GCM sin tag | ✅ Completado | El frontend llamaba cipher.xor igual para cifrar y descifrar: imposible distinguir texto→base64 de base64→texto. Fix: el payload lleva `direction` (encrypt/decrypt); cipher.encode usa el mismo campo (encode/decode). El formato AES-GCM ahora viaja el tag: base64(salt + nonce + TAG + ciphertext) |
 
 #### Algoritmos de codificación (34.1)
 

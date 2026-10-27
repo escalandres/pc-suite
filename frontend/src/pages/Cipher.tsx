@@ -288,7 +288,10 @@ function EncryptPanel() {
         }
       } else {
         const r = await bridge.call<{ output: string }>(
-          OperationIds.cipherXor, { input, key: password }, 30_000);
+          OperationIds.cipherXor,
+          { input, key: password, direction },
+          30_000,
+        );
         result = r.output;
       }
       setOutput(result);

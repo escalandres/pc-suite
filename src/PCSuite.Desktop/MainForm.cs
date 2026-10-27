@@ -191,6 +191,13 @@ public partial class MainForm : Form
         // y sin ninguna acción de modificación.
         var securityService = new SecurityService();
 
+        // Archivos + Cifrador (Tasks 033/034): seguridad de archivos y
+        // codificación/cifrado de texto — 100% .NET en proceso, sin red ni
+        // elevación. Sin logger a propósito: contraseñas y claves jamás
+        // se registran (misma regla que PgpService).
+        var fileSecurityService = new PCSuite.Infrastructure.Files.FileSecurityService();
+        var cipherService = new PCSuite.Infrastructure.Files.CipherService();
+
         // Local Share (Task 016): servicio de transferencia de archivos en LAN.
         // elevationManager solo se usa para la regla de firewall (UAC puntual);
         // las transferencias corren con privilegios normales de usuario.
@@ -402,6 +409,15 @@ public partial class MainForm : Form
                 new CertPgpSignFileOperation(certificateService),
                 new CertCsrGenerateOperation(certificateService),
                 new CertPgpVerifyFileOperation(certificateService),
+                new FilesEncryptOperation(fileSecurityService),
+                new FilesDecryptOperation(fileSecurityService),
+                new FilesShredOperation(fileSecurityService),
+                new FilesHashOperation(fileSecurityService),
+                new CipherEncodeOperation(cipherService),
+                new CipherHashOperation(cipherService),
+                new CipherEncryptAesOperation(cipherService),
+                new CipherDecryptAesOperation(cipherService),
+                new CipherXorOperation(cipherService),
                 new UninstallListOperation(),
                 new UninstallDiscoverOperation(),
                 new UninstallRunOfficialOperation(elevationManager),

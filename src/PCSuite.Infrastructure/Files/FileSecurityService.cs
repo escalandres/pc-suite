@@ -38,28 +38,57 @@ public sealed class FileSecurityService : IFileSecurityService
         var key = Rfc2898DeriveBytes.Pbkdf2(
             Encoding.UTF8.GetBytes(request.Password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
 
-        await using var input = File.OpenRead(request.InputPath);
-        await using var output = File.Create(outputPath);
-
-        // Header: magia + salt + IV
-        await output.WriteAsync(Encoding.ASCII.GetBytes(MagicHeader), cancellationToken);
-        await output.WriteAsync(salt, cancellationToken);
-        await output.WriteAsync(iv, cancellationToken);
-
-        // AES-256-CBC en streaming (64KB chunks)
+        // AES-256-CBC en streaming vía CryptoStream: aplica UN solo relleno
+        // PKCS7 al final del archivo. (Fix 2026-10-26: la primera versión
+        // llamaba TransformFinalBlock por chunk de 64 KB, lo que rellenaba
+        // CADA chunk como si fuera el último — al descifrar, los límites de
+        // lectura no coincidían con los de escritura y los archivos de más
+        // de 64 KB se corrompían o reventaban con "padding inválido".)
         using var aes = Aes.Create();
         aes.Key = key;
         aes.IV = iv;
         aes.Mode = CipherMode.CBC;
         aes.Padding = PaddingMode.PKCS7;
 
-        using var encryptor = aes.CreateEncryptor();
-        var buffer = new byte[64 * 1024];
-        int read;
-        while ((read = await input.ReadAsync(buffer, cancellationToken)) > 0)
+        try
         {
-            var encrypted = encryptor.TransformFinalBlock(buffer, 0, read);
-            await output.WriteAsync(encrypted, cancellationToken);
+            // El input vive DENTRO del try: su handle de lectura debe
+            // cerrarse antes del borrado seguro del original — ShredCoreAsync
+            // reabre el archivo para escribir y un lector abierto lo bloquea
+            // (tercer bug de la tanda 2026-10-26: DeleteOriginal SIEMPRE
+            // fallaba con IOException).
+            await using var input = File.OpenRead(request.InputPath);
+            await using var output = File.Create(outputPath);
+
+            // Header: magia + salt + IV
+            await output.WriteAsync(Encoding.ASCII.GetBytes(MagicHeader), cancellationToken);
+            await output.WriteAsync(salt, cancellationToken);
+            await output.WriteAsync(iv, cancellationToken);
+
+            using (var encryptor = aes.CreateEncryptor())
+            await using (var crypto = new CryptoStream(output, encryptor, CryptoStreamMode.Write))
+            {
+                var buffer = new byte[64 * 1024];
+                int read;
+                while ((read = await input.ReadAsync(buffer, cancellationToken)) > 0)
+                {
+                    await crypto.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                }
+
+                await crypto.FlushFinalBlockAsync(cancellationToken);
+            }
+        }
+        catch (ArgumentException)
+        {
+            TryDelete(outputPath);
+            throw new FileSecurityException("La ruta del archivo no es válida.");
+        }
+        catch (IOException)
+        {
+            // Sin .pcsuite-enc a medias: un archivo parcial no descifra y
+            // solo confundiría al usuario.
+            TryDelete(outputPath);
+            throw new FileSecurityException("No se pudo encriptar el archivo (error de disco).");
         }
 
         // Borrado seguro del original si se pidió
@@ -84,8 +113,19 @@ public sealed class FileSecurityService : IFileSecurityService
         }
 
         await using var input = File.OpenRead(request.InputPath);
-        var header = new byte[MagicHeader.Length + SaltSize + IvSize];
-        await input.ReadExactlyAsync(header, cancellationToken);
+
+        byte[] header;
+        try
+        {
+            header = new byte[MagicHeader.Length + SaltSize + IvSize];
+            await input.ReadExactlyAsync(header, cancellationToken);
+        }
+        catch (IOException)
+        {
+            // Truncado o ilegible: ni siquiera llega a tener el header
+            // completo (36 bytes) — mismo mensaje controlado que la magia.
+            throw new FileSecurityException("El archivo no es un .pcsuite-enc válido (header incorrecto).");
+        }
 
         // Validar magia
         var magic = Encoding.ASCII.GetString(header, 0, MagicHeader.Length);
@@ -109,21 +149,39 @@ public sealed class FileSecurityService : IFileSecurityService
             outputPath += ".decrypted";
         }
 
-        await using var output = File.Create(outputPath);
-
         using var aes = Aes.Create();
         aes.Key = key;
         aes.IV = iv;
         aes.Mode = CipherMode.CBC;
         aes.Padding = PaddingMode.PKCS7;
 
-        using var decryptor = aes.CreateDecryptor();
-        var buffer = new byte[64 * 1024 + 32]; // +32 para el padding final
-        int read;
-        while ((read = await input.ReadAsync(buffer, cancellationToken)) > 0)
+        try
         {
-            var decrypted = decryptor.TransformFinalBlock(buffer, 0, read);
-            await output.WriteAsync(decrypted, cancellationToken);
+            await using var output = File.Create(outputPath);
+            using (var decryptor = aes.CreateDecryptor())
+            await using (var crypto = new CryptoStream(output, decryptor, CryptoStreamMode.Write))
+            {
+                // Streaming en ambos sentidos: los límites de lectura del
+                // descifrado NO dependen de los de la escritura (la garantía
+                // que el cifrado por TransformFinalBlock por chunk rompía).
+                await input.CopyToAsync(crypto, 64 * 1024, cancellationToken);
+            }
+        }
+        catch (CryptographicException)
+        {
+            // Contraseña incorrecta o ciphertext dañado: sin salida parcial.
+            TryDelete(outputPath);
+            throw new FileSecurityException("No se pudo descifrar: contraseña incorrecta o archivo no válido.");
+        }
+        catch (ArgumentException)
+        {
+            TryDelete(outputPath);
+            throw new FileSecurityException("La ruta del archivo no es válida.");
+        }
+        catch (IOException)
+        {
+            TryDelete(outputPath);
+            throw new FileSecurityException("No se pudo descifrar el archivo (error de disco).");
         }
 
         return new FileDecryptResult(
@@ -151,7 +209,7 @@ public sealed class FileSecurityService : IFileSecurityService
         using var md5 = MD5.Create();
         using var sha1 = SHA1.Create();
         using var sha256 = SHA256.Create();
-        using var crc32 = new Crc32();
+        var crc32 = new Crc32();
 
         await using var stream = File.OpenRead(path);
         var buffer = new byte[64 * 1024];
@@ -161,20 +219,19 @@ public sealed class FileSecurityService : IFileSecurityService
             md5.TransformBlock(buffer, 0, read, null, 0);
             sha1.TransformBlock(buffer, 0, read, null, 0);
             sha256.TransformBlock(buffer, 0, read, null, 0);
-            crc32.TransformBlock(buffer, 0, read, null, 0);
+            crc32.Append(buffer.AsSpan(0, read));
         }
 
         md5.TransformFinalBlock([], 0, 0);
         sha1.TransformFinalBlock([], 0, 0);
         sha256.TransformFinalBlock([], 0, 0);
-        crc32.TransformFinalBlock([], 0, 0);
 
         return new FileHashResult(
             path,
             Convert.ToHexString(sha256.Hash!).ToLowerInvariant(),
             Convert.ToHexString(sha1.Hash!).ToLowerInvariant(),
             Convert.ToHexString(md5.Hash!).ToLowerInvariant(),
-            crc32.HashUInt32);
+            crc32.Value);
     }
 
     public Task<StegoEmbedResult> StegoEmbedAsync(
@@ -200,17 +257,18 @@ public sealed class FileSecurityService : IFileSecurityService
 
         for (var pass = 0; pass < passes; pass++)
         {
-            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
-            stream.Seek(0, SeekOrigin.Begin);
+            // Última pasada: ceros; el resto, aleatorio.
+            var zeros = pass == passes - 1;
+            if (zeros)
+            {
+                Array.Clear(buffer);
+            }
+
+            await using var stream = await OpenForWriteWithRetryAsync(path, ct);
             var written = 0L;
             while (written < size)
             {
-                if (pass == passes - 1)
-                {
-                    // Última pasada: ceros
-                    Array.Clear(buffer);
-                }
-                else
+                if (!zeros)
                 {
                     RandomNumberGenerator.Fill(buffer);
                 }
@@ -224,7 +282,43 @@ public sealed class FileSecurityService : IFileSecurityService
             stream.Flush(flushToDisk: true);
         }
 
-        File.Delete(path);
+        await DeleteWithRetryAsync(path, ct);
+    }
+
+    /// <summary>
+    /// El antivirus o el indexador retienen un instante los archivos
+    /// recién escritos (la carrera que hacía flaquear el shred en la suite
+    /// completa): reintentos breves antes de dejar pasar el IOException.
+    /// </summary>
+    private static async Task<FileStream> OpenForWriteWithRetryAsync(string path, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                await Task.Delay(50, ct);
+            }
+        }
+    }
+
+    private static async Task DeleteWithRetryAsync(string path, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                await Task.Delay(50, ct);
+            }
+        }
     }
 
     private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
@@ -232,6 +326,20 @@ public sealed class FileSecurityService : IFileSecurityService
         await using var stream = File.OpenRead(path);
         var hash = await SHA256.HashDataAsync(stream, ct);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     private static void ValidatePath(string path)
@@ -248,30 +356,30 @@ public sealed class FileSecurityService : IFileSecurityService
     }
 }
 
-/// <summary>CRC32 (IEEE 802.3) para el hash multi-algoritmo de archivos.</summary>
-internal sealed class Crc32 : HashAlgorithm
+/// <summary>
+/// CRC32 (IEEE 802.3) — acumulador simple y explícito: Append por chunk y
+/// Value al final. NO hereda de HashAlgorithm a propósito: la máquina de
+/// estados de la clase base (Initialize/State) re-inicializa el registro
+/// alrededor del TransformFinalBlock y el valor leído después llegaba en 0
+/// (bug 2026-10-26, cazado por el vector de prueba "123456789" → 0xCBF43926).
+/// Con ciclo de vida propio el resultado es determinista.
+/// </summary>
+internal sealed class Crc32
 {
     private const uint Polynomial = 0xEDB88320;
     private static readonly uint[] Table = BuildTable();
 
-    private uint _hash;
+    private uint _hash = 0xFFFFFFFF;
 
-    public uint HashUInt32 => _hash;
+    /// <summary>Valor final CRC-32 de todo lo acumulado con <see cref="Append"/>.</summary>
+    public uint Value => ~_hash;
 
-    public override void Initialize() => _hash = 0xFFFFFFFF;
-
-    protected override void HashCore(byte[] array, int ibStart, int cbSize)
+    public void Append(ReadOnlySpan<byte> data)
     {
-        for (var i = ibStart; i < ibStart + cbSize; i++)
+        foreach (var b in data)
         {
-            _hash = (_hash >> 8) ^ Table[(_hash ^ array[i]) & 0xFF];
+            _hash = (_hash >> 8) ^ Table[(_hash ^ b) & 0xFF];
         }
-    }
-
-    protected override byte[] HashFinal()
-    {
-        var final = ~_hash;
-        return BitConverter.GetBytes(final);
     }
 
     private static uint[] BuildTable()

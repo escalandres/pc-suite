@@ -62,4 +62,16 @@ public static class BridgeErrorCodes
 
     // Códigos de uninstall.* (Task 020): fallos del desinstalador forzado.
     public const string UninstallFailed = "UNINSTALL_FAILED";
+
+    // Código de las operaciones files.* (Task 033): fallos controlados de
+    // seguridad de archivos (ruta inválida, contraseña vacía, descifrado
+    // fallido, error de disco) con mensaje apto para la UI; jamás rutas de
+    // otros archivos ni stack traces.
+    public const string FilesFailed = "FILES_FAILED";
+
+    // Código de las operaciones cipher.* (Task 034): fallos controlados de
+    // codificación/cifrado de texto (algoritmo desconocido, entrada no
+    // válida, contraseña vacía, descifrado fallido) con mensaje apto para
+    // la UI. Todo es .NET en proceso: no hay timeout propio.
+    public const string CipherFailed = "CIPHER_FAILED";
 }

@@ -89,16 +89,23 @@ public sealed class CipherService
         var key = Rfc2898DeriveBytes.Pbkdf2(
             Encoding.UTF8.GetBytes(password), salt, 100_000, HashAlgorithmName.SHA256, 32);
 
-        using var aesGcm = new AesGcm(key, tagSizeInBytes: 16);
-        var ciphertext = new byte[Encoding.UTF8.GetBytes(input).Length + 16];
+        var plaintext = Encoding.UTF8.GetBytes(input);
+        var ciphertext = new byte[plaintext.Length];
         var tag = new byte[16];
-        aesGcm.Encrypt(nonce, Encoding.UTF8.GetBytes(input), ciphertext, tag);
 
-        // Formato: base64(salt[16] + nonce[12] + ciphertext)
-        var combined = new byte[salt.Length + nonce.Length + ciphertext.Length];
+        using var aesGcm = new AesGcm(key, tagSizeInBytes: 16);
+        aesGcm.Encrypt(nonce, plaintext, ciphertext, tag);
+
+        // Formato: base64(salt[16] + nonce[12] + tag[16] + ciphertext).
+        // El tag VIAJA con el ciphertext — sin él no hay descifrado posible.
+        // (Fix 2026-10-26: la primera versión copiaba 16 bytes de ceros en
+        // su lugar y el tag se perdía → DecryptAes autenticaba contra ceros
+        // y fallaba SIEMPRE.)
+        var combined = new byte[salt.Length + nonce.Length + tag.Length + ciphertext.Length];
         salt.CopyTo(combined, 0);
         nonce.CopyTo(combined, salt.Length);
-        ciphertext.CopyTo(combined, salt.Length + nonce.Length);
+        tag.CopyTo(combined, salt.Length + nonce.Length);
+        ciphertext.CopyTo(combined, salt.Length + nonce.Length + tag.Length);
 
         return Convert.ToBase64String(combined);
     }
@@ -118,14 +125,22 @@ public sealed class CipherService
 
         var salt = combined[..16];
         var nonce = combined[16..28];
-        var ciphertext = combined[28..];
+        var tag = combined[28..44];
+        var ciphertext = combined[44..];
 
         var key = Rfc2898DeriveBytes.Pbkdf2(
             Encoding.UTF8.GetBytes(password), salt, 100_000, HashAlgorithmName.SHA256, 32);
 
+        var plaintext = new byte[ciphertext.Length];
         using var aesGcm = new AesGcm(key, tagSizeInBytes: 16);
-        var plaintext = new byte[combined.Length - 16 - 12 - 16];
-        aesGcm.Decrypt(nonce, combined[(16 + 12)..^16], combined[^16..], plaintext);
+        try
+        {
+            aesGcm.Decrypt(nonce, ciphertext, tag, plaintext);
+        }
+        catch (CryptographicException)
+        {
+            throw new NotSupportedException("No se pudo descifrar: contraseña incorrecta o texto cifrado alterado.");
+        }
         return Encoding.UTF8.GetString(plaintext);
     }
 
