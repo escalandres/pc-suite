@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   FileSearch,
+  FolderOpen,
   Hash,
   Lock,
   ShieldAlert,
@@ -66,6 +67,7 @@ export function FileTools() {
 function EncryptPanel() {
   const [mode, setMode] = useState<'encrypt' | 'decrypt'>('encrypt');
   const [inputPath, setInputPath] = useState('');
+  const [isFolder, setIsFolder] = useState(false);
   const [password, setPassword] = useState('');
   const [deleteOriginal, setDeleteOriginal] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -80,6 +82,25 @@ function EncryptPanel() {
       );
       if (!result.cancelled && result.paths.length > 0) {
         setInputPath(result.paths[0]);
+        setIsFolder(false);
+      }
+    } catch {
+      // best-effort
+    }
+  };
+
+  // Task 033.5: la MISMA op protege carpetas — el backend empaqueta el
+  // árbol completo en un contenedor .pcsuite-enc único.
+  const pickFolder = async () => {
+    try {
+      const result = await bridge.call<{ cancelled: boolean; path?: string | null }>(
+        OperationIds.systemPickFolder,
+        undefined,
+        10 * 60_000,
+      );
+      if (!result.cancelled && result.path) {
+        setInputPath(result.path);
+        setIsFolder(true);
       }
     } catch {
       // best-effort
@@ -92,24 +113,28 @@ function EncryptPanel() {
     setNotice(null);
     try {
       if (mode === 'encrypt') {
-        const result = await bridge.call<{ outputPath: string; sha256: string }>(
+        const result = await bridge.call<{ outputPath: string; sha256: string; kind?: string }>(
           OperationIds.filesEncrypt,
           { inputPath: inputPath.trim(), password, deleteOriginal: deleteOriginal || undefined },
           5 * 60_000,
         );
         setNotice({
           kind: 'success',
-          text: `Encriptado → ${result.outputPath} (SHA-256: ${result.sha256.slice(0, 16)}…)`,
+          text: result.kind === 'folder'
+            ? `Carpeta encriptada → ${result.outputPath} (todo el árbol en un solo contenedor)`
+            : `Encriptado → ${result.outputPath} (SHA-256: ${result.sha256.slice(0, 16)}…)`,
         });
       } else {
-        const result = await bridge.call<{ outputPath: string; sha256: string }>(
+        const result = await bridge.call<{ outputPath: string; sha256: string; kind?: string }>(
           OperationIds.filesDecrypt,
           { inputPath: inputPath.trim(), password },
           5 * 60_000,
         );
         setNotice({
           kind: 'success',
-          text: `Desencriptado → ${result.outputPath}`,
+          text: result.kind === 'folder'
+            ? `Carpeta restaurada en → ${result.outputPath}`
+            : `Desencriptado → ${result.outputPath}`,
         });
       }
     } catch (e) {
@@ -166,7 +191,22 @@ function EncryptPanel() {
           style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
         >
           <FileSearch size={14} aria-hidden className="mr-1" />
-          Examinar…
+          Archivo…
+        </button>
+        <button
+          type="button"
+          onClick={() => void pickFolder()}
+          className={`shrink-0 cursor-pointer rounded-md border px-3 py-2 text-xs font-medium ${
+            isFolder ? '' : 'opacity-70 hover:opacity-100'
+          }`}
+          style={{
+            borderColor: isFolder ? 'var(--pcs-accent)' : 'var(--pcs-border)',
+            color: 'var(--pcs-text)',
+          }}
+          title="Proteger una carpeta completa (subdirectorios incluidos)"
+        >
+          <FolderOpen size={14} aria-hidden className="mr-1" />
+          Carpeta…
         </button>
       </div>
 
@@ -180,7 +220,7 @@ function EncryptPanel() {
         style={{ background: 'var(--pcs-surface-2)', borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
       />
 
-      {mode === 'encrypt' && (
+      {mode === 'encrypt' && !isFolder && (
         <label className="flex cursor-pointer items-center gap-2 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
           <input
             type="checkbox"
@@ -190,6 +230,13 @@ function EncryptPanel() {
           />
           Borrar el original de forma segura tras encriptar
         </label>
+      )}
+      {mode === 'encrypt' && isFolder && (
+        <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+          Protegerás la carpeta completa (subdirectorios incluidos) en un solo
+          contenedor. El borrado seguro de carpetas no está disponible todavía:
+          verificá la desencriptación y borrá la carpeta a mano.
+        </p>
       )}
 
       <button
@@ -213,8 +260,9 @@ function EncryptPanel() {
       )}
 
       <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-        AES-256-CBC con PBKDF2 (100k iteraciones, SHA-256). El archivo encriptado lleva
-        extensión <code>.pcsuite-enc</code>.
+        AES-256-CBC con PBKDF2 (100k iteraciones, SHA-256). La salida lleva extensión{' '}
+        <code>.pcsuite-enc</code> — archivos y carpetas por igual; una carpeta se
+        restaura completa en su sitio (nunca sobrescribe: aterriza como "(1)" si ya existe).
       </p>
     </section>
   );

@@ -4,6 +4,8 @@ namespace PCSuite.Core.Files;
 public sealed class FileSecurityException(string message) : Exception(message);
 
 // --- Encriptar / Desencriptar ---
+// Kind: "file" (PCS1) o "folder" (PCD1, Task 033.5) — el frontend ramifica
+// el mensaje del resultado según qué se protegió.
 
 public sealed record FileEncryptRequest(
     string InputPath,
@@ -11,14 +13,14 @@ public sealed record FileEncryptRequest(
     string? OutputPath = null,
     bool? DeleteOriginal = null);
 
-public sealed record FileEncryptResult(string OutputPath, string Sha256);
+public sealed record FileEncryptResult(string OutputPath, string Sha256, string Kind = "file");
 
 public sealed record FileDecryptRequest(
     string InputPath,
     string Password,
     string? OutputPath = null);
 
-public sealed record FileDecryptResult(string OutputPath, string Sha256);
+public sealed record FileDecryptResult(string OutputPath, string Sha256, string Kind = "file");
 
 // --- Borrado seguro ---
 

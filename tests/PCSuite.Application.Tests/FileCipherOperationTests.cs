@@ -285,6 +285,36 @@ public sealed class FileCipherOperationTests : IDisposable
         Assert.Equal(BridgeErrorCodes.MalformedMessage, response.Error!.Code);
     }
 
+    [Fact]
+    public async Task Files_Folder_RoundTripThroughBridge()
+    {
+        // Task 033.5: la MISMA op files.encrypt protege carpetas — el
+        // contrato solo agrega "kind" y el frontend ramifica el mensaje.
+        var folder = Path.Combine(_temp.DirectoryPath, "proyecto");
+        Directory.CreateDirectory(Path.Combine(folder, "docs"));
+        await File.WriteAllTextAsync(Path.Combine(folder, "docs", "readme.md"), "# hola");
+
+        var encrypted = await Send(
+            _router,
+            "fg1",
+            OperationIds.FilesEncrypt,
+            JsonSerializer.Serialize(new { inputPath = folder, password = "clave" }));
+        Assert.True(encrypted.Success);
+        Assert.Equal("folder", encrypted.Result!.Value.GetProperty("kind").GetString());
+        var encPath = encrypted.Result!.Value.GetProperty("outputPath").GetString();
+
+        var decrypted = await Send(
+            _router,
+            "fg2",
+            OperationIds.FilesDecrypt,
+            JsonSerializer.Serialize(new { inputPath = encPath, password = "clave" }));
+        Assert.True(decrypted.Success);
+        Assert.Equal("folder", decrypted.Result!.Value.GetProperty("kind").GetString());
+        var restored = decrypted.Result!.Value.GetProperty("outputPath").GetString();
+
+        Assert.Equal("# hola", await File.ReadAllTextAsync(Path.Combine(restored!, "docs", "readme.md")));
+    }
+
     // ------------------------------------------------------------------
     // Guardia de la clase de bug: contrato sin operación
     // ------------------------------------------------------------------

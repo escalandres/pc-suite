@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using PCSuite.Core.Files;
@@ -12,10 +13,18 @@ namespace PCSuite.Infrastructure.Files;
 /// Formato de archivo encriptado (.pcsuite-enc):
 ///   [16 bytes magia: PCS1][16 bytes salt][16 bytes IV][ciphertext AES-CBC]
 ///   PBKDF2(SHA-256, 100_000 iter) deriva la clave de la contraseña + salt.
+///
+/// Formato de CARPETA encriptada (Task 033.5): mismo pipeline, magia PCD1:
+///   [PCD1][salt][IV][ciphertext AES-CBC de un ZIP con el árbol completo].
+///   El ZIP se escribe EN STREAMING directo al CryptoStream (ZipArchive
+///   sobre stream no seekable, con data descriptors): sin archivo temporal
+///   y una sola pasada por disco. La restauración extrae con guard
+///   anti-zip-slip y jamás sobrescribe carpetas existentes.
 /// </summary>
 public sealed class FileSecurityService : IFileSecurityService
 {
     private const string MagicHeader = "PCS1";
+    private const string FolderMagicHeader = "PCD1";
 
     private const int SaltSize = 16;
     private const int IvSize = 16;
@@ -26,10 +35,17 @@ public sealed class FileSecurityService : IFileSecurityService
         FileEncryptRequest request,
         CancellationToken cancellationToken = default)
     {
-        ValidatePath(request.InputPath);
+        ValidateEncryptInput(request.InputPath);
         if (string.IsNullOrWhiteSpace(request.Password))
         {
             throw new FileSecurityException("La contraseña no puede estar vacía.");
+        }
+
+        // Task 033.5: la MISMA op protege archivos y carpetas — el servicio
+        // detecta el tipo de entrada y cero superficie nueva del puente.
+        if (Directory.Exists(request.InputPath))
+        {
+            return await EncryptFolderAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
         var outputPath = request.OutputPath ?? request.InputPath + ".pcsuite-enc";
@@ -102,6 +118,89 @@ public sealed class FileSecurityService : IFileSecurityService
             await ComputeSha256Async(outputPath, cancellationToken));
     }
 
+    /// <summary>
+    /// Task 033.5 — protege una CARPETA completa en un contenedor único
+    /// .pcsuite-enc: [PCD1][salt][IV][AES-256-CBC de un ZIP en streaming].
+    /// ZipArchive escribe directo al CryptoStream (stream no seekable con
+    /// data descriptors): una sola pasada por disco, sin ZIP temporal.
+    /// </summary>
+    private async Task<FileEncryptResult> EncryptFolderAsync(
+        FileEncryptRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.DeleteOriginal == true)
+        {
+            // El borrado seguro multipasada de ÁRBOLES queda pendiente: el
+            // checkbox promete "de forma segura" y un Directory.Delete
+            // simple sería una mentira silenciosa.
+            throw new FileSecurityException(
+                "El borrado seguro de carpetas no está disponible todavía: verificá la desencriptación y borrá la carpeta a mano.");
+        }
+
+        var root = request.InputPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var outputPath = request.OutputPath ?? root + ".pcsuite-enc";
+
+        var salt = RandomNumberGenerator.GetBytes(SaltSize);
+        var iv = RandomNumberGenerator.GetBytes(IvSize);
+        var key = Rfc2898DeriveBytes.Pbkdf2(
+            Encoding.UTF8.GetBytes(request.Password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.IV = iv;
+        aes.Mode = CipherMode.CBC;
+        aes.Padding = PaddingMode.PKCS7;
+
+        try
+        {
+            await using var output = File.Create(outputPath);
+            await output.WriteAsync(Encoding.ASCII.GetBytes(FolderMagicHeader), cancellationToken);
+            await output.WriteAsync(salt, cancellationToken);
+            await output.WriteAsync(iv, cancellationToken);
+
+            // Dispose en cadena al salir del bloque: zip (central directory
+            // al CryptoStream) → crypto (relleno PKCS7 final) → encryptor.
+            using (var encryptor = aes.CreateEncryptor())
+            await using (var crypto = new CryptoStream(output, encryptor, CryptoStreamMode.Write))
+            using (var zip = new ZipArchive(crypto, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                // Entrada por directorio: preserva las carpetas VACÍAS.
+                foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories))
+                {
+                    zip.CreateEntry(ToZipEntryName(root, directory) + "/");
+                }
+
+                foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    var entry = zip.CreateEntry(ToZipEntryName(root, file), CompressionLevel.Optimal);
+                    await using var source = File.OpenRead(file);
+                    using var target = entry.Open();
+                    await source.CopyToAsync(target, 64 * 1024, cancellationToken);
+                }
+            }
+        }
+        catch (ArgumentException)
+        {
+            TryDelete(outputPath);
+            throw new FileSecurityException("La ruta de la carpeta no es válida.");
+        }
+        catch (IOException)
+        {
+            TryDelete(outputPath);
+            throw new FileSecurityException("No se pudo encriptar la carpeta (error de disco o archivo bloqueado).");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TryDelete(outputPath);
+            throw new FileSecurityException("No hay permisos suficientes para leer la carpeta.");
+        }
+
+        return new FileEncryptResult(
+            outputPath,
+            await ComputeSha256Async(outputPath, cancellationToken),
+            "folder");
+    }
+
     public async Task<FileDecryptResult> DecryptAsync(
         FileDecryptRequest request,
         CancellationToken cancellationToken = default)
@@ -127,9 +226,9 @@ public sealed class FileSecurityService : IFileSecurityService
             throw new FileSecurityException("El archivo no es un .pcsuite-enc válido (header incorrecto).");
         }
 
-        // Validar magia
+        // Validar magia: PCS1 (archivo) o PCD1 (carpeta, Task 033.5)
         var magic = Encoding.ASCII.GetString(header, 0, MagicHeader.Length);
-        if (magic != MagicHeader)
+        if (magic != MagicHeader && magic != FolderMagicHeader)
         {
             throw new FileSecurityException("El archivo no es un .pcsuite-enc válido (header incorrecto).");
         }
@@ -139,6 +238,17 @@ public sealed class FileSecurityService : IFileSecurityService
 
         var key = Rfc2898DeriveBytes.Pbkdf2(
             Encoding.UTF8.GetBytes(request.Password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.IV = iv;
+        aes.Mode = CipherMode.CBC;
+        aes.Padding = PaddingMode.PKCS7;
+
+        if (magic == FolderMagicHeader)
+        {
+            return await DecryptFolderAsync(request, input, aes, cancellationToken).ConfigureAwait(false);
+        }
 
         var outputPath = request.OutputPath ?? Path.ChangeExtension(request.InputPath, null);
         outputPath = outputPath.EndsWith(".pcsuite-enc")
@@ -155,12 +265,6 @@ public sealed class FileSecurityService : IFileSecurityService
         // PDF original y el usuario perdió la única copia no encriptada —
         // de aquí en adelante el desencriptado aterriza en "nombre (1).ext".
         outputPath = DeriveNonCollidingPath(outputPath);
-
-        using var aes = Aes.Create();
-        aes.Key = key;
-        aes.IV = iv;
-        aes.Mode = CipherMode.CBC;
-        aes.Padding = PaddingMode.PKCS7;
 
         try
         {
@@ -194,6 +298,97 @@ public sealed class FileSecurityService : IFileSecurityService
         return new FileDecryptResult(
             outputPath,
             await ComputeSha256Async(outputPath, cancellationToken));
+    }
+
+    /// <summary>
+    /// Task 033.5 — restaura el árbol de un contenedor PCD1. El plaintext
+    /// (un ZIP) se lee EN STREAMING desde el CryptoStream; cada entrada se
+    /// valida contra la raíz (anti-zip-slip) y la carpeta destino NUNCA
+    /// sobrescribe una existente: aterriza en "Carpeta (1)".
+    /// </summary>
+    private async Task<FileDecryptResult> DecryptFolderAsync(
+        FileDecryptRequest request,
+        FileStream input,
+        Aes aes,
+        CancellationToken cancellationToken)
+    {
+        var folderName = request.OutputPath ?? Path.ChangeExtension(request.InputPath, null);
+        folderName = folderName.EndsWith(".pcsuite-enc")
+            ? folderName[..^".pcsuite-enc".Length]
+            : folderName;
+
+        var target = DeriveNonCollidingDirectoryPath(folderName);
+
+        try
+        {
+            Directory.CreateDirectory(target);
+            var root = Path.GetFullPath(target)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            // ZipArchive lee secuencialmente desde el CryptoStream (stream
+            // no seekable: local headers + data descriptors — el formato
+            // exacto que produce EncryptFolderAsync).
+            using (var decryptor = aes.CreateDecryptor())
+            using (var plain = new CryptoStream(input, decryptor, CryptoStreamMode.Read, leaveOpen: true))
+            using (var zip = new ZipArchive(plain, ZipArchiveMode.Read, leaveOpen: true))
+            {
+                foreach (var entry in zip.Entries)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var full = Path.GetFullPath(Path.Combine(root, entry.FullName));
+                    if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new FileSecurityException(
+                            "El contenedor contiene rutas que escapan de la carpeta destino.");
+                    }
+
+                    if (entry.FullName.EndsWith('/'))
+                    {
+                        Directory.CreateDirectory(full);
+                        continue;
+                    }
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+                    await using var targetStream = File.Create(full);
+                    using var source = entry.Open();
+                    await source.CopyToAsync(targetStream, 64 * 1024, cancellationToken);
+                }
+            }
+        }
+        catch (FileSecurityException)
+        {
+            // Zip-slip: limpiar la restauración parcial antes de subir.
+            TryDeleteDirectory(target);
+            throw;
+        }
+        catch (CryptographicException)
+        {
+            TryDeleteDirectory(target);
+            throw new FileSecurityException("No se pudo descifrar: contraseña incorrecta o contenedor no válido.");
+        }
+        catch (InvalidDataException)
+        {
+            TryDeleteDirectory(target);
+            throw new FileSecurityException("El contenedor de carpeta está dañado.");
+        }
+        catch (ArgumentException)
+        {
+            TryDeleteDirectory(target);
+            throw new FileSecurityException("La ruta de destino no es válida.");
+        }
+        catch (IOException)
+        {
+            TryDeleteDirectory(target);
+            throw new FileSecurityException("No se pudo restaurar la carpeta (error de disco).");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TryDeleteDirectory(target);
+            throw new FileSecurityException("No hay permisos suficientes para restaurar la carpeta.");
+        }
+
+        return new FileDecryptResult(target, string.Empty, "folder");
     }
 
     public async Task<FileShredResult> ShredAsync(
@@ -371,6 +566,61 @@ public sealed class FileSecurityService : IFileSecurityService
             {
                 return candidate;
             }
+        }
+    }
+
+    /// <summary>Encriptar acepta archivo O carpeta (Task 033.5).</summary>
+    private static void ValidateEncryptInput(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
+        {
+            throw new FileSecurityException("La ruta debe ser absoluta.");
+        }
+
+        if (!File.Exists(path) && !Directory.Exists(path))
+        {
+            throw new FileSecurityException($"El archivo no existe: {path}");
+        }
+    }
+
+    /// <summary>Ruta relativa al root con separadores de ZIP (siempre /).</summary>
+    private static string ToZipEntryName(string root, string fullPath) =>
+        Path.GetRelativePath(root, fullPath).Replace('\\', '/');
+
+    /// <summary>
+    /// Carpeta destino libre de colisiones (archivo O carpeta en el camino):
+    /// "Carpeta", "Carpeta (1)", … — la restauración jamás sobrescribe.
+    /// </summary>
+    private static string DeriveNonCollidingDirectoryPath(string path)
+    {
+        if (!File.Exists(path) && !Directory.Exists(path))
+        {
+            return path;
+        }
+
+        var directory = Path.GetDirectoryName(path) ?? ".";
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        for (var i = 1; ; i++)
+        {
+            var candidate = Path.Combine(directory, $"{name} ({i})");
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 
