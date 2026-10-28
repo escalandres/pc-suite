@@ -198,6 +198,13 @@ public partial class MainForm : Form
         var fileSecurityService = new PCSuite.Infrastructure.Files.FileSecurityService();
         var cipherService = new PCSuite.Infrastructure.Files.CipherService();
 
+        // Windows (Task 036): catálogo de comandos de reparación (sfc, DISM).
+        // Ejecuta como los escaneos de ClamAV — runas directo con argv fijo
+        // del catálogo, UAC por operación y consola elevada visible. Sin
+        // logger: los ids y exit codes no son secretos, pero tampoco hay
+        // nada de usuario que registrar.
+        var windowsRepairService = new PCSuite.Infrastructure.Windows.WindowsRepairService(processRunner);
+
         // Local Share (Task 016): servicio de transferencia de archivos en LAN.
         // elevationManager solo se usa para la regla de firewall (UAC puntual);
         // las transferencias corren con privilegios normales de usuario.
@@ -418,6 +425,8 @@ public partial class MainForm : Form
                 new CipherEncryptAesOperation(cipherService),
                 new CipherDecryptAesOperation(cipherService),
                 new CipherXorOperation(cipherService),
+                new WindowsListCommandsOperation(windowsRepairService),
+                new WindowsRunCommandOperation(windowsRepairService, jobManager),
                 new UninstallListOperation(),
                 new UninstallDiscoverOperation(),
                 new UninstallRunOfficialOperation(elevationManager),

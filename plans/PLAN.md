@@ -416,6 +416,59 @@ cipher.xor         → { input, key } → { output }
 | ├ 35.3 - `empaquetar.bat` + ISCC → artefactos autocontenidos | ✅ Completado | Setup 42,3 MB + zip 58,2 MB; el instalador lee la versión del EXE publicado (sin hardcodeo). Estructura Task 022 |
 | └ 35.4 - `publicar.bat`: manifiesto + firma PGP + verificación + `gh release` | ✅ Completado | Firma validada contra la clave EMBEBIDA del updater (si pasa aquí, pasa allí). `gh` CLI no instalado → quedó impreso el comando exacto para crear el release desde la web UI con LOS BINARIOS EXACTOS firmados. `releases\COPIAR-A-ASTRO.md` mapea la copia manual al sitio Astro |
 
+### Task 036 — Módulo "Windows": catálogo de comandos de reparación (v0.10.0)
+
+> Pedido del usuario (2026-10-27): menú top-level para ejecutar comandos de
+> reparación de Windows (sfc, DISM…) con admin. La restricción de arquitectura
+> es innegociable: el puente es tipado — NUNCA ejecución arbitraria. El menú es
+> un CATÁLOGO: cada comando es una entrada de registro con argv fijo; el
+> frontend solo viaja con su id. Los comandos futuros del usuario entran como
+> entradas del registro (cero superficie nueva del puente).
+
+#### Arquitectura
+
+- **Página**: `Windows.tsx` — top-level en el sidebar, catálogo por categoría con confirmación
+- **Ejecución**: patrón escaneos ClamAV (NO el helper IPC): `ProcessRequest { FileName = %SystemRoot%\System32\…, Arguments = argv FIJO del catálogo, Timeout = null (lección 024: trabajos legítimos largos sin tope), RequiresElevation = true }` → UAC por operación, **consola elevada visible** (el progreso nativo de sfc/DISM lo dibuja la propia consola), espera del exit code
+- **Jobs**: `windows.runCommand` responde `{ jobId }` en el acto (patrón ClamAvScanJobOperation); desenlace por job.event/job.get; cancelación vía job.cancel (honesta: el padre no elevado no puede matar el proceso elevado — limitación 024/025 documentada)
+- **Resultados**: exit code → mensaje amable por comando + puntero a los logs oficiales (CBS.log / dism.log); sin parsing de progreso v1 (sfc no es parseable y DISM es frágil — la consola nativa es la fuente visual)
+- **Registro de comandos** (`WindowsCommandCatalog`): agregar uno = 1 entrada (+ opcional un case de mensaje de exit code). Sin helper elevado nuevo: runas directo con argv fijo, igual que los escaneos de ClamAV
+
+#### Catálogo semilla (familia de reparación del sistema)
+
+| Id | Comando | Qué hace | Duración |
+|---|---|---|---|
+| `sfc-scannow` | `sfc /scannow` | Comprueba la integridad de los archivos de sistema protegidos y repara los dañados | 10–30 min |
+| `sfc-verifyonly` | `sfc /verifyonly` | Comprueba SIN reparar (solo reporte a CBS.log) | 10–30 min |
+| `dism-checkhealth` | `DISM /Online /Cleanup-Image /CheckHealth` | Chequeo rápido del almacén de componentes (corrupción marcada) | segundos |
+| `dism-scanhealth` | `DISM /Online /Cleanup-Image /ScanHealth` | Escaneo del almacén de componentes | minutos |
+| `dism-restorehealth` | `DISM /Online /Cleanup-Image /RestoreHealth` | REPARA el almacén de componentes (puede usar Windows Update) | 10–60 min |
+
+La secuencia de reparación documentada en la UI: CheckHealth → ScanHealth → RestoreHealth → `sfc /scannow`.
+
+#### Modelo de datos
+
+```csharp
+// Operaciones bridge
+windows.listCommands → { } → { commands: [{ id, name, description, category, displayCommand, durationHint, heavy, logPath }] }
+windows.runCommand   → { commandId } → { jobId }   // desenlace en el Result del job
+
+// Result del job (job.event / job.get)
+{ succeeded, exitCode, message, logHint }
+```
+
+#### Registro de implementación
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 036 - Página "Windows" en el sidebar (entre Cifrador y Seguridad): catálogo de 5 comandos de reparación + jobs con desenlace sondeado | ✅ Completado | 2026-10-27. 1026/1026 tests (+22), 0 warnings, tsc+vite OK |
+| ├ 36.1 - WindowsCommandCatalog (Infrastructure\Windows): 5 entradas semilla (sfc /scannow, sfc /verifyonly, DISM CheckHealth/ScanHealth/RestoreHealth) con argv fijo, duración, heavy y log oficial. AGREGAR UN COMANDO = 1 entrada (+ opcional un case en Summarize) | ✅ Completado | Tests: ids únicos, binarios reales de System32, argv fijos no vacíos, find de id hostil → null |
+| ├ 36.2 - WindowsRepairService: runas directo (UAC por operación, consola elevada visible), Timeout null (lección 024), id allow-listado ANTES de tocar el runner (cero UAC para desconocidos); exit codes oficiales → mensajes controlados + puntero a CBS.log/dism.log | ✅ Completado | ElevationDeclined → ELEVATION_CANCEL controlado; fallo inesperado → WINDOWS_FAILED sin detalles internos |
+| ├ 36.3 - Ops windows.listCommands / windows.runCommand (patrón ClamAvScanJobOperation): { jobId } en el acto, desenlace como Result del job, job.cancel honesto | ✅ Completado | Payload no-objeto → MALFORMED_MESSAGE; id desconocido → WINDOWS_FAILED sin job residual; job de servicio fallido → status failed con mensaje |
+| └ 36.4 - UI Windows.tsx: catálogo por categoría con chips de duración, comando copiable, confirmación con createPortal (heavy con aviso reforzado), job en curso con cronómetro + cancelar honesto, desenlace con mensaje + logHint | ✅ Completado | VALID_PAGES derivado de NAV_ITEMS: la página nueva es deep-linkable por construcción (sin tocar el allowlist) |
+
+---
+
+
 | Tarea | Estado | Notas |
 |---|---|---|
 | Task 017 - Landing page (descarga de la app), sistema de actualizaciones desde la app (manifiesto latest.json + SHA-256 en streaming + ejecución del Setup existente), publicación con publicar.bat - ver `docs/landing/PCSuite_Landing_Propuesta.md` | 🚧 En progreso | 17.1-17.4 + 17.6 + sitio desplegado ✅. Pendiente: 17.5 (changelog en la página) y la validación end-to-end del ciclo con firma en un release real (0.5.2). Decisiones: dominio aes-studio.dev con URLs por producto (/pcsuite/); binarios en GitHub Releases del repo público escalandres/pc-suite; el sitio (Astro/Vercel) solo sirve KBs |

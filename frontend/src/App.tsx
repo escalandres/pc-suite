@@ -10,6 +10,7 @@ import { Clamav } from './pages/Clamav';
 import { Certificates } from './pages/Certificates';
 import { FileTools } from './pages/FileTools';
 import { Cipher } from './pages/Cipher';
+import { WindowsPage } from './pages/Windows';
 import { Cleaner } from './pages/Cleaner';
 import { Security } from './pages/Security';
 import { Settings } from './pages/Settings';
@@ -231,6 +232,8 @@ function renderPage(
       return <FileTools />;
     case 'cipher':
       return <Cipher />;
+    case 'windows':
+      return <WindowsPage />;
     case 'security':
       return <Security />;
     case 'cleaner':

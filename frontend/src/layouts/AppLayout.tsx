@@ -5,6 +5,7 @@ import {
   Binary,
   FolderOpen,
   Home,
+  Monitor,
   MonitorSmartphone,
   ShieldCheck,
   Wrench,
@@ -42,6 +43,7 @@ export type PageId =
   | 'certificates'
   | 'files'
   | 'cipher'
+  | 'windows'
   | 'activity'
   | 'settings';
 
@@ -79,6 +81,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'certificates', label: 'Certificados', icon: FileKey, enabled: true },
   { id: 'files', label: 'Archivos', icon: FolderOpen, enabled: true },
   { id: 'cipher', label: 'Cifrador', icon: Binary, enabled: true },
+  { id: 'windows', label: 'Windows', icon: Monitor, enabled: true },
   { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: true },
   { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: true },
   { id: 'plugins', label: 'Plugins', icon: Puzzle, enabled: true },

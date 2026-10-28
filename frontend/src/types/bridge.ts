@@ -66,6 +66,9 @@ export const OperationIds = {
   cipherEncryptAes: 'cipher.encryptAes',
   cipherDecryptAes: 'cipher.decryptAes',
   cipherXor: 'cipher.xor',
+  /** Task 036: Windows — catálogo de comandos de reparación (sfc, DISM). */
+  windowsListCommands: 'windows.listCommands',
+  windowsRunCommand: 'windows.runCommand',
   toolsList: 'tools.list',
   toolsSearch: 'tools.search',
   toolExecute: 'tool.execute',
@@ -429,7 +432,7 @@ export interface JobEventPayload {
   progress?: number | null;
   error?: string | null;
   /** Resultado estructurado al completarse (según el tipo de job). */
-  result?: ClamAvScanResult | UpdateDownloadJobResult | null;
+  result?: ClamAvScanResult | UpdateDownloadJobResult | WindowsRunJobResult | null;
 }
 
 /** Snapshot de job.get. */
@@ -442,7 +445,27 @@ export interface JobSnapshot {
   exitCode?: number | null;
   progress?: number | null;
   error?: string | null;
-  result?: ClamAvScanResult | null;
+  result?: ClamAvScanResult | WindowsRunJobResult | null;
+}
+
+/** Result del job de windows.runCommand (Task 036): desenlace del comando. */
+export interface WindowsRunJobResult {
+  succeeded: boolean;
+  exitCode: number;
+  message: string;
+  logHint: string;
+}
+
+/** Comando del catálogo de reparación (windows.listCommands, Task 036). */
+export interface WindowsCommandInfo {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  displayCommand: string;
+  durationHint: string;
+  heavy: boolean;
+  logPath: string;
 }
 
 /** Resultado de job.cancel. */

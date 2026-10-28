@@ -366,6 +366,14 @@ public static class OperationIds
     /// <summary>Cifra/decifra texto con XOR (Task 034).</summary>
     public const string CipherXor = "cipher.xor";
 
+    // ---------------- Task 036: Windows ----------------
+
+    /// <summary>Catálogo de comandos de reparación (solo ids; argv fijo vive en el catálogo del backend).</summary>
+    public const string WindowsListCommands = "windows.listCommands";
+
+    /// <summary>Ejecuta un comando del catálogo como job ({ jobId } en el acto).</summary>
+    public const string WindowsRunCommand = "windows.runCommand";
+
     // ---------------- Task 019: certificados ----------------
 
     /// <summary>Genera un certificado X.509 autofirmado (Task 19.1).</summary>

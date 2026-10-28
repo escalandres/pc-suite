@@ -74,4 +74,9 @@ public static class BridgeErrorCodes
     // válida, contraseña vacía, descifrado fallido) con mensaje apto para
     // la UI. Todo es .NET en proceso: no hay timeout propio.
     public const string CipherFailed = "CIPHER_FAILED";
+
+    // Código de las operaciones windows.* (Task 036): fallos controlados del
+    // catálogo de comandos de reparación (id desconocido, UAC cancelado,
+    // ejecutable ausente, salida con error) con mensaje apto para la UI.
+    public const string WindowsFailed = "WINDOWS_FAILED";
 }
