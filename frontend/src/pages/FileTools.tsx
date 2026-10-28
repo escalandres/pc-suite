@@ -165,7 +165,15 @@ function EncryptPanel() {
         </button>
         <button
           type="button"
-          onClick={() => setMode('decrypt')}
+          onClick={() => {
+            setMode('decrypt');
+            // Una carpeta seleccionada en modo encriptar es inútil aquí:
+            // el contenedor siempre es un ARCHIVO .pcsuite-enc.
+            if (isFolder) {
+              setIsFolder(false);
+              setInputPath('');
+            }
+          }}
           className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer ${
             mode === 'decrypt' ? '' : 'opacity-50'
           }`}
@@ -193,21 +201,23 @@ function EncryptPanel() {
           <FileSearch size={14} aria-hidden className="mr-1" />
           Archivo…
         </button>
-        <button
-          type="button"
-          onClick={() => void pickFolder()}
-          className={`shrink-0 cursor-pointer rounded-md border px-3 py-2 text-xs font-medium ${
-            isFolder ? '' : 'opacity-70 hover:opacity-100'
-          }`}
-          style={{
-            borderColor: isFolder ? 'var(--pcs-accent)' : 'var(--pcs-border)',
-            color: 'var(--pcs-text)',
-          }}
-          title="Proteger una carpeta completa (subdirectorios incluidos)"
-        >
-          <FolderOpen size={14} aria-hidden className="mr-1" />
-          Carpeta…
-        </button>
+        {mode === 'encrypt' && (
+          <button
+            type="button"
+            onClick={() => void pickFolder()}
+            className={`shrink-0 cursor-pointer rounded-md border px-3 py-2 text-xs font-medium ${
+              isFolder ? '' : 'opacity-70 hover:opacity-100'
+            }`}
+            style={{
+              borderColor: isFolder ? 'var(--pcs-accent)' : 'var(--pcs-border)',
+              color: 'var(--pcs-text)',
+            }}
+            title="Proteger una carpeta completa (subdirectorios incluidos)"
+          >
+            <FolderOpen size={14} aria-hidden className="mr-1" />
+            Carpeta…
+          </button>
+        )}
       </div>
 
       <input
