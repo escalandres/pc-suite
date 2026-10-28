@@ -410,9 +410,9 @@ cipher.xor         → { input, key } → { output }
 
 | Tarea | Estado | Notas |
 |---|---|---|
-| Task 035 - Release 0.9.0: bump de versión, notas, empaquetado, firma PGP y publicación | 🚧 En progreso | Pipeline local COMPLETO; 4ª publicación 2026-10-27 (adds: fix ops Cifrador → guard de sobrescritura + deep-linking → carpetas 033.5) — nada llegó al canal público (sitio en 0.6.0); regla de oro aplicada en cada re-corte. Pendiente (manual, usuario): release de GitHub con los binarios EXACTOS + copia Astro/Vercel |
+| Task 035 - Release 0.9.0: bump de versión, notas, empaquetado, firma PGP y publicación | 🚧 En progreso | Pipeline local COMPLETO; 5ª publicación 2026-10-27 (adds: fix ops Cifrador → guard de sobrescritura + deep-linking → carpetas 033.5 → botón Carpeta solo en Encriptar) — nada llegó al canal público (sitio en 0.6.0); regla de oro aplicada en cada re-corte. Pendiente (manual, usuario): release de GitHub con los binarios EXACTOS + copia Astro/Vercel |
 | ├ 35.1 - Bump 0.8.0 → 0.9.0 en `Directory.Build.props` | ✅ Completado | Fuente única de verdad de la versión |
-| ├ 35.2 - `docs\landing\notas\0.9.0.md` con el changelog real (hashes reales, no placeholders) | ✅ Completado | Instalador `e7093e62…`, portable `c712a795…` (4ª publicación, incluye carpetas 033.5); publicar.ps1 lo convirtió a `releases\0.9.0\0.9.0.html` |
+| ├ 35.2 - `docs\landing\notas\0.9.0.md` con el changelog real (hashes reales, no placeholders) | ✅ Completado | Instalador `bf0df91b…`, portable `dc9f9f1b…` (5ª publicación, incluye carpetas 033.5 + ajuste del botón); publicar.ps1 lo convirtió a `releases\0.9.0\0.9.0.html` |
 | ├ 35.3 - `empaquetar.bat` + ISCC → artefactos autocontenidos | ✅ Completado | Setup 42,3 MB + zip 58,2 MB; el instalador lee la versión del EXE publicado (sin hardcodeo). Estructura Task 022 |
 | └ 35.4 - `publicar.bat`: manifiesto + firma PGP + verificación + `gh release` | ✅ Completado | Firma validada contra la clave EMBEBIDA del updater (si pasa aquí, pasa allí). `gh` CLI no instalado → quedó impreso el comando exacto para crear el release desde la web UI con LOS BINARIOS EXACTOS firmados. `releases\COPIAR-A-ASTRO.md` mapea la copia manual al sitio Astro |
 
