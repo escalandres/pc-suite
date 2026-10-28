@@ -466,6 +466,17 @@ windows.runCommand   → { commandId } → { jobId }   // desenlace en el Result
 | ├ 36.3 - Ops windows.listCommands / windows.runCommand (patrón ClamAvScanJobOperation): { jobId } en el acto, desenlace como Result del job, job.cancel honesto | ✅ Completado | Payload no-objeto → MALFORMED_MESSAGE; id desconocido → WINDOWS_FAILED sin job residual; job de servicio fallido → status failed con mensaje |
 | └ 36.4 - UI Windows.tsx: catálogo por categoría con chips de duración, comando copiable, confirmación con createPortal (heavy con aviso reforzado), job en curso con cronómetro + cancelar honesto, desenlace con mensaje + logHint | ✅ Completado | VALID_PAGES derivado de NAV_ITEMS: la página nueva es deep-linkable por construcción (sin tocar el allowlist) |
 
+### Task 037 - Release 0.10.0
+
+> La 0.9.0 nunca llegó al canal público (el sitio sigue en 0.6.0) — la
+> 0.10.0 la supersede y agrega el menú Windows (Task 036).
+
+| Tarea | Estado | Notas |
+|---|---|---|
+| Task 037 - Release 0.10.0: menú Windows + todo lo acumulado de 0.8/0.9 | ✅ Completado | 2026-10-27. Bump 0.9.0 → 0.10.0; notas acumulativas desde 0.6.0; EXE empaquetado versión 0.10.0+50ef7fc verificada |
+| ├ 37.1 - Empaquetado + firma + manifiesto `releases\0.10.0\` | ✅ Completado | Instalador `aa8b519c…`, portable `4c5281b9…`; firma PGP verificada contra la clave embebida del updater |
+| ├ 37.2 - Pendiente manual (usuario): release de GitHub con LOS BINARIOS EXACTOS + copia Astro/Vercel | ⏳ Pendiente | `releases\COPIAR-A-ASTRO.md` mapea la copia; los tags pcsuite-v0.9.0 (69c4419) y pcsuite-v0.10.0 quedan disponibles — el canal público salta de la versión que se copie en adelante |
+
 ---
 
 
