@@ -192,6 +192,10 @@ public partial class MainForm : Form
         // y sin ninguna acción de modificación.
         var securityService = new SecurityService();
 
+        // Plugins (Task 013): servicio de plugins extensibles (AssemblyLoadContext).
+        // Sin argumentos; descubre assemblies en <base>/plugins y PCSUITE_PLUGINS_PATH.
+        var pluginService = new PCSuite.Infrastructure.Plugins.PluginService();
+
         // Archivos + Cifrador (Tasks 033/034): seguridad de archivos y
         // codificación/cifrado de texto — 100% .NET en proceso, sin red ni
         // elevación. Sin logger a propósito: contraseñas y claves jamás
@@ -437,6 +441,9 @@ public partial class MainForm : Form
                 new AiConvertOperation(aiService),
                 new OllamaDetectOperation(aiService),
                 new OllamaListModelsOperation(aiService),
+                new PluginListOperation(pluginService),
+                new PluginCheckUpdateOperation(pluginService),
+                new PluginLaunchOperation(pluginService),
                 new UninstallListOperation(),
                 new UninstallDiscoverOperation(),
                 new UninstallRunOfficialOperation(elevationManager),
