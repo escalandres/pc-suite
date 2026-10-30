@@ -48,7 +48,7 @@ public sealed class WindowsOperationTests
 
         Assert.True(response.Success);
         var commands = response.Result!.Value.GetProperty("commands");
-        Assert.Equal(5, commands.GetArrayLength());
+        Assert.Equal(7, commands.GetArrayLength());
 
         var sfc = commands[0];
         Assert.Equal(WindowsCommandCatalog.SfcScannow, sfc.GetProperty("id").GetString());

@@ -81,6 +81,25 @@ public static class OperationIds
     /// <summary>Desinstala un paquete (payload: {"packageId"}); puede pedir UAC.</summary>
     public const string WingetUninstall = "winget.uninstall";
 
+    // ---------------- Task 038: IA / markItDown ----------------
+
+    /// <summary>Detecta si Python y markItDown están instalados (payload cero).</summary>
+    public const string AiDetect = "ai.detect";
+
+    /// <summary>Instala markItDown vía pip (payload cero; puede pedir UAC).</summary>
+    public const string AiInstall = "ai.install";
+
+    /// <summary>Convierte un archivo a Markdown (payload: {"path"}). Ejecuta como job.</summary>
+    public const string AiConvert = "ai.convert";
+
+    // ---------------- Task 038: Ollama ----------------
+
+    /// <summary>Detecta si Ollama está instalado (payload cero).</summary>
+    public const string OllamaDetect = "ollama.detect";
+
+    /// <summary>Lista los modelos instalados de Ollama (payload cero).</summary>
+    public const string OllamaListModels = "ollama.listModels";
+
     // Operaciones WSL (Task 007): TODAS de payload cero — el frontend no
     // envía argumentos (§12/§53) y los argv son fijos en WslArguments.
     /// <summary>Estado de WSL: instalación, versión, distribución por defecto y running/stopped.</summary>

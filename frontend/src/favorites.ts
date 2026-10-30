@@ -10,7 +10,8 @@ import type { PageId } from './layouts/AppLayout';
 
 export interface Favorite {
   key: string; // 'page:<id>' | 'tool:<id>'
-  label: string;
+  label?: string; // texto guardado (fallback si no hay labelKey)
+  labelKey?: string; // clave de i18n; se prefiere sobre `label`
   page: PageId;
   toolId?: string;
 }

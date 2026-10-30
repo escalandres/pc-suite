@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds, EventIds } from '../types/bridge';
+import { t } from '../lib/i18n';
 import type {
   LocalShareStatusResult,
   LocalShareFirewallStatusResult,
@@ -556,7 +557,7 @@ export function LocalShare() {
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Local Share</h1>
+          <h1 className="text-2xl font-semibold">{t('sidebar.localshare')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
             Envía archivos entre equipos con PCSuite en tu red local. Sin nube, sin servicios externos.
           </p>
@@ -674,7 +675,7 @@ export function LocalShare() {
           style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
         >
           <h2 className="mb-2 text-sm font-semibold">
-            Emparejando con «{pairing.peerDisplayName}»…
+            {t('pages.localshare.pairingWith', { name: pairing.peerDisplayName })}
           </h2>
           <p className="mb-3 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
             Compara este código con el de la pantalla del otro equipo y acepta allí.
@@ -709,11 +710,11 @@ export function LocalShare() {
               color: isRunning ? 'var(--pcs-success)' : 'var(--pcs-text-muted)',
             }}
           >
-            {status?.status === 'running' ? '● Activo' : '○ Detenido'}
+            {status?.status === 'running' ? t('pages.localshare.status.active') : t('pages.localshare.status.stopped')}
           </span>
           {isRunning && (
             <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              Puerto {status?.port} · {status?.displayName}
+              {t('pages.localshare.port', { port: status?.port ?? '', name: status?.displayName ?? '' })}
             </span>
           )}
           <button
@@ -741,7 +742,7 @@ export function LocalShare() {
         >
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
             <MonitorSmartphone size={16} aria-hidden style={{ color: 'var(--pcs-warning)' }} />
-            Solicitud entrante de {incomingRequest.peerDisplayName}
+            {t('pages.localshare.incomingFrom', { name: incomingRequest.peerDisplayName })}
           </h2>
           <p className="mb-3 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
             {incomingRequest.itemCount} archivo(s){incomingRequest.items.some(i => i.isMessage) ? ' / mensaje(es)' : ''} · {formatBytes(incomingRequest.totalBytes)}
@@ -784,7 +785,7 @@ export function LocalShare() {
         {/* Dispositivos */}
         <section className="rounded-lg border p-4" style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-            <Users size={15} aria-hidden /> Dispositivos
+            <Users size={15} aria-hidden /> {t('pages.localshare.devices')}
           </h2>
           {devices.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
@@ -898,7 +899,7 @@ export function LocalShare() {
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <MessageSquare size={16} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
-              <h3 className="text-sm font-semibold">Mensaje de texto</h3>
+              <h3 className="text-sm font-semibold">{t('pages.localshare.textMessage')}</h3>
               <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                 mismo pipeline cifrado y consentimiento que los archivos (tope 16 KB)
               </span>
@@ -945,7 +946,7 @@ export function LocalShare() {
       {/* Transferencias */}
       <section>
         <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <HardDrive size={15} aria-hidden /> Transferencias
+          <HardDrive size={15} aria-hidden /> {t('pages.localshare.transfers')}
         </h2>
         {transfers.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>

@@ -1,6 +1,7 @@
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useActivity } from '../activity';
 import type { ActivityEntry } from '../activity';
+import { useTranslation } from '../hooks/useTranslation';
 
 function formatTime(entry: ActivityEntry): string {
   return new Date(entry.startedAt).toLocaleTimeString();
@@ -64,22 +65,22 @@ function Section({ title, entries }: { title: string; entries: ActivityEntry[] }
  * detalle de error (mensaje estructurado del puente, nunca stack traces).
  */
 export function ActivityPage() {
+  const { t } = useTranslation();
   const entries = useActivity();
   const running = entries.filter((entry) => entry.status === 'running');
   const completed = entries.filter((entry) => entry.status !== 'running');
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold">Actividad</h1>
+      <h1 className="mb-4 text-xl font-semibold">{t('sidebar.activity')}</h1>
       {entries.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--pcs-muted)' }}>
-          Sin actividad todavía: cada operación que ejecutes aparecerá aquí en cuanto empiece y
-          se marcará como completada o fallida al terminar.
+          {t('pages.activity.none')}
         </p>
       ) : (
         <>
-          <Section title="En curso" entries={running} />
-          <Section title="Completadas" entries={completed} />
+          <Section title={t('pages.activity.running')} entries={running} />
+          <Section title={t('pages.activity.completed')} entries={completed} />
         </>
       )}
     </div>

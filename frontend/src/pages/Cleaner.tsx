@@ -7,6 +7,8 @@ import type {
   CleanerCleanResult,
   CleanerScanResult,
 } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
+import { t } from '../lib/i18n';
 
 /**
  * Página "Limpiador" (Task 011): escaneo de las 3 raíces temporales fijas
@@ -48,6 +50,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function Cleaner() {
+  const { t } = useTranslation();
   const [scan, setScan] = useState<CleanerScanResult | null>(null);
   const [scanning, setScanning] = useState(true);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -76,7 +79,7 @@ export function Cleaner() {
             ),
       );
     } catch (error) {
-      setScanError(errorMessage(error, 'No se pudieron escanear las carpetas temporales.'));
+      setScanError(errorMessage(error, t('pages.cleaner.scanError')));
     } finally {
       setScanning(false);
     }
@@ -107,7 +110,7 @@ export function Cleaner() {
     if (ids.length === 0 || busy) return;
     if (
       !window.confirm(
-        `¿Borrar los archivos temporales de ${ids.length} ubicación(es) (${formatBytes(totalSelected)})? Los archivos en uso o sin permiso se omitirán.`,
+        t('pages.cleaner.confirmClean', { count: ids.length, bytes: formatBytes(totalSelected) }),
       )
     ) {
       return;
@@ -128,12 +131,12 @@ export function Cleaner() {
         kind: 'success',
         text:
           skipped > 0
-            ? `Limpieza terminada: ${formatBytes(freed)} liberados, ${skipped} fichero(s) omitidos.`
-            : `Limpieza terminada: ${formatBytes(freed)} liberados.`,
+            ? t('pages.cleaner.cleanSuccessWithSkipped', { bytes: formatBytes(freed), count: skipped })
+            : t('pages.cleaner.cleanSuccess', { bytes: formatBytes(freed) }),
       });
       await runScan();
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'La limpieza falló.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.cleaner.cleanFailed')) });
     } finally {
       setBusy(null);
     }
@@ -146,10 +149,9 @@ export function Cleaner() {
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Limpiador</h1>
+          <h1 className="text-2xl font-semibold">{t('pages.cleaner.title')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            Archivos temporales del usuario, de Windows y de la caché de Windows Update — solo
-            categorías fijas seleccionables, nunca rutas.
+            {t('pages.cleaner.subtitle')}
           </p>
         </div>
         <button
@@ -160,13 +162,13 @@ export function Cleaner() {
           style={{ background: 'var(--pcs-accent)', color: '#fff' }}
         >
           <RefreshCw size={14} aria-hidden className={scanning ? 'animate-spin' : undefined} />
-          Escanear
+          {t('pages.cleaner.scan')}
         </button>
       </header>
 
       {scanning && (
         <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Escaneando carpetas temporales…
+          {t('pages.cleaner.scanning')}
         </p>
       )}
 
@@ -211,10 +213,10 @@ export function Cleaner() {
                 }
                 style={{ accentColor: 'var(--pcs-accent)' }}
               />
-              Seleccionar todas
-            </label>
-            <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              {formatBytes(totalSelected)} seleccionados
+                {t('pages.cleaner.selectAll')}
+              </label>
+              <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+                {t('pages.cleaner.selected', { bytes: formatBytes(totalSelected) })}
             </span>
           </div>
 
@@ -242,10 +244,10 @@ export function Cleaner() {
               }}
             >
               <Trash2 size={14} aria-hidden />
-              {busyClean ? 'Limpiando…' : 'Limpiar seleccionadas'}
+              {busyClean ? t('pages.cleaner.cleaning') : t('pages.cleaner.cleanSelected')}
             </button>
             <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              Sin elevación: lo que no se pueda borrar se omite y se reporta.
+              {t('pages.cleaner.noElevation')}
             </span>
           </div>
         </section>
@@ -256,18 +258,18 @@ export function Cleaner() {
         <section
           className="rounded-lg border p-4"
           style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
-          aria-label="Resultado de la última limpieza"
+          aria-label={t('pages.cleaner.lastCleanAria')}
         >
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Sparkles size={14} aria-hidden />
-            Última limpieza
+            {t('pages.cleaner.lastClean')}
           </h2>
           <ul className="mt-2 divide-y" style={{ borderColor: 'var(--pcs-border)' }}>
             {lastClean.categories.map((category) => (
               <li key={category.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
                 <span className="font-medium">{labelOf(category.id)}</span>
                 <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                  {category.deletedFiles} borrado(s) · {formatBytes(category.freedBytes)} liberados
+                  {t('pages.cleaner.deleted', { files: category.deletedFiles, bytes: formatBytes(category.freedBytes) })}
                 </span>
                 {category.skippedFiles > 0 && (
                   <span
@@ -277,7 +279,7 @@ export function Cleaner() {
                       color: 'var(--pcs-danger)',
                     }}
                   >
-                    {category.skippedFiles} omitido(s)
+                    {t('pages.cleaner.skipped', { count: category.skippedFiles })}
                   </span>
                 )}
                 {category.detail && (
@@ -315,7 +317,7 @@ function CategoryRow(props: {
         checked={props.checked}
         disabled={props.disabled || !category.accessible}
         onChange={props.onToggle}
-        aria-label={`Seleccionar ${category.label}`}
+        aria-label={t('pages.cleaner.selectCategory', { name: category.label })}
         style={{ accentColor: 'var(--pcs-accent)' }}
       />
       <div className="min-w-0 flex-1">
@@ -336,11 +338,11 @@ function CategoryRow(props: {
             color: 'var(--pcs-danger)',
           }}
         >
-          Sin permisos
+          {t('pages.cleaner.noPermissions')}
         </span>
       ) : (
         <span className="whitespace-nowrap text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-          {category.fileCount} fichero(s) · {formatBytes(category.sizeBytes)}
+          {t('pages.cleaner.fileStats', { count: category.fileCount, bytes: formatBytes(category.sizeBytes) })}
         </span>
       )}
     </li>

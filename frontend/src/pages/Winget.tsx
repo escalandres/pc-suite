@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpCircle, CheckSquare, Info, List, RefreshCw, Search, Square, Trash2, Download } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
+import { t } from '../lib/i18n';
 import type {
   InstalledApp,
   InstalledAppListResult,
@@ -40,18 +42,18 @@ interface Notice {
   text: string;
 }
 
-const MODES: { id: Mode; label: string; icon: typeof Search }[] = [
-  { id: 'search', label: 'Buscar', icon: Search },
-  { id: 'installed', label: 'Instalados', icon: List },
-  { id: 'updates', label: 'Actualizaciones', icon: ArrowUpCircle },
-  { id: 'registry', label: 'Registro', icon: Trash2 },
+const MODES: { id: Mode; labelKey: string; icon: typeof Search }[] = [
+  { id: 'search', labelKey: 'pages.winget.modeSearch', icon: Search },
+  { id: 'installed', labelKey: 'pages.winget.modeInstalled', icon: List },
+  { id: 'updates', labelKey: 'pages.winget.modeUpdates', icon: ArrowUpCircle },
+  { id: 'registry', labelKey: 'pages.winget.modeRegistry', icon: Trash2 },
 ];
 
 const EMPTY_HINTS: Record<Mode, string> = {
-  search: 'Escribe una consulta para buscar en el índice de winget.',
-  installed: 'No hay paquetes instalados desde winget.',
-  updates: 'Todo está actualizado: no hay actualizaciones pendientes.',
-  registry: 'No hay apps con entrada de desinstalación en el registro.',
+  search: t('pages.winget.hintSearch'),
+  installed: t('pages.winget.hintInstalled'),
+  updates: t('pages.winget.hintUpdates'),
+  registry: t('pages.winget.hintRegistry'),
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -59,6 +61,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export function Winget() {
+  const { t } = useTranslation();
   const [detect, setDetect] = useState<WinGetDetectResult | null>(null);
   const [loadingDetect, setLoadingDetect] = useState(true);
 
@@ -106,7 +109,7 @@ export function Winget() {
     } catch (error) {
       setPlanFor(null);
     setNotice('__registry__', 'error',
-        errorMessage(error, 'No se pudo construir el plan de eliminación.'));
+        errorMessage(error, t('pages.winget.planError')));
     } finally {
       setPlanLoading(false);
     }
@@ -149,7 +152,7 @@ export function Winget() {
         `Desinstalador oficial lanzado (${result.launcher}). Complétalo en su ventana y luego limpia los residuos.`);
     } catch (error) {
       setNotice('__registry__', 'error',
-        errorMessage(error, 'No se pudo lanzar el desinstalador oficial.'));
+        errorMessage(error, t('pages.winget.uninstallError')));
     }
   };
 
@@ -217,7 +220,7 @@ export function Winget() {
       } catch (error) {
         setPackages([]);
         setRegistryApps([]);
-        setListError(errorMessage(error, 'No se pudieron cargar los paquetes.'));
+        setListError(errorMessage(error, t('pages.winget.loadError')));
       } finally {
         setLoading(false);
       }
@@ -244,7 +247,7 @@ export function Winget() {
         }
       } catch (error) {
         if (!cancelled) {
-          setListError(errorMessage(error, 'No se pudo detectar winget.'));
+          setListError(errorMessage(error, t('pages.winget.detectError')));
         }
       } finally {
         if (!cancelled) {
@@ -432,10 +435,10 @@ export function Winget() {
     // Resumen final (solo si no fue cancelado — el cancel ya puso su aviso).
     if (!batchCancelRef.current) {
       if (failed.length === 0) {
-        setNotice('__batch__', 'success', `Se actualizaron ${ids.length} paquete(s) correctamente.`);
+        setNotice('__batch__', 'success', t('pages.winget.batchSuccess', { count: ids.length }));
       } else {
         setNotice('__batch__', 'error',
-          `${ids.length - failed.length} actualizado(s), ${failed.length} fallido(s): ${failed.join(', ')}`);
+          t('pages.winget.batchPartial', { done: ids.length - failed.length, failed: failed.length, list: failed.join(', ') }));
       }
     }
 
@@ -454,10 +457,9 @@ export function Winget() {
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Paquetes</h1>
+          <h1 className="text-2xl font-semibold">{t('sidebar.winget')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            Gestión de paquetes con winget: búsqueda, instalados, actualizaciones e
-            instalación/desinstalación — solo ids validados por el nativo, nunca comandos.
+            {t('pages.winget.subtitle')}
           </p>
         </div>
         <button
@@ -473,14 +475,14 @@ export function Winget() {
           style={{ background: 'var(--pcs-accent)', color: '#fff' }}
         >
           <RefreshCw size={14} aria-hidden className={loading ? 'animate-spin' : undefined} />
-          Actualizar
+          {t('common.refresh')}
         </button>
       </header>
 
       {/* Detección de winget */}
       {loadingDetect && (
         <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Detectando winget…
+          {t('pages.winget.detecting')}
         </p>
       )}
 
@@ -552,7 +554,7 @@ export function Winget() {
                     }}
                   >
                     <Icon size={14} aria-hidden />
-                    {entry.label}
+                    {t(entry.labelKey)}
                   </button>
                 );
               })}
@@ -572,7 +574,7 @@ export function Winget() {
                   }}
                 >
                   {allSelected ? <CheckSquare size={14} aria-hidden /> : <Square size={14} aria-hidden />}
-                  {allSelected ? 'Ninguno' : 'Todos'}
+                  {allSelected ? t('pages.winget.none') : t('pages.winget.all')}
                 </button>
 
                 {/* Actualizar todo (existente) */}
@@ -581,7 +583,7 @@ export function Winget() {
                   onClick={() => {
                     if (
                       !window.confirm(
-                        `¿Actualizar ${packages.length} paquete(s)? Windows puede mostrar un control de cuentas de usuario (UAC).`,
+                        t('pages.winget.confirmUpgradeAll', { count: packages.length })
                       )
                     ) {
                       return;
@@ -593,7 +595,7 @@ export function Winget() {
                       'upgradeAll',
                       OperationIds.wingetUpgradeAll,
                       undefined,
-                      'Todas las actualizaciones se aplicaron.',
+                      t('pages.winget.upgradeAllCompleted'),
                     );
                   }}
                   disabled={Boolean(busy['__all__']) || batchRunning}
@@ -601,7 +603,7 @@ export function Winget() {
                   style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                 >
                   <Download size={14} aria-hidden />
-                  {busy['__all__'] ? 'Actualizando…' : 'Actualizar todo'}
+                  {busy['__all__'] ? t('pages.winget.updatingAll') : t('pages.winget.upgradeAll')}
                 </button>
 
                 {/* Task 018: actualizar solo los seleccionados */}
@@ -611,8 +613,8 @@ export function Winget() {
                     onClick={() => {
                       if (
                         !window.confirm(
-                          `¿Actualizar ${selectedIds.size} paquete(s) seleccionado(s)? Windows puede mostrar un control de cuentas de usuario (UAC).`,
-                        )
+                        t('pages.winget.confirmUpgradeSelected', { count: selectedIds.size })
+                      )
                       ) {
                         return;
                       }
@@ -622,7 +624,7 @@ export function Winget() {
                     style={{ background: 'var(--pcs-success)', color: '#fff' }}
                   >
                     <ArrowUpCircle size={14} aria-hidden />
-                    Actualizar seleccionados ({selectedIds.size})
+                    {t('pages.winget.upgradeSelected', { count: selectedIds.size })}
                   </button>
                 )}
 
@@ -661,7 +663,7 @@ export function Winget() {
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Buscar paquetes en el índice de winget…"
+                placeholder={t('pages.winget.searchPlaceholder')}
                 className="w-full bg-transparent py-2 text-sm outline-none"
                 style={{ color: 'var(--pcs-text)' }}
               />
@@ -804,7 +806,7 @@ export function Winget() {
                       {mode === 'search' && (
                         <ActionButton
                           busy={action === 'install'}
-                          label="Instalar"
+                          label={t('pages.winget.install')}
                           icon={<Download size={13} aria-hidden />}
                           onClick={() =>
                             void runMutation(
@@ -812,7 +814,7 @@ export function Winget() {
                               'install',
                               OperationIds.wingetInstall,
                               { packageId: pkg.id },
-                              `Se instaló ${pkg.name}.`,
+                              t('pages.winget.installSuccess', { name: pkg.name }),
                             )
                           }
                         />
@@ -821,7 +823,7 @@ export function Winget() {
                       {mode === 'updates' && (
                         <ActionButton
                           busy={action === 'upgrade'}
-                          label="Actualizar"
+                          label={t('pages.winget.upgrade')}
                           icon={<ArrowUpCircle size={13} aria-hidden />}
                           onClick={() =>
                             void runMutation(
@@ -829,7 +831,7 @@ export function Winget() {
                               'upgrade',
                               OperationIds.wingetUpgrade,
                               { packageId: pkg.id },
-                              `Se actualizó ${pkg.name}.`,
+                              t('pages.winget.upgradeSuccess', { name: pkg.name }),
                             )
                           }
                         />
@@ -838,11 +840,11 @@ export function Winget() {
                       {mode === 'installed' && (
                         <ActionButton
                           busy={action === 'uninstall'}
-                          label="Desinstalar"
+                          label={t('pages.winget.uninstall')}
                           danger
                           icon={<Trash2 size={13} aria-hidden />}
                           onClick={() => {
-                            if (!window.confirm(`¿Desinstalar ${pkg.name} (${pkg.id})?`)) {
+                            if (!window.confirm(t('pages.winget.confirmUninstall', { name: pkg.name, id: pkg.id }))) {
                               return;
                             }
                             void runMutation(
@@ -1026,7 +1028,7 @@ function RegistryList(props: {
                     style={{ borderColor: 'var(--pcs-danger)', color: 'var(--pcs-danger)' }}
                   >
                     <Trash2 size={12} aria-hidden />
-                    Desinstalar…
+                    {t('pages.winget.uninstallButton')}
                   </button>
                 </span>
               </div>

@@ -20,6 +20,7 @@ import type {
   SystemPickFilesResult,
   X509GenerateResult,
 } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
 
 /**
  * Página "Certificados" (Task 019): X.509 autofirmado, inspección universal,
@@ -42,12 +43,12 @@ interface Notice {
   text: string;
 }
 
-const X509_ALGORITHMS: { value: string; label: string }[] = [
-  { value: 'rsa2048', label: 'RSA 2048' },
-  { value: 'rsa4096', label: 'RSA 4096' },
-  { value: 'ecdsa-p256', label: 'ECDSA P-256' },
-  { value: 'ecdsa-p384', label: 'ECDSA P-384' },
-  { value: 'ed25519', label: 'Ed25519' },
+const X509_ALGORITHMS: { value: string; labelKey: string }[] = [
+  { value: 'rsa2048', labelKey: 'pages.certificates.algoRsa2048' },
+  { value: 'rsa4096', labelKey: 'pages.certificates.algoRsa4096' },
+  { value: 'ecdsa-p256', labelKey: 'pages.certificates.algoEcdsaP256' },
+  { value: 'ecdsa-p384', labelKey: 'pages.certificates.algoEcdsaP384' },
+  { value: 'ed25519', labelKey: 'pages.certificates.algoEd25519' },
 ];
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -79,6 +80,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function Certificates() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('x509');
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -114,9 +116,9 @@ export function Certificates() {
         X509_TIMEOUT,
       );
       setLastCert(result);
-      setNotice({ kind: 'success', text: 'Certificado generado y guardado en el escritorio.' });
+      setNotice({ kind: 'success', text: t('pages.certificates.certGenerated') });
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo generar el certificado.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.genCertError')) });
     } finally {
       setGenerating(false);
     }
@@ -154,10 +156,10 @@ export function Certificates() {
       setLastCsr(result);
       setNotice({
         kind: 'success',
-        text: 'CSR generado. Envíalo a tu CA; la clave privada quedó en el escritorio.',
+        text: t('pages.certificates.csrGenerated'),
       });
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo generar el CSR.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.csrError')) });
     } finally {
       setCsrBusy(false);
     }
@@ -182,7 +184,7 @@ export function Certificates() {
         OperationIds.certInspect, { path }, READ_TIMEOUT);
       setInspectResult(result);
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo inspeccionar el archivo.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.inspectError')) });
     } finally {
       setInspecting(false);
     }
@@ -197,12 +199,12 @@ export function Certificates() {
   const [convertResult, setConvertResult] = useState<CertificateConvertResult | null>(null);
 
   /** Direcciones soportadas por cert.convert (inputFormat → outputFormat). */
-  const CONVERT_DIRECTIONS: { value: string; label: string; from: string; to: string; needsOutPassword: boolean; needsInPassword: boolean }[] = [
-    { value: 'pem2der', label: 'PEM → DER (binario)', from: 'pem', to: 'der', needsOutPassword: false, needsInPassword: false },
-    { value: 'der2pem', label: 'DER → PEM (texto)', from: 'der', to: 'pem', needsOutPassword: false, needsInPassword: false },
-    { value: 'pem2pfx', label: 'PEM (clave+cert) → PFX/PKCS#12', from: 'pem', to: 'pfx', needsOutPassword: true, needsInPassword: false },
-    { value: 'pfx2pem', label: 'PFX/PKCS#12 → PEM (clave+cert)', from: 'pfx', to: 'pem', needsOutPassword: false, needsInPassword: true },
-    { value: 'openssh2pem', label: 'Clave OpenSSH → PEM (PKCS#8)', from: 'openssh', to: 'pem', needsOutPassword: false, needsInPassword: false },
+  const CONVERT_DIRECTIONS: { value: string; labelKey: string; from: string; to: string; needsOutPassword: boolean; needsInPassword: boolean }[] = [
+    { value: 'pem2der', labelKey: 'pages.certificates.convertPem2der', from: 'pem', to: 'der', needsOutPassword: false, needsInPassword: false },
+    { value: 'der2pem', labelKey: 'pages.certificates.convertDer2pem', from: 'der', to: 'pem', needsOutPassword: false, needsInPassword: false },
+    { value: 'pem2pfx', labelKey: 'pages.certificates.convertPem2pfx', from: 'pem', to: 'pfx', needsOutPassword: true, needsInPassword: false },
+    { value: 'pfx2pem', labelKey: 'pages.certificates.convertPfx2pem', from: 'pfx', to: 'pem', needsOutPassword: false, needsInPassword: true },
+    { value: 'openssh2pem', labelKey: 'pages.certificates.convertOpenSsh2pem', from: 'openssh', to: 'pem', needsOutPassword: false, needsInPassword: false },
   ];
   const convertNeedsOutPassword = CONVERT_DIRECTIONS.find((d) => d.value === convertDirection)?.needsOutPassword ?? false;
   const convertNeedsInPassword = CONVERT_DIRECTIONS.find((d) => d.value === convertDirection)?.needsInPassword ?? false;
@@ -216,7 +218,7 @@ export function Certificates() {
       setConvertPath(picked.paths[0]);
       setConvertResult(null);
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo abrir el selector.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.openSelectorError')) });
     }
   };
 
@@ -239,9 +241,9 @@ export function Certificates() {
         READ_TIMEOUT,
       );
       setConvertResult(result);
-      setNotice({ kind: 'success', text: 'Conversión completada.' });
+      setNotice({ kind: 'success', text: t('pages.certificates.conversionCompleted') });
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'La conversión falló.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.conversionFailed')) });
     } finally {
       setConverting(false);
     }
@@ -328,10 +330,10 @@ export function Certificates() {
       setSignFingerprint(created.fingerprint);
       setNotice({
         kind: 'success',
-        text: `Clave creada (${created.algorithm}): ${created.fingerprint}`,
+        text: t('pages.certificates.keyCreated', { algorithm: created.algorithm, fingerprint: created.fingerprint }),
       });
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo generar la clave.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.keyGenError')) });
     } finally {
       setGenBusy(false);
     }
@@ -350,10 +352,10 @@ export function Certificates() {
       setPublicArmor(result.armoredKey);
       setNotice({
         kind: 'success',
-        text: 'Clave pública exportada — comparte este bloque; quien la importe podrá verificar tus firmas.',
+        text: t('pages.certificates.publicKeyExported'),
       });
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo exportar la clave.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.exportKeyError')) });
     } finally {
       setExporting(false);
     }
@@ -374,10 +376,10 @@ export function Certificates() {
       setImportOpen(false);
       setNotice({
         kind: 'success',
-        text: `Clave pública importada: ${imported.userId} (${imported.fingerprint}). Ya puedes verificar sus firmas.`,
+        text: t('pages.certificates.publicKeyImported', { userId: imported.userId, fingerprint: imported.fingerprint }),
       });
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo importar la clave: bloque armoured inválido.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.importKeyError')) });
     } finally {
       setImporting(false);
     }
@@ -397,7 +399,7 @@ export function Certificates() {
       const path = await pickOneFile();
       if (path) { setVerifyPath(path); setVerifyOutcome(null); }
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo abrir el selector.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.openSelectorError')) });
     }
   };
 
@@ -407,7 +409,7 @@ export function Certificates() {
       const path = await pickOneFile();
       if (path) { setVerifySigPath(path); setVerifyOutcome(null); }
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo abrir el selector.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.openSelectorError')) });
     }
   };
 
@@ -423,7 +425,7 @@ export function Certificates() {
       );
       setVerifyOutcome(outcome);
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'La verificación falló.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.verifyError')) });
     } finally {
       setVerifying(false);
     }
@@ -438,7 +440,7 @@ export function Certificates() {
       setSignPath(picked.paths[0]);
       setSignResult(null);
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'No se pudo abrir el selector.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.openSelectorError')) });
     }
   };
 
@@ -458,31 +460,29 @@ export function Certificates() {
       );
       setSignResult(result);
       setSignPassphrase('');
-      setNotice({ kind: 'success', text: 'Archivo firmado. La firma quedó junto al original.' });
+      setNotice({ kind: 'success', text: t('pages.certificates.fileSigned') });
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'La firma falló.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.certificates.signError')) });
     } finally {
       setSigning(false);
     }
   };
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'x509', label: 'X.509 autofirmado' },
-    { id: 'csr', label: 'CSR (PKCS#10)' },
-    { id: 'inspect', label: 'Inspeccionar' },
-    { id: 'convert', label: 'Convertir' },
-    { id: 'sign', label: 'Firmar con PGP' },
+  const tabs: { id: Tab; labelKey: string }[] = [
+    { id: 'x509', labelKey: 'pages.certificates.tabX509' },
+    { id: 'csr', labelKey: 'pages.certificates.tabCsr' },
+    { id: 'inspect', labelKey: 'pages.certificates.tabInspect' },
+    { id: 'convert', labelKey: 'pages.certificates.tabConvert' },
+    { id: 'sign', labelKey: 'pages.certificates.tabSign' },
   ];
 
   return (
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Certificados</h1>
+          <h1 className="text-2xl font-semibold">{t('sidebar.certificates')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            Genera certificados X.509, inspecciona cualquier formato, convierte
-            PEM↔DER y firma archivos con tus claves PGP — todo en proceso, sin
-            elevación.
+            {t('pages.certificates.subtitle')}
           </p>
         </div>
         <FileKey size={24} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
@@ -510,7 +510,7 @@ export function Certificates() {
                   }
             }
           >
-            {item.label}
+            {t(item.labelKey)}
           </button>
         ))}
       </nav>
@@ -536,7 +536,7 @@ export function Certificates() {
           style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Algoritmo">
+            <Field label={t('pages.certificates.fieldAlgorithm')}>
               <select
                 value={algorithm}
                 onChange={(event) => setAlgorithm(event.target.value)}
@@ -545,12 +545,12 @@ export function Certificates() {
               >
                 {X509_ALGORITHMS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.labelKey)}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Common Name *">
+            <Field label={t('pages.certificates.fieldCommonName')}>
               <input
                 type="text"
                 value={commonName}
@@ -560,7 +560,7 @@ export function Certificates() {
                 style={inputStyle}
               />
             </Field>
-            <Field label="Organización (opcional)">
+            <Field label={t('pages.certificates.fieldOrganization')}>
               <input
                 type="text"
                 value={organization}
@@ -569,7 +569,7 @@ export function Certificates() {
                 style={inputStyle}
               />
             </Field>
-            <Field label="País (opcional, código de 2 letras)">
+            <Field label={t('pages.certificates.fieldCountry')}>
               <input
                 type="text"
                 value={country}
@@ -580,7 +580,7 @@ export function Certificates() {
                 style={inputStyle}
               />
             </Field>
-            <Field label="Subject Alternative Names (separados por coma)">
+            <Field label={t('pages.certificates.fieldSans')}>
               <input
                 type="text"
                 value={sans}
@@ -590,7 +590,7 @@ export function Certificates() {
                 style={inputStyle}
               />
             </Field>
-            <Field label="Validez (días)">
+            <Field label={t('pages.certificates.fieldValidity')}>
               <input
                 type="number"
                 value={validityDays}
@@ -612,10 +612,10 @@ export function Certificates() {
               style={{ background: 'var(--pcs-accent)', color: '#fff' }}
             >
               <RefreshCw size={14} aria-hidden className={generating ? 'animate-spin' : undefined} />
-              {generating ? 'Generando…' : 'Generar certificado'}
+              {generating ? t('pages.certificates.generating') : t('pages.certificates.generateCert')}
             </button>
             <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              Los archivos se guardan en Desktop\PCSuite-Certificados.
+              {t('pages.certificates.filesSaved')}
             </span>
           </div>
 
@@ -623,23 +623,23 @@ export function Certificates() {
             <div className="mt-4 space-y-3">
               <dl className="grid gap-2 text-sm sm:grid-cols-2">
                 <div>
-                  <dt className="font-medium">Subject</dt>
+                  <dt className="font-medium">{t('pages.certificates.detailSubject')}</dt>
                   <dd style={{ color: 'var(--pcs-text-muted)' }}>{lastCert.subject}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium">Válido</dt>
+                  <dt className="font-medium">{t('pages.certificates.detailValid')}</dt>
                   <dd style={{ color: 'var(--pcs-text-muted)' }}>
                     {lastCert.validFrom} → {lastCert.validTo}
                   </dd>
                 </div>
                 <div>
-                  <dt className="font-medium">Fingerprint SHA-256</dt>
+                  <dt className="font-medium">{t('pages.certificates.detailFingerprint')}</dt>
                   <dd className="font-mono text-xs break-all" style={{ color: 'var(--pcs-text-muted)' }}>
                     {lastCert.fingerprint}
                   </dd>
                 </div>
                 <div>
-                  <dt className="font-medium">Serial</dt>
+                  <dt className="font-medium">{t('pages.certificates.detailSerial')}</dt>
                   <dd className="font-mono text-xs break-all" style={{ color: 'var(--pcs-text-muted)' }}>
                     {lastCert.serialNumber}
                   </dd>
@@ -648,7 +648,7 @@ export function Certificates() {
 
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">Clave privada</span>
+                  <span className="text-sm font-medium">{t('pages.certificates.fieldPrivateKey')}</span>
                   <button
                     type="button"
                     onClick={() => void openInExplorer(lastCert.privateKeyPath)}
@@ -656,7 +656,7 @@ export function Certificates() {
                     style={{ color: 'var(--pcs-accent)' }}
                   >
                     <FolderOpen size={12} aria-hidden />
-                    Mostrar en el Explorador
+                    {t('pages.certificates.showInExplorer')}
                   </button>
                 </div>
                 <code
@@ -668,7 +668,7 @@ export function Certificates() {
               </div>
 
               <details>
-                <summary className="cursor-pointer text-sm font-medium">Ver certificado PEM</summary>
+                <summary className="cursor-pointer text-sm font-medium">{t('pages.certificates.showCertPem')}</summary>
                 <textarea
                   readOnly
                   value={lastCert.certificatePem}
@@ -697,7 +697,7 @@ export function Certificates() {
           </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Algoritmo">
+            <Field label={t('pages.certificates.fieldAlgorithm')}>
               <select
                 value={csrAlgorithm}
                 onChange={(event) => setCsrAlgorithm(event.target.value)}
@@ -706,12 +706,12 @@ export function Certificates() {
               >
                 {X509_ALGORITHMS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.labelKey)}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Common Name *">
+            <Field label={t('pages.certificates.fieldCommonName')}>
               <input
                 type="text"
                 value={csrCommonName}
@@ -721,7 +721,7 @@ export function Certificates() {
                 style={inputStyle}
               />
             </Field>
-            <Field label="Organización (opcional)">
+            <Field label={t('pages.certificates.fieldOrganization')}>
               <input
                 type="text"
                 value={csrOrganization}
@@ -730,7 +730,7 @@ export function Certificates() {
                 style={inputStyle}
               />
             </Field>
-            <Field label="País (opcional, código de 2 letras)">
+            <Field label={t('pages.certificates.fieldCountry')}>
               <input
                 type="text"
                 value={csrCountry}
@@ -741,7 +741,7 @@ export function Certificates() {
                 style={inputStyle}
               />
             </Field>
-            <Field label="Subject Alternative Names (separados por coma)">
+            <Field label={t('pages.certificates.fieldSans')}>
               <input
                 type="text"
                 value={csrSans}
@@ -762,10 +762,10 @@ export function Certificates() {
               style={{ background: 'var(--pcs-accent)', color: '#fff' }}
             >
               <RefreshCw size={14} aria-hidden className={csrBusy ? 'animate-spin' : undefined} />
-              {csrBusy ? 'Generando…' : 'Generar CSR'}
+              {csrBusy ? t('pages.certificates.generating') : t('pages.certificates.generateCsr')}
             </button>
             <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              CSR + clave privada se guardan en Desktop\PCSuite-Certificados.
+              {t('pages.certificates.csrFilesSaved')}
             </span>
           </div>
 
@@ -773,7 +773,7 @@ export function Certificates() {
             <div className="mt-4 space-y-3">
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">Clave privada</span>
+                  <span className="text-sm font-medium">{t('pages.certificates.fieldPrivateKey')}</span>
                   <button
                     type="button"
                     onClick={() => void openInExplorer(lastCsr.privateKeyPath)}
@@ -781,7 +781,7 @@ export function Certificates() {
                     style={{ color: 'var(--pcs-accent)' }}
                   >
                     <FolderOpen size={12} aria-hidden />
-                    Mostrar en el Explorador
+                    {t('pages.certificates.showInExplorer')}
                   </button>
                 </div>
                 <code
@@ -793,7 +793,7 @@ export function Certificates() {
               </div>
 
               <details>
-                <summary className="cursor-pointer text-sm font-medium">Ver CSR (PEM)</summary>
+                <summary className="cursor-pointer text-sm font-medium">{t('pages.certificates.showCsrPem')}</summary>
                 <textarea
                   readOnly
                   value={lastCsr.csrPem}
@@ -804,8 +804,7 @@ export function Certificates() {
                 />
               </details>
               <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                Copia el bloque PEM y envíalo a tu CA. La clave privada NUNCA
-                sale de este equipo.
+                {t('pages.certificates.pemCopyNote')}
               </p>
             </div>
           )}
@@ -827,7 +826,7 @@ export function Certificates() {
               style={{ background: 'var(--pcs-accent)', color: '#fff' }}
             >
               <FileSearch size={14} aria-hidden />
-              {inspecting ? 'Inspeccionando…' : 'Elegir archivo e inspeccionar'}
+              {inspecting ? t('pages.certificates.inspecting') : t('pages.certificates.btnInspect')}
             </button>
             {inspectPath && (
               <code className="truncate font-mono text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
@@ -836,8 +835,7 @@ export function Certificates() {
             )}
           </div>
           <p className="mt-2 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-            Reconoce: X.509 (PEM/DER), CSR, claves privadas (PKCS#8/RSA/EC), claves
-            PGP públicas/privadas y claves públicas SSH.
+            {t('pages.certificates.inspectRecognizes')}
           </p>
 
           {inspectResult && (
@@ -879,7 +877,7 @@ export function Certificates() {
           style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Dirección">
+            <Field label={t('pages.certificates.fieldDirection')}>
               <select
                 value={convertDirection}
                 onChange={(event) => setConvertDirection(event.target.value)}
@@ -888,12 +886,12 @@ export function Certificates() {
               >
                 {CONVERT_DIRECTIONS.map((direction) => (
                   <option key={direction.value} value={direction.value}>
-                    {direction.label}
+                    {t(direction.labelKey)}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Archivo de entrada">
+            <Field label={t('pages.certificates.fieldInputFile')}>
               <button
                 type="button"
                 onClick={() => void pickAndConvert()}
@@ -902,12 +900,12 @@ export function Certificates() {
               >
                 <FolderOpen size={14} aria-hidden />
                 <span className="truncate">
-                  {convertPath || 'Elegir archivo…'}
+                  {convertPath || t('pages.certificates.btnPickFile')}
                 </span>
               </button>
             </Field>
             {convertNeedsInPassword && (
-              <Field label="Password del PFX de entrada">
+              <Field label={t('pages.certificates.fieldInputPassword')}>
                 <input
                   type="password"
                   value={convertInputPassword}
@@ -919,7 +917,7 @@ export function Certificates() {
               </Field>
             )}
             {convertNeedsOutPassword && (
-              <Field label="Password del PFX de salida">
+              <Field label={t('pages.certificates.fieldOutputPassword')}>
                 <input
                   type="password"
                   value={convertOutputPassword}
@@ -941,18 +939,18 @@ export function Certificates() {
               style={{ background: 'var(--pcs-accent)', color: '#fff' }}
             >
               <RefreshCw size={14} aria-hidden className={converting ? 'animate-spin' : undefined} />
-              {converting ? 'Convirtiendo…' : 'Convertir'}
+              {converting ? t('pages.certificates.converting') : t('pages.certificates.convert')}
             </button>
             <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              El resultado se guarda en Desktop\PCSuite-Certificados.
-              {convertDirection === 'pem2pfx' && ' El PEM debe contener clave + certificado (bundle fullchain).'}
+              {t('pages.certificates.convertFilesSaved')}
+              {convertDirection === 'pem2pfx' && t('pages.certificates.pemBundleNote')}
             </span>
           </div>
 
           {convertResult && (
             <div className="mt-4">
               <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-sm font-medium">Archivo convertido ({convertResult.outputFormat})</span>
+                <span className="text-sm font-medium">{t('pages.certificates.convertedFile', { format: convertResult.outputFormat })}</span>
                 <button
                   type="button"
                   onClick={() => void openInExplorer(convertResult.outputPath)}
@@ -960,7 +958,7 @@ export function Certificates() {
                   style={{ color: 'var(--pcs-accent)' }}
                 >
                   <FolderOpen size={12} aria-hidden />
-                  Mostrar en el Explorador
+                  {t('pages.certificates.showInExplorer')}
                 </button>
               </div>
               <code
@@ -988,7 +986,7 @@ export function Certificates() {
               className="flex items-center gap-1.5 text-sm font-medium"
               style={{ color: 'var(--pcs-accent)' }}
             >
-              {genOpen ? '− Cerrar' : '+ Generar clave de firma…'}
+              {genOpen ? t('pages.certificates.closeKeyGen') : t('pages.certificates.generateSigningKey')}
             </button>
 
             {(genOpen || keys.length === 0) && (
@@ -1002,7 +1000,7 @@ export function Certificates() {
                     : 'La nueva clave se añade al keyring de la app. Ed25519 es la recomendada; RSA queda para compatibilidad con sistemas que no aceptan curvas modernas.'}
                 </p>
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="Nombre *">
+                  <Field label={t('pages.certificates.fieldName')}>
                     <input
                       type="text"
                       value={genName}
@@ -1012,7 +1010,7 @@ export function Certificates() {
                       style={inputStyle}
                     />
                   </Field>
-                  <Field label="Email *">
+                  <Field label={t('pages.certificates.fieldEmail')}>
                     <input
                       type="email"
                       value={genEmail}
@@ -1022,7 +1020,7 @@ export function Certificates() {
                       style={inputStyle}
                     />
                   </Field>
-                  <Field label="Passphrase (opcional)">
+                  <Field label={t('pages.certificates.fieldPassphrase')}>
                     <input
                       type="password"
                       value={genPassphrase}
@@ -1037,18 +1035,18 @@ export function Certificates() {
                     RSA (2048/3072/4096) por compatibilidad clásica — el
                     backend ya generaba ambas desde el Task 009. */}
                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  <Field label="Algoritmo">
+                  <Field label={t('pages.certificates.fieldAlgorithm')}>
                     <select
                       value={genAlgorithm}
                       onChange={(event) => setGenAlgorithm(event.target.value as 'ed25519' | 'rsa')}
                       className="w-full rounded-md border px-3 py-2 text-sm"
                       style={inputStyle}
                     >
-                      <option value="ed25519">Ed25519 (recomendada)</option>
-                      <option value="rsa">RSA</option>
+                      <option value="ed25519">{t('pages.certificates.algoEd25519Recommended')}</option>
+                      <option value="rsa">{t('pages.certificates.algoRsa')}</option>
                     </select>
                   </Field>
-                  <Field label="Tamaño (RSA)">
+                  <Field label={t('pages.certificates.fieldKeySize')}>
                     <select
                       value={String(genBits)}
                       onChange={(event) => setGenBits(Number(event.target.value))}
@@ -1071,7 +1069,7 @@ export function Certificates() {
                     style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                   >
                     <RefreshCw size={14} aria-hidden className={genBusy ? 'animate-spin' : undefined} />
-                    {genBusy ? 'Generando…' : 'Crear clave'}
+                    {genBusy ? t('pages.certificates.generating') : t('pages.certificates.createKey')}
                   </button>
                   <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                     Sin elevación. Ed25519 se genera en segundos; RSA 4096 puede
@@ -1091,7 +1089,7 @@ export function Certificates() {
           ) : (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Clave firmante">
+                <Field label={t('pages.certificates.fieldSigningKey')}>
                   <select
                     value={signFingerprint}
                     onChange={(event) => { setSignFingerprint(event.target.value); setPublicArmor(null); }}
@@ -1105,7 +1103,7 @@ export function Certificates() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Passphrase (solo si la clave la tiene)">
+                <Field label={t('pages.certificates.fieldPassphrase')}>
                   <input
                     type="password"
                     value={signPassphrase}
@@ -1115,7 +1113,7 @@ export function Certificates() {
                     style={inputStyle}
                   />
                 </Field>
-                <Field label="Archivo a firmar">
+                <Field label={t('pages.certificates.fieldFileToSign')}>
                   <button
                     type="button"
                     onClick={() => void pickAndSign()}
@@ -1123,7 +1121,7 @@ export function Certificates() {
                     style={inputStyle}
                   >
                     <FolderOpen size={14} aria-hidden />
-                    <span className="truncate">{signPath || 'Elegir archivo…'}</span>
+                    <span className="truncate">{signPath || t('pages.certificates.btnPickFile')}</span>
                   </button>
                 </Field>
               </div>
@@ -1137,7 +1135,7 @@ export function Certificates() {
                   style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                 >
                   <PenLine size={14} aria-hidden />
-                  {signing ? 'Firmando…' : 'Firmar archivo'}
+                  {signing ? t('pages.certificates.signing') : t('pages.certificates.signFile')}
                 </button>
                 <button
                   type="button"
@@ -1147,17 +1145,17 @@ export function Certificates() {
                   style={inputStyle}
                 >
                   <RefreshCw size={14} aria-hidden className={exporting ? 'animate-spin' : undefined} />
-                  {exporting ? 'Exportando…' : 'Exportar clave pública'}
+                  {exporting ? t('pages.certificates.exporting') : t('pages.certificates.exportPublicKey')}
                 </button>
                 <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                  Firma detached armoured (.sig) junto al original.
+                  {t('pages.certificates.signDetachedNote')}
                 </span>
               </div>
 
               {publicArmor && (
                 <div className="mt-4">
                   <p className="mb-1 text-sm font-medium">
-                    Tu clave pública — compártela; quien la importe podrá verificar tus firmas
+                    {t('pages.certificates.publicKeyNote')}
                   </p>
                   <textarea
                     readOnly
@@ -1168,7 +1166,7 @@ export function Certificates() {
                     onFocus={(event) => event.target.select()}
                   />
                   <p className="mt-1 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                    Es un bloque de solo lectura: pulsa dentro, Ctrl+A y Ctrl+C para copiarlo.
+                    {t('pages.certificates.readonlyNote')}
                   </p>
                 </div>
               )}
@@ -1178,7 +1176,7 @@ export function Certificates() {
           {signResult && (
             <div className="mt-4">
               <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-sm font-medium">Firma generada</span>
+                <span className="text-sm font-medium">{t('pages.certificates.signatureGenerated')}</span>
                 <button
                   type="button"
                   onClick={() => void openInExplorer(signResult.signaturePath)}
@@ -1186,7 +1184,7 @@ export function Certificates() {
                   style={{ color: 'var(--pcs-accent)' }}
                 >
                   <FolderOpen size={12} aria-hidden />
-                  Mostrar en el Explorador
+                  {t('pages.certificates.showInExplorer')}
                 </button>
               </div>
               <code
@@ -1206,11 +1204,10 @@ export function Certificates() {
               className="flex items-center gap-1.5 text-sm font-medium"
               style={{ color: 'var(--pcs-accent)' }}
             >
-              {importOpen ? '− Cerrar' : '+ Importar clave pública…'}
+              {importOpen ? t('pages.certificates.closeKeyGen') : t('pages.certificates.importPublicKey')}
             </button>
             <p className="mt-1 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              ¿Te enviaron un archivo firmado? Importa aquí la clave pública del
-              firmante para poder verificarlo en la app.
+              {t('pages.certificates.importPubKeyNote')}
             </p>
 
             {importOpen && (
@@ -1233,10 +1230,10 @@ export function Certificates() {
                     style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                   >
                     <RefreshCw size={14} aria-hidden className={importing ? 'animate-spin' : undefined} />
-                    {importing ? 'Importando…' : 'Importar clave'}
+                    {importing ? t('pages.certificates.importing') : t('pages.certificates.importKey')}
                   </button>
                   <span className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                    Solo públicas: la importación jamás acepta material privado de terceros como tuyo.
+                    {t('pages.certificates.importPublicOnly')}
                   </span>
                 </div>
               </div>
@@ -1251,17 +1248,16 @@ export function Certificates() {
               className="flex items-center gap-1.5 text-sm font-medium"
               style={{ color: 'var(--pcs-accent)' }}
             >
-              {verifyOpen ? '− Cerrar' : '✓ Verificar firma de un archivo…'}
+              {verifyOpen ? t('pages.certificates.closeKeyGen') : t('pages.certificates.verifyFile')}
             </button>
             <p className="mt-1 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              Comprueba que un archivo y su .sig no se han alterado. Necesita la
-              clave pública del firmante importada arriba.
+              {t('pages.certificates.verifyNote')}
             </p>
 
             {verifyOpen && (
               <div className="mt-3">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Archivo original">
+                  <Field label={t('pages.certificates.fieldOriginalFile')}>
                     <button
                       type="button"
                       onClick={() => void pickVerifyOriginal()}
@@ -1272,7 +1268,7 @@ export function Certificates() {
                       <span className="truncate">{verifyPath || 'Elegir archivo…'}</span>
                     </button>
                   </Field>
-                  <Field label="Firma (.sig)">
+                  <Field label={t('pages.certificates.fieldSignatureFile')}>
                     <button
                       type="button"
                       onClick={() => void pickVerifySignature()}
@@ -1280,7 +1276,7 @@ export function Certificates() {
                       style={inputStyle}
                     >
                       <FolderOpen size={14} aria-hidden />
-                      <span className="truncate">{verifySigPath || 'Elegir firma…'}</span>
+                      <span className="truncate">{verifySigPath || t('pages.certificates.btnPickFile')}</span>
                     </button>
                   </Field>
                 </div>
@@ -1294,7 +1290,7 @@ export function Certificates() {
                     style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                   >
                     <RefreshCw size={14} aria-hidden className={verifying ? 'animate-spin' : undefined} />
-                    {verifying ? 'Verificando…' : 'Verificar'}
+                    {verifying ? t('pages.certificates.verifying') : t('pages.certificates.verify')}
                   </button>
                 </div>
 
@@ -1318,7 +1314,7 @@ export function Certificates() {
                   >
                     {verifyOutcome.valid ? (
                       <p>
-                        ✓ Firma válida — el archivo coincide con lo que firmó{' '}
+                        ✓ {t('pages.certificates.signatureValid', { signer: verifyOutcome.signer?.userId || 'el firmante' })}
                         <strong>{verifyOutcome.signer?.userId || 'el firmante'}</strong>.
                         {verifyOutcome.signer && (
                           <span className="ml-1 font-mono text-xs" style={{ opacity: 0.8 }}>

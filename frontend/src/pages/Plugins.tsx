@@ -3,6 +3,7 @@ import { bridge } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type { PluginCollectionResult, PluginOperationResult, PluginMetadata } from '../types/bridge';
 import { Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
 
 /**
  * Página "Plugins": catálogo y gestión de complementos extensibles.
@@ -15,6 +16,7 @@ import { Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
 const PLUGIN_TIMEOUT_MS = 15_000;
 
 export function Plugins() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [plugins, setPlugins] = useState<PluginMetadata[]>([]);
   const [checkingUpdate, setCheckingUpdate] = useState<string | null>(null); // pluginId en proceso
@@ -57,10 +59,10 @@ export function Plugins() {
   // Helper: obtener texto del estado
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'active': return 'Activo';
-      case 'inactive': return 'Inactivo';
-      case 'error': return 'Error';
-      default: return 'Desconocido';
+      case 'active': return t('pages.plugins.status.active');
+      case 'inactive': return t('pages.plugins.status.inactive');
+      case 'error': return t('pages.plugins.status.error');
+      default: return t('pages.plugins.status.unknown');
     }
   };
 
@@ -115,7 +117,7 @@ export function Plugins() {
   if (loading) {
     return (
       <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-        Cargando información de plugins…
+        {t('pages.plugins.loading')}
       </p>
     );
   }
@@ -124,11 +126,9 @@ export function Plugins() {
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Plugins</h1>
+          <h1 className="text-2xl font-semibold">{t('sidebar.plugins')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            Sistema de complementos extensibles para PCSuite. Los plugins
-            permiten ampliar las funcionalidades de la aplicación con nuevos
-            herramientas y capacidades.
+            {t('pages.plugins.subtitle')}
           </p>
         </div>
         <Sparkles size={16} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
@@ -139,14 +139,14 @@ export function Plugins() {
         className="rounded-lg border p-6"
         style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
       >
-        <h2 className="text-lg font-medium mb-4">Catálogo de plugins</h2>
+        <h2 className="text-lg font-medium mb-4">{t('pages.plugins.catalog')}</h2>
         
         {plugins.length === 0 ? (
           <div className="p-4 text-center text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            No hay plugins instalados.
+            {t('pages.plugins.none')}
             <br />
             <span className="font-medium" style={{ cursor: 'pointer', color: 'var(--pcs-accent)' }} onClick={() => load()}>
-              Actualizar lista
+              {t('pages.plugins.refreshList')}
             </span>
           </div>
         ) : (
@@ -173,12 +173,12 @@ export function Plugins() {
                       <p className="font-medium truncate">{plugin.name}</p>
                       <p className="text-xs opacity-75">{plugin.id}</p>
                       <p className="text-xs font-medium">
-                        <span style={{ color: 'var(--pcs-text-muted)' }}>Versión actual: </span>
+                        <span style={{ color: 'var(--pcs-text-muted)' }}>{t('pages.plugins.versionCurrent')}: </span>
                         <span style={{ color: status === 'active' ? 'var(--pcs-success)' : 'var(--pcs-warning)' }}>
                           {plugin.version}
                         </span>
                         {plugin.updateAvailable && plugin.availableVersion ? (
-                          <span style={{ marginLeft: '4px', color: 'var(--pcs-success)' }}> ({plugin.availableVersion} disponible)</span>
+                          <span style={{ marginLeft: '4px', color: 'var(--pcs-success)' }}>{t('pages.plugins.available', { version: plugin.availableVersion })}</span>
                         ) : ''}
                       </p>
                     </div>
@@ -204,14 +204,14 @@ export function Plugins() {
                           color: isCheckingUpdate(plugin.id) ? 'var(--pcs-text-muted)' : '#fff',
                           cursor: isCheckingUpdate(plugin.id) ? 'not-allowed' : 'pointer',
                         }}
-                        title={isCheckingUpdate(plugin.id) ? 'Comprobando…' : 'Comprobar actualización'}
+                        title={isCheckingUpdate(plugin.id) ? t('pages.plugins.checking') : t('pages.plugins.checkUpdate')}
                       >
                         {isCheckingUpdate(plugin.id) ? (
                           <RefreshCw size={12} aria-hidden className="animate-spin" />
                         ) : (
                           <CheckCircle2 size={12} aria-hidden />
                         )}
-                        <span className="hidden sm:inline">Actualizar</span>
+                        <span className="hidden sm:inline">{t('pages.plugins.update')}</span>
                       </button>
                       
                       {/* Botón Launch */}
@@ -225,10 +225,10 @@ export function Plugins() {
                           color: 'var(--pcs-text)',
                           cursor: 'pointer',
                         }}
-                        title="Lanzar plugin"
+                        title={t('pages.plugins.launch')}
                       >
                         <Sparkles size={12} aria-hidden />{' '}
-                        <span className="hidden sm:inline">Lanzar</span>
+                        <span className="hidden sm:inline">{t('pages.plugins.launch')}</span>
                       </button>
                     </div>
                   </div>
@@ -241,7 +241,7 @@ export function Plugins() {
         {/* Cuando hay plugins pero algunos fallaron el load */}
         {plugins.length > 0 && (
           <p className="mt-2 text-xs opacity-60">
-            {plugins.length} plugin(s) cargado(s)
+            {t('pages.plugins.loaded', { count: plugins.length })}
           </p>
         )}
 
@@ -252,37 +252,32 @@ export function Plugins() {
         className="rounded-lg border p-6"
         style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
       >
-        <h2 className="text-lg font-medium mb-4">Directivas de extensión</h2>
+        <h2 className="text-lg font-medium mb-4">{t('pages.plugins.directives')}</h2>
         <ul className="space-y-3 text-sm">
           <li>
-            <p className="font-medium">Añadir nuevo plugin:</p>
+            <p className="font-medium">{t('pages.plugins.addPlugin')}:</p>
             <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              Los plugins se distribuyen como assemblies .NET y se descubren
-              automáticamente en el directorio <code className="font-mono">plugins/</code> al iniciar PCSuite.
+              {t('pages.plugins.addPluginDesc')}
             </p>
           </li>
           <li>
-            <p className="font-medium">Comprobar actualizaciones:</p>
+            <p className="font-medium">{t('pages.plugins.checkUpdates')}:</p>
             <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              Seleccione un plugin de la lista y pulse <strong>Actualizar</strong> para verificar
-              si hay versión disponible. La comprobación usa el servicio
-              <code className="font-mono">IPluginService.CheckUpdate</code> con timeout de 15 segundos.
+              {t('pages.plugins.checkUpdatesDesc')}
             </p>
           </li>
           <li>
-            <p className="font-medium">Lanzar plugin:</p>
+            <p className="font-medium">{t('pages.plugins.launchPlugin')}:</p>
             <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              Pulse <strong>Lanzar</strong> para ejecutar la acción principal del plugin.
-              Cada plugin define su propia lógica de lanzamiento a través de la
-              interfaz <code className="font-mono">IPlugin</code>.
+              {t('pages.plugins.launchPluginDesc')}
             </p>
           </li>
           <li>
-            <p className="font-medium">Estado de los indicadores:</p>
+            <p className="font-medium">{t('pages.plugins.indicators')}:</p>
             <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              <span className="font-medium">Activo (green):</span> plugin cargado y operativo.<br />
-              <span className="font-medium">Inactivo (gray):</span> plugin instalado pero desactivado.<br />
-              <span className="font-medium">Error (red):</span> ocurrió un problema al cargar el plugin.
+              <span className="font-medium">{t('pages.plugins.indicatorActive')}</span><br />
+              <span className="font-medium">{t('pages.plugins.indicatorInactive')}</span><br />
+              <span className="font-medium">{t('pages.plugins.indicatorError')}</span>
             </p>
           </li>
         </ul>
@@ -293,7 +288,7 @@ export function Plugins() {
         style={{ borderColor: 'var(--pcs-border)' }}
       >
         <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-          Versión 0.1.0 — Sistema de plugins en desarrollo
+          {t('pages.plugins.version')}
         </p>
         <button
           type="button"
@@ -301,7 +296,7 @@ export function Plugins() {
           className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors pcs-press-feedback"
           style={{ background: 'var(--pcs-accent)', color: '#fff' }}
         >
-          <RefreshCw size={12} aria-hidden /> Actualizar lista
+          <RefreshCw size={12} aria-hidden /> {t('pages.plugins.refreshList')}
         </button>
       </footer>
     </div>

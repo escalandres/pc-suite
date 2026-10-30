@@ -3,20 +3,21 @@ import { Cpu, HardDrive, MonitorSmartphone, ShieldCheck, RefreshCw } from 'lucid
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type { SystemInfoResult } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 interface StatCard {
   key: keyof SystemInfoResult;
-  label: string;
+  labelKey: string;
   icon: typeof Cpu;
 }
 
 const CARDS: StatCard[] = [
-  { key: 'machineName', label: 'Equipo', icon: MonitorSmartphone },
-  { key: 'osDescription', label: 'Sistema operativo', icon: HardDrive },
-  { key: 'processorCount', label: 'Procesadores lógicos', icon: Cpu },
-  { key: 'isAdministrator', label: 'Sesión administrador', icon: ShieldCheck },
+  { key: 'machineName', labelKey: 'pages.home.cardMachineName', icon: MonitorSmartphone },
+  { key: 'osDescription', labelKey: 'pages.home.cardOs', icon: HardDrive },
+  { key: 'processorCount', labelKey: 'pages.home.cardCpu', icon: Cpu },
+  { key: 'isAdministrator', labelKey: 'pages.home.cardAdmin', icon: ShieldCheck },
 ];
 
 /**
@@ -24,6 +25,7 @@ const CARDS: StatCard[] = [
  * invocando la operación permitida system.info.
  */
 export function Home() {
+  const { t } = useTranslation();
   const [state, setState] = useState<LoadState>('idle');
   const [info, setInfo] = useState<SystemInfoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export function Home() {
     } catch (err) {
       // Nunca mostrar stack traces: solo el mensaje controlado del BridgeError.
       const message =
-        err instanceof BridgeError ? err.message : 'No se pudo obtener la información.';
+        err instanceof BridgeError ? err.message : t('common.errorFetch');
       setError(message);
       setState('error');
     }
@@ -52,9 +54,9 @@ export function Home() {
     <div className="space-y-6">
       <header className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Inicio</h1>
+          <h1 className="text-2xl font-semibold">{t('pages.home.title')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            Información general de este equipo.
+            {t('pages.home.subtitle')}
           </p>
         </div>
         <button
@@ -65,13 +67,13 @@ export function Home() {
           style={{ background: 'var(--pcs-accent)', color: '#fff' }}
         >
           <RefreshCw size={14} aria-hidden className={state === 'loading' ? 'animate-spin' : ''} />
-          Actualizar
+          {t('common.refresh')}
         </button>
       </header>
 
       {state === 'loading' && (
         <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Consultando el sistema…
+          {t('pages.home.loading')}
         </p>
       )}
 
@@ -92,7 +94,7 @@ export function Home() {
               const Icon = card.icon;
               const raw = info[card.key];
               const value =
-                typeof raw === 'boolean' ? (raw ? 'Sí' : 'No') : String(raw ?? '—');
+                typeof raw === 'boolean' ? (raw ? t('common.yes') : t('common.no')) : String(raw ?? t('common.dash'));
               return (
                 <article
                   key={card.key}
@@ -101,7 +103,7 @@ export function Home() {
                 >
                   <div className="flex items-center gap-2 text-xs uppercase tracking-wide" style={{ color: 'var(--pcs-text-muted)' }}>
                     <Icon size={14} aria-hidden />
-                    {card.label}
+                    {t(card.labelKey)}
                   </div>
                   <div className="mt-2 break-words text-base font-medium">{value}</div>
                 </article>
@@ -113,14 +115,14 @@ export function Home() {
             className="rounded-lg border p-4 text-sm"
             style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
           >
-            <h2 className="mb-3 font-medium">Detalles</h2>
+            <h2 className="mb-3 font-medium">{t('pages.home.details')}</h2>
             <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
-              <Detail label="Versión de la app" value={info.appVersion} />
-              <Detail label="Runtime" value={info.runtimeVersion} />
-              <Detail label="Versión del SO" value={info.osVersion} />
+              <Detail label={t('pages.home.detailAppVersion')} value={info.appVersion} />
+              <Detail label={t('pages.home.detailRuntime')} value={info.runtimeVersion} />
+              <Detail label={t('pages.home.detailOsVersion')} value={info.osVersion} />
               <Detail
-                label="Arquitectura"
-                value={info.is64BitOperatingSystem ? '64 bits' : '32 bits'}
+                label={t('pages.home.detailArch')}
+                value={info.is64BitOperatingSystem ? t('pages.home.detail64bits') : t('pages.home.detail32bits')}
               />
             </dl>
           </section>

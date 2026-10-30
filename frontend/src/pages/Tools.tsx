@@ -5,6 +5,8 @@ import { OperationIds } from '../types/bridge';
 import type { ToolCollectionResult, ToolExecuteResult, ToolInfo } from '../types/bridge';
 import { ToolForm } from '../components/ToolForm';
 import { toolKey, toggleFavorite, useFavorites } from '../favorites';
+import { useTranslation } from '../hooks/useTranslation';
+import { t } from '../lib/i18n';
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof BridgeError ? error.message : fallback;
@@ -97,8 +99,8 @@ function ToolRow({ tool, active, starred, onSelect, onToggleFavorite }: ToolRowP
             aria-pressed={starred}
             aria-label={
               starred
-                ? `Quitar ${tool.name} de favoritos`
-                : `Añadir ${tool.name} a favoritos`
+                ? t('pages.tools.removeFavorite', { name: tool.name })
+                : t('pages.tools.addFavorite', { name: tool.name })
             }
             onClick={onToggleFavorite}
             className={`pcs-touch-target absolute right-2 top-2 rounded p-2 transition-opacity ${
@@ -125,6 +127,7 @@ function ToolRow({ tool, active, starred, onSelect, onToggleFavorite }: ToolRowP
  * exampleInput de cada tool.
  */
 export function Tools({ focus }: { focus?: { toolId: string } | null }) {
+  const { t } = useTranslation();
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -154,7 +157,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
         }
       } catch (error) {
         if (!cancelled) {
-          setListError(errorMessage(error, 'No se pudieron cargar las herramientas.'));
+          setListError(errorMessage(error, t('pages.tools.loadError')));
         }
       } finally {
         if (!cancelled) {
@@ -241,7 +244,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
       });
       setOutput(formatToolOutput(result.output));
     } catch (error) {
-      setRunError(errorMessage(error, 'No se pudo ejecutar la herramienta.'));
+      setRunError(errorMessage(error, t('pages.tools.runError')));
     } finally {
       setRunning(false);
     }
@@ -253,7 +256,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
     try {
       parsed = JSON.parse(inputText);
     } catch {
-      setRunError('La entrada no es JSON válido.');
+      setRunError(t('pages.tools.invalidJson'));
       return;
     }
     void executePayload(parsed);
@@ -275,10 +278,9 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Herramientas</h1>
+        <h1 className="text-2xl font-semibold">{t('sidebar.tools')}</h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Las herramientas se descubren desde el nativo por metadatos — ninguna está hardcodeada
-          en esta UI.
+          {t('pages.tools.subtitle')}
         </p>
       </header>
 
@@ -294,7 +296,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar herramientas…"
+              placeholder={t('pages.tools.searchPlaceholder')}
               className="w-full bg-transparent py-2 text-sm outline-none"
               style={{ color: 'var(--pcs-text)' }}
             />
@@ -314,12 +316,12 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
               <Wrench size={48} aria-hidden className="mb-4 opacity-30" style={{ color: 'var(--pcs-accent)' }} />
               <h3 className="text-lg font-medium mb-1">
-                {query ? 'Sin resultados' : 'No hay herramientas disponibles'}
+                {query ? t('pages.tools.noResults') : t('pages.tools.noTools')}
               </h3>
               <p className="text-sm mb-4" style={{ color: 'var(--pcs-text-muted)' }}>
                 {query
-                  ? `No se encontraron herramientas para «{query}».`
-                  : 'El host nativo no ha registrado herramientas aún.'}
+                  ? t('pages.tools.noResultsForQuery', { query })
+                  : t('pages.tools.noToolsRegistered')}
               </p>
               {!query && (
                 <button
@@ -328,7 +330,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
                   className="rounded-md px-3 py-2 text-sm font-medium"
                   style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                 >
-                  Recargar
+                  {t('pages.tools.reload')}
                 </button>
               )}
             </div>
@@ -374,7 +376,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
               className="flex h-full min-h-64 items-center justify-center rounded-lg border border-dashed p-6 text-center text-sm"
               style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text-muted)' }}
             >
-              Selecciona una herramienta para configurarla y ejecutarla.
+              {t('pages.tools.selectTool')}
             </div>
           ) : (
             <div
@@ -385,8 +387,8 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
                 <h2 className="font-medium">{selected.name}</h2>
                 <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                   {selected.parameters.length > 0
-                    ? 'Configura los parámetros y ejecuta — Ctrl+Enter también funciona.'
-                    : 'Entrada JSON — edítala según lo que necesites:'}
+                    ? t('pages.tools.configureParams')
+                    : t('pages.tools.jsonInput')}
                 </p>
               </div>
 
@@ -414,9 +416,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
 
                   {/* 14.3.2 — Helper text para JSON textarea */}
                   <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                    Formato: <code className="font-mono">&#123; &#34;clave&#34;: &#34;valor&#34; &#125;</code> |
-                    Atajos: <kbd className="px-1 rounded border" style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-bg)' }}>Ctrl+Enter</kbd> Ejecutar,
-                    <kbd className="px-1 rounded border" style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-bg)' }}>Ctrl+Shift+F</kbd> Formatear
+                    {t('pages.tools.jsonHelp')}
                   </p>
 
                   <button
@@ -427,7 +427,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
                     style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                   >
                     <Play size={14} aria-hidden />
-                    {running ? 'Ejecutando…' : 'Ejecutar'}
+                    {running ? t('pages.tools.running') : t('pages.tools.run')}
                   </button>
                 </>
               )}
@@ -449,7 +449,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
                       className="text-xs uppercase tracking-wide"
                       style={{ color: 'var(--pcs-text-muted)' }}
                     >
-                      Resultado
+                      {t('pages.tools.result')}
                     </span>
                     <button
                       type="button"
@@ -458,7 +458,7 @@ export function Tools({ focus }: { focus?: { toolId: string } | null }) {
                       style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
                     >
                       <Copy size={12} aria-hidden />
-                      {copied ? '¡Copiado!' : 'Copiar'}
+                      {copied ? t('pages.tools.copied') : t('pages.tools.copy')}
                     </button>
                   </div>
                   <pre

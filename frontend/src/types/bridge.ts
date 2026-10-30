@@ -148,6 +148,13 @@ export const OperationIds = {
   pgpGenerateKey: 'pgp.generateKey',
   pgpExportKey: 'pgp.exportKey',
   pgpImportKey: 'pgp.importKey',
+  /** Task 038: IA / markItDown — detección, instalación y conversión a Markdown. */
+  aiDetect: 'ai.detect',
+  aiInstall: 'ai.install',
+  aiConvert: 'ai.convert',
+  /** Task 038: Ollama — detección y listado de modelos. */
+  ollamaDetect: 'ollama.detect',
+  ollamaListModels: 'ollama.listModels',
 } as const;
 
 export const EventIds = {
@@ -583,6 +590,61 @@ export interface PgpListKeysResult {
 export interface PgpExportKeyResult {
   armoredKey: string;
   isPrivate: boolean;
+}
+
+/* =====================================================================
+   Task 038 — IA / markItDown
+   ===================================================================== */
+
+/** Resultado de ia.detect: estado de Python y markItDown. */
+export interface AiStatusResult {
+  installed: boolean;
+  pythonPath?: string | null;
+  pythonVersion?: string | null;
+  markItDownVersion?: string | null;
+  detail?: string | null;
+}
+
+/** Resultado de ia.install (outcome estructurado, igual que winget/clamav). */
+export interface AiMutationResult {
+  succeeded: boolean;
+  exitCode: number;
+  elevated: boolean;
+  detail?: string | null;
+}
+
+/** Resultado del job de ia.convert: archivo Markdown generado o error controlado. */
+export interface AiConvertResult {
+  succeeded: boolean;
+  exitCode: number;
+  outputPath?: string | null;
+  detail?: string | null;
+}
+
+/** Payload de ia.convert: solo la ruta del archivo. */
+export interface AiConvertPayload {
+  path: string;
+}
+
+/** Resultado de ollama.detect: estado de Ollama. */
+export interface OllamaStatusResult {
+  installed: boolean;
+  ollamaPath?: string | null;
+  version?: string | null;
+  detail?: string | null;
+}
+
+/** Un modelo instalado de Ollama. */
+export interface OllamaModelResult {
+  name: string;
+  size?: string | null;
+  modified?: string | null;
+  digest?: string | null;
+}
+
+/** Resultado de ollama.listModels: colección de modelos instalados. */
+export interface OllamaModelCollectionResult {
+  models: OllamaModelResult[];
 }
 
 /**

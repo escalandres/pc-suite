@@ -6,6 +6,7 @@ import { bridge } from '../services/pcsuiteBridge';
 import { openHelp } from '../shortcuts';
 import { setThemePreference } from '../theme';
 import { OperationIds } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
 import type {
   DeveloperCollectionResult,
   DeveloperToolInfo,
@@ -48,9 +49,9 @@ function fuzzyScore(query: string, entry: PaletteEntry): number | null {
 }
 
 const THEME_ENTRIES = [
-  ['dark', 'Oscuro'],
-  ['light', 'Claro'],
-  ['system', 'Sistema'],
+  ['dark', 'theme.dark'],
+  ['light', 'theme.light'],
+  ['system', 'theme.system'],
 ] as const;
 
 const RECENT_KEY = 'pcsuite.commandPalette.recent';
@@ -101,6 +102,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [devs, setDevs] = useState<DeveloperToolInfo[]>([]);
   const [recent, setRecent] = useState<RecentEntry[]>([]);
+  const { t } = useTranslation();
 
   // Refresca el índice de tools/devs cada vez que se abre (best-effort:
   // sin host nativo las categorías simplemente quedan vacías).
@@ -129,8 +131,8 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
   const entries: PaletteEntry[] = [
     ...NAV_ITEMS.filter((item) => item.enabled).map((item) => ({
       key: `page:${item.id}`,
-      label: item.label,
-      category: 'Página',
+      label: t(item.labelKey),
+      category: t('common.page'),
       tags: [item.id],
       icon: item.icon,
       run: () => {
@@ -142,7 +144,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
     ...tools.map((tool) => ({
       key: `tool:${tool.id}`,
       label: tool.name,
-      category: 'Tool',
+      category: t('common.tool'),
       detail: tool.id,
       tags: [tool.id, ...tool.keywords],
       icon: Wrench,
@@ -155,8 +157,8 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
     ...devs.map((dev) => ({
       key: `dev:${dev.id}`,
       label: dev.name,
-      category: 'Dev',
-      detail: dev.isInstalled ? (dev.version ?? undefined) : 'No instalado',
+      category: t('common.dev'),
+      detail: dev.isInstalled ? (dev.version ?? undefined) : t('common.notInstalled'),
       tags: [dev.id],
       icon: Terminal,
       run: () => {
@@ -167,8 +169,8 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
     })),
     ...THEME_ENTRIES.map(([value, name]) => ({
       key: `set:theme-${value}`,
-      label: `Tema: ${name}`,
-      category: 'Ajustes',
+      label: t(name as any),
+      category: t('common.settings'),
       tags: ['tema', 'theme', value],
       icon: Settings,
       run: () => {
@@ -179,8 +181,8 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
     })),
     {
       key: 'help:shortcuts',
-      label: 'Ver atajos de teclado',
-      category: 'Ajustes',
+      label: t('common.shortcuts'),
+      category: t('common.settings'),
       tags: ['atajos', 'shortcuts', 'ayuda', 'help'],
       icon: Keyboard,
       run: () => {
@@ -221,7 +223,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Búsqueda global"
+        aria-label={t('common.globalSearch')}
       >
         <div
           className="flex items-center gap-2 border-b px-3"
@@ -250,8 +252,8 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
                 onClose();
               }
             }}
-            placeholder="Buscar páginas, herramientas, ajustes…"
-            aria-label="Buscar en PCSuite"
+            placeholder={t('common.searchPlaceholder')}
+            aria-label={t('common.searchInPCSuite')}
             className="w-full bg-transparent py-3 text-sm outline-none"
             style={{ color: 'var(--pcs-text)' }}
           />

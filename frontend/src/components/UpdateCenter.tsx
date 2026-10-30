@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds, EventIds } from '../types/bridge';
+import { t } from '../lib/i18n';
 import type {
   JobEventPayload,
   AppUpdateCheckResult,
@@ -66,7 +67,7 @@ export function UpdateCenter({ check }: { check: AppUpdateCheckResult | null }) 
       title={`Versión ${check.latestVersion} disponible — Ajustes > Acerca de`}
     >
       <Sparkles size={12} aria-hidden />
-      Actualización
+      {t('pages.update.badge')}
     </a>
   );
 }
@@ -129,13 +130,11 @@ export function UpdateStartupModal({ check }: { check: AppUpdateCheckResult | nu
           >
             <Sparkles size={20} aria-hidden />
           </span>
-          <h2 id="update-modal-title" className="text-base font-semibold">
-            Nueva versión disponible
-          </h2>
+          <h2 id="update-modal-title" className="text-base font-semibold">{t('pages.update.newVersion')}</h2>
         </div>
 
         <p className="mt-4 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Hay una versión nueva de PCSuite lista para descargar e instalar:
+          {t('pages.update.newVersionAvailable')}
         </p>
         <div className="mt-2 flex items-center gap-2">
           <span className="text-xs font-mono" style={{ color: 'var(--pcs-text-muted)' }}>
@@ -160,7 +159,7 @@ export function UpdateStartupModal({ check }: { check: AppUpdateCheckResult | nu
             className="mt-2 inline-flex cursor-pointer items-center gap-1 text-xs underline-offset-2 transition-colors hover:underline"
             style={{ color: 'var(--pcs-accent)' }}
           >
-            Notas de versión
+{t('pages.winget.releaseNotes')}
             <ExternalLink size={10} aria-hidden className="opacity-70" />
           </a>
         )}
@@ -172,7 +171,7 @@ export function UpdateStartupModal({ check }: { check: AppUpdateCheckResult | nu
             className="rounded-md border px-3 py-2 text-sm font-medium cursor-pointer transition-colors"
             style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
           >
-            Más tarde
+{t('common.later')}
           </button>
           <button
             type="button"
@@ -184,13 +183,12 @@ export function UpdateStartupModal({ check }: { check: AppUpdateCheckResult | nu
             style={{ background: 'var(--pcs-accent)', color: '#fff' }}
           >
             <Download size={14} aria-hidden />
-            Actualizar
+{t('pages.winget.upgradeAll')}
           </button>
         </div>
 
         <p className="mt-3 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-          El botón te lleva a Ajustes › Actualizaciones: la descarga se verifica con
-          SHA-256 y Windows puede pedir permiso (UAC) al instalar.
+{t('pages.update.installNote')}
         </p>
       </div>
     </div>,
@@ -223,7 +221,7 @@ export function UpdatePanel() {
         setNotice({ kind: 'error', text: result.error });
       }
     } catch (e) {
-      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo comprobar.' });
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : t('pages.update.checkFailed') });
     } finally {
       setChecking(false);
     }
@@ -251,14 +249,14 @@ export function UpdatePanel() {
         const result = payload.result as UpdateDownloadJobResult | null;
         if (result?.path) {
           setDownload({ phase: 'ready', path: result.path });
-          setNotice({ kind: 'success', text: 'Descarga verificada (SHA-256 OK). Lista para instalar.' });
+          setNotice({ kind: 'success', text: t('pages.update.downloadComplete') });
         } else {
           setDownload({ phase: 'idle' });
           setNotice({ kind: 'error', text: 'La descarga terminó sin resultado.' });
         }
       } else if (payload.status === 'failed') {
-        setDownload({ phase: 'failed', error: payload.error ?? 'La descarga falló.' });
-        setNotice({ kind: 'error', text: payload.error ?? 'La descarga falló.' });
+        setDownload({ phase: 'failed', error: payload.error ?? t('pages.winget.downloadFailed') });
+        setNotice({ kind: 'error', text: payload.error ?? t('pages.winget.downloadFailed') });
       } else if (payload.status === 'cancelled') {
         setDownload({ phase: 'idle' });
         setNotice(null);
@@ -277,7 +275,7 @@ export function UpdatePanel() {
       setDownload({ phase: 'downloading', jobId: result.jobId, progress: 0 });
     } catch (e) {
       setDownload({ phase: 'idle' });
-      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo descargar.' });
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : t('pages.winget.downloadFailed') });
     }
   };
 
@@ -290,7 +288,7 @@ export function UpdatePanel() {
       // La app se cierra sola (onInstalled → MainForm.Close). Si no se cerró,
       // el usuario puede seguirla usando; el mensaje ya explica el desenlace.
     } catch (e) {
-      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo instalar.' });
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : t('pages.update.installFailed') });
     } finally {
       setInstalling(false);
     }
@@ -304,10 +302,10 @@ export function UpdatePanel() {
     <section
       className="space-y-3 rounded-lg border p-4"
       style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
-      aria-label="Actualizaciones"
+      aria-label={t('pages.winget.updates')}
     >
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">Actualizaciones</h2>
+        <h2 className="text-sm font-semibold" aria-label={t('pages.winget.updates')}>{t('pages.winget.updates')}</h2>
         <button
           type="button"
           onClick={() => void runCheck()}
@@ -316,7 +314,7 @@ export function UpdatePanel() {
           style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
         >
           <RefreshCw size={12} aria-hidden className={checking ? 'animate-spin' : undefined} />
-          {checking ? 'Comprobando…' : 'Buscar actualizaciones'}
+          {checking ? t('pages.update.checking') : t('pages.update.checkButton')}
         </button>
       </div>
 
@@ -342,7 +340,7 @@ export function UpdatePanel() {
         >
           <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-semibold">Clave de firma cambiada</p>
+            <p className="font-semibold">{t('pages.update.signatureRotated')}</p>
             <p className="mt-0.5" style={{ color: 'var(--pcs-text-muted)' }}>
               {check.keyRotationWarning} La descarga queda bloqueada hasta que
               verifiques el fingerprint en{' '}
@@ -355,7 +353,7 @@ export function UpdatePanel() {
       {check && !available && !check.error && (
         <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--pcs-success)' }}>
           <ShieldCheck size={13} aria-hidden />
-          PCSuite {check.currentVersion} está actualizado.
+          {t('pages.update.upToDate', { version: check.currentVersion })}
         </p>
       )}
 
@@ -386,7 +384,7 @@ export function UpdatePanel() {
                 className="ml-auto flex cursor-pointer items-center gap-1 text-xs underline-offset-2 transition-colors hover:underline"
                 style={{ color: 'var(--pcs-accent)' }}
               >
-                Notas de versión
+                {t('pages.winget.releaseNotes')}
                 <ExternalLink size={10} aria-hidden className="opacity-70" />
               </a>
             )}
@@ -407,7 +405,7 @@ export function UpdatePanel() {
                 />
               </div>
               <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                Descargando con verificación SHA-256… {Math.round(download.progress * 100)}%
+                {t('pages.update.downloading', { percent: Math.round(download.progress * 100) })}
               </p>
             </div>
           )}
@@ -434,7 +432,7 @@ export function UpdatePanel() {
                 style={{ background: 'var(--pcs-success)', color: '#fff' }}
               >
                 <CheckCircle2 size={14} aria-hidden />
-                {installing ? 'Lanzando…' : 'Instalar ahora'}
+                {installing ? t('pages.update.launching') : t('pages.winget.installNow')}
               </button>
             )}
 
@@ -453,7 +451,7 @@ export function UpdatePanel() {
 
           {isReady && (
             <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              El instalador descargado y verificado reemplazará la versión actual;
+              t('pages.update.installNote')
               tu configuración y datos no se tocan. Windows puede pedir permiso (UAC).
             </p>
           )}
@@ -462,3 +460,7 @@ export function UpdatePanel() {
     </section>
   );
 }
+
+
+
+

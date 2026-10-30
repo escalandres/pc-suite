@@ -15,6 +15,7 @@ using PCSuite.Infrastructure.Notifications;
 using PCSuite.Blazor;
 using PCSuite.Blazor.Components;
 using PCSuite.Infrastructure;
+using PCSuite.Infrastructure.AI;
 using PCSuite.Infrastructure.ClamAV;
 using PCSuite.Infrastructure.Cleaner;
 using PCSuite.Infrastructure.Developers;
@@ -204,6 +205,10 @@ public partial class MainForm : Form
         // logger: los ids y exit codes no son secretos, pero tampoco hay
         // nada de usuario que registrar.
         var windowsRepairService = new PCSuite.Infrastructure.Windows.WindowsRepairService(processRunner);
+
+        // IA (Task 038): detección/instalación de markItDown y conversión de
+        // archivos a Markdown. Todo local, sin elevación salvo que pip lo pida.
+        var aiService = new AiService(locator, processRunner, _loggerFactory.CreateLogger<AiService>());
 
         // Local Share (Task 016): servicio de transferencia de archivos en LAN.
         // elevationManager solo se usa para la regla de firewall (UAC puntual);
@@ -427,6 +432,11 @@ public partial class MainForm : Form
                 new CipherXorOperation(cipherService),
                 new WindowsListCommandsOperation(windowsRepairService),
                 new WindowsRunCommandOperation(windowsRepairService, jobManager),
+                new AiDetectOperation(aiService),
+                new AiInstallOperation(aiService),
+                new AiConvertOperation(aiService),
+                new OllamaDetectOperation(aiService),
+                new OllamaListModelsOperation(aiService),
                 new UninstallListOperation(),
                 new UninstallDiscoverOperation(),
                 new UninstallRunOfficialOperation(elevationManager),

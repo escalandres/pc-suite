@@ -33,6 +33,8 @@ import type {
   SystemPickFilesResult,
   SystemPickFolderResult,
 } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
+import { t } from '../lib/i18n';
 
 // Timeouts del lado del cliente, siempre por encima de los del nativo
 // (lecturas 30 s, install/update 900 s). Los ESCANEOS son jobs: la llamada
@@ -57,9 +59,9 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 const SCAN_LABELS: Record<ScanKind, string> = {
-  quick: 'Escaneo rápido',
-  full: 'Escaneo completo',
-  custom: 'Escaneo personalizado',
+  quick: t('clamav.scan.quick'),
+  full: t('clamav.scan.full'),
+  custom: t('clamav.scan.custom'),
 };
 
 // Instalación automática: UN solo intento por sesión de app. Si el usuario
@@ -80,6 +82,7 @@ function formatElapsed(totalMs: number): string {
 }
 
 export function Clamav() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<ClamAvStatusResult | null>(null);
   const [history, setHistory] = useState<ClamAvHistoryEntryResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,7 +151,7 @@ export function Clamav() {
         setHistory([]);
       }
     } catch (error) {
-      setLoadError(errorMessage(error, 'No se pudo consultar ClamAV.'));
+      setLoadError(errorMessage(error, t('pages.clamav.loadError')));
     } finally {
       setLoading(false);
     }
@@ -568,7 +571,7 @@ export function Clamav() {
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">ClamAV</h1>
+          <h1 className="text-2xl font-semibold">{t('sidebar.clamav')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
             Antivirus de código abierto: estado, instalación, definiciones, escaneos e
             historial —" solo operaciones fijas, nunca argumentos arbitrarios.
@@ -596,14 +599,14 @@ export function Clamav() {
             style={{ background: 'var(--pcs-accent)', color: '#fff' }}
           >
             <RefreshCw size={14} aria-hidden className={loading ? 'animate-spin' : undefined} />
-            Actualizar
+            {t('common.refresh')}
           </button>
         </div>
       </header>
 
       {loading && (
         <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Consultando clamscan…
+          {t('pages.clamav.loading')}
         </p>
       )}
 
@@ -636,7 +639,7 @@ export function Clamav() {
         <section
           className="rounded-lg border p-4"
           style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
-          aria-label="Estado de ClamAV"
+          aria-label={t('pages.clamav.statusAria')}
         >
           {!installed ? (
             <div className="space-y-3">
@@ -651,7 +654,7 @@ export function Clamav() {
               <ActionButton
                 busy={busy === 'install'}
                 disabled={busyAny}
-                label={busy === 'install' ? 'Instalando…' : 'Instalar ClamAV'}
+                label={busy === 'install' ? t('pages.clamav.installing') : t('pages.clamav.install')}
                 icon={<Download size={14} aria-hidden />}
                 primary
                 onClick={() => {
@@ -687,7 +690,7 @@ export function Clamav() {
             <ActionButton
               busy={busy === 'update'}
               disabled={busyAny || !status.canUpdateDefinitions}
-              label={busy === 'update' ? 'Actualizando…' : 'Actualizar definiciones'}
+              label={busy === 'update' ? t('pages.clamav.updating') : t('pages.clamav.updateDefs')}
               icon={<ArrowUpCircle size={14} aria-hidden />}
               shortcut="D"
               onClick={() => {
@@ -762,7 +765,7 @@ export function Clamav() {
           >
             <FileSearch size={22} aria-hidden className="opacity-40" style={{ color: 'var(--pcs-accent)' }} />
             <p className="text-sm font-medium" style={{ color: 'var(--pcs-text)' }}>
-              Escanear un archivo
+              {t('pages.clamav.scanFile')}
             </p>
             <button
               type="button"
@@ -1360,7 +1363,7 @@ function QuickScanModal(props: {
             style={{ background: 'var(--pcs-accent)', color: '#fff' }}
           >
             <Zap size={14} aria-hidden />
-            Escanear ahora
+            {t('pages.clamav.scanNow')}
           </button>
         </div>
       </div>

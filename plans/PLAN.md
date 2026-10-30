@@ -442,6 +442,8 @@ cipher.xor         → { input, key } → { output }
 | `dism-checkhealth` | `DISM /Online /Cleanup-Image /CheckHealth` | Chequeo rápido del almacén de componentes (corrupción marcada) | segundos |
 | `dism-scanhealth` | `DISM /Online /Cleanup-Image /ScanHealth` | Escaneo del almacén de componentes | minutos |
 | `dism-restorehealth` | `DISM /Online /Cleanup-Image /RestoreHealth` | REPARA el almacén de componentes (puede usar Windows Update) | 10–60 min |
+| `dism-analyzecomponentstore` | `DISM /Online /Cleanup-Image /AnalyzeComponentStore` | Analiza el almacén de componentes (tamaño, reducción posible) sin modificar nada | minutos |
+| `dism-startcomponentcleanup` | `DISM /Online /Cleanup-Image /StartComponentCleanup` | Limpia el almacén de componentes: elimina versiones anteriores de archivos actualizados | 5–15 min |
 
 La secuencia de reparación documentada en la UI: CheckHealth → ScanHealth → RestoreHealth → `sfc /scannow`.
 
@@ -460,8 +462,8 @@ windows.runCommand   → { commandId } → { jobId }   // desenlace en el Result
 
 | Tarea | Estado | Notas |
 |---|---|---|
-| Task 036 - Página "Windows" en el sidebar (entre Cifrador y Seguridad): catálogo de 5 comandos de reparación + jobs con desenlace sondeado | ✅ Completado | 2026-10-27. 1026/1026 tests (+22), 0 warnings, tsc+vite OK |
-| ├ 36.1 - WindowsCommandCatalog (Infrastructure\Windows): 5 entradas semilla (sfc /scannow, sfc /verifyonly, DISM CheckHealth/ScanHealth/RestoreHealth) con argv fijo, duración, heavy y log oficial. AGREGAR UN COMANDO = 1 entrada (+ opcional un case en Summarize) | ✅ Completado | Tests: ids únicos, binarios reales de System32, argv fijos no vacíos, find de id hostil → null |
+| Task 036 - Página "Windows" en el sidebar (entre Cifrador y Seguridad): catálogo de 7 comandos de reparación + jobs con desenlace sondeado | ✅ Completado | 2026-10-27. 1026/1026 tests (+22), 0 warnings, tsc+vite OK |
+| ├ 36.1 - WindowsCommandCatalog (Infrastructure\Windows): 7 entradas semilla (sfc /scannow, sfc /verifyonly, DISM CheckHealth/ScanHealth/RestoreHealth/AnalyzeComponentStore/StartComponentCleanup) con argv fijo, duración, heavy y log oficial. AGREGAR UN COMANDO = 1 entrada (+ opcional un case en Summarize) | ✅ Completado | Tests: ids únicos, binarios reales de System32, argv fijos no vacíos, find de id hostil → null |
 | ├ 36.2 - WindowsRepairService: runas directo (UAC por operación, consola elevada visible), Timeout null (lección 024), id allow-listado ANTES de tocar el runner (cero UAC para desconocidos); exit codes oficiales → mensajes controlados + puntero a CBS.log/dism.log | ✅ Completado | ElevationDeclined → ELEVATION_CANCEL controlado; fallo inesperado → WINDOWS_FAILED sin detalles internos |
 | ├ 36.3 - Ops windows.listCommands / windows.runCommand (patrón ClamAvScanJobOperation): { jobId } en el acto, desenlace como Result del job, job.cancel honesto | ✅ Completado | Payload no-objeto → MALFORMED_MESSAGE; id desconocido → WINDOWS_FAILED sin job residual; job de servicio fallido → status failed con mensaje |
 | └ 36.4 - UI Windows.tsx: catálogo por categoría con chips de duración, comando copiable, confirmación con createPortal (heavy con aviso reforzado), job en curso con cronómetro + cancelar honesto, desenlace con mensaje + logHint | ✅ Completado | VALID_PAGES derivado de NAV_ITEMS: la página nueva es deep-linkable por construcción (sin tocar el allowlist) |
@@ -476,6 +478,45 @@ windows.runCommand   → { commandId } → { jobId }   // desenlace en el Result
 | Task 037 - Release 0.10.0: menú Windows + todo lo acumulado de 0.8/0.9 | ✅ Completado | 2026-10-27. Bump 0.9.0 → 0.10.0; notas acumulativas desde 0.6.0; EXE empaquetado versión 0.10.0+50ef7fc verificada |
 | ├ 37.1 - Empaquetado + firma + manifiesto `releases\0.10.0\` | ✅ Completado | Instalador `aa8b519c…`, portable `4c5281b9…`; firma PGP verificada contra la clave embebida del updater |
 | ├ 37.2 - Pendiente manual (usuario): release de GitHub con LOS BINARIOS EXACTOS + copia Astro/Vercel | ⏳ Pendiente | `releases\COPIAR-A-ASTRO.md` mapea la copia; los tags pcsuite-v0.9.0 (69c4419) y pcsuite-v0.10.0 quedan disponibles — el canal público salta de la versión que se copie en adelante |
+
+### Task 038 — Módulo "IA": detección e instalación de markItDown + conversión de archivos a Markdown
+
+> Nuevo menú top-level "IA" que permite convertir archivos (PDF, DOCX, XLSX, PPTX, imágenes, audio, HTML…) a Markdown para usarlos como contexto en IA. Usa markItDown (Microsoft, paquete Python) como motor de conversión — PCSuite orquesta, no es el motor.
+
+#### Arquitectura
+
+- **Página**: rontend/src/pages/Ai.tsx — top-level en el sidebar, vista única con estado, instalación, selector de archivo y área de Markdown resultante.
+- **Backend**: src/PCSuite.Infrastructure/AI/AiService.cs + src/PCSuite.Core/AI/IAiService.cs + ops en src/PCSuite.Infrastructure/Operations/AiOperations.cs.
+- **Contratos**: src/PCSuite.Contracts/AiResults.cs (nuevo), src/PCSuite.Contracts/OperationIds.cs (añadir i.detect, i.install, i.convert), src/PCSuite.Contracts/BridgeErrorCodes.cs (añadir AiFailed, AiNotInstalled, AiConversionFailed).
+- **Detección**: python --version / python3 --version + python -m pip show markitdown.
+- **Instalación**: python -m pip install markitdown (vía ProcessRunner directo; UAC por operación si el entorno de Python lo requiere).
+- **Conversión**: python -m markitdown <ruta> → stdout = Markdown. Ejecución como **JOB** (patrón ClamAV/Windows): responde {jobId} al instante, desenlace por job.event/job.get. Sin tope de reloj (lección 024).
+- **Selección de archivo**: reusa system.pickFiles (diálogo nativo de Windows, Task 026) → ruta absoluta.
+- **Sin elevación por defecto**: solo UAC si pip lo pide para instalar en ubicación protegida.
+
+#### Modelo de datos
+
+`csharp
+// Operaciones bridge
+ai.detect   → { } → { installed: boolean, pythonPath?: string, markitdownVersion?: string, detail?: string }
+ai.install  → { } → { succeeded: boolean, exitCode: number, elevated: boolean, detail?: string }
+ai.convert  → { path: string } → { jobId: string }   // desenlace como Result del job
+
+// Result del job de ai.convert (job.event / job.get)
+{ succeeded: boolean, exitCode: number, markdown?: string, detail?: string }
+`
+
+#### Registro de implementación (pendiente)
+
+| Tarea | Descripción | Estado |
+|---|---|---|
+| 38.1 — Contratos + núcleo | IAiService (Core), DTOs AiResults.cs (Contracts), OperationIds + BridgeErrorCodes | 🔲 Pendiente |
+| 38.2 — Infraestructura | AiService: detect python/pip/markitdown, install via pip, convert via python -m markitdown | 🔲 Pendiente |
+| 38.3 — Operaciones puente | i.detect, i.install, i.convert (ai.convert como JOB) + registro en CommandRouter (MainForm) | 🔲 Pendiente |
+| 38.4 — UI React | Página "IA" en el sidebar: detectar, instalar, seleccionar archivo (system.pickFiles), convertir, mostrar markdown, copiar al portapapeles | 🔲 Pendiente |
+| 38.5 — Tests | xUnit para AiService/AiOperations (mock de IProcessRunner); Vitest para página IA | 🔲 Pendiente |
+
+---
 
 ---
 
@@ -572,3 +613,4 @@ windows.runCommand   → { commandId } → { jobId }   // desenlace en el Result
 4. **Eventos al WebView2 exigen el hilo UI**: todo evento disparado desde hilos de fondo (handler TLS, listener UDP, stdout de ClamAV) moría en silencio — el banner de emparejamiento era el primero INDISPENSABLE.
 5. **`File.path` no existe en WebView2** (es de Electron): el selector web entregaba nombres sueltos y el backend no encontraba nada. Solución: `system.pickFiles` con diálogo nativo de Windows.
 6. **Privilegios asimétricos al actualizar**: instalar "solo para mí" contra una instalación "todos los usuarios" deja todo a mitad con "MoveFile code 5" — ahora hay guard de elevación con mensaje claro.
+| Task 039 - Corrección de i18n del frontend: eliminación de BOM en JSON/TSX, traducción completa al español, fallback a inglés, corrección de claves sin resolver en Settings/UpdateCenter/Certificates/ClamAV/Tools/Winget/WSL/Plugins, y reubicación del selector de idioma a Ajustes | ✅ Completado | 2026-10-29 |

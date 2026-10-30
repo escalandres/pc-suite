@@ -26,6 +26,8 @@ public static class WindowsCommandCatalog
     public const string DismCheckHealth = "dism-checkhealth";
     public const string DismScanHealth = "dism-scanhealth";
     public const string DismRestoreHealth = "dism-restorehealth";
+    public const string DismAnalyzeComponentStore = "dism-analyzecomponentstore";
+    public const string DismStartComponentCleanup = "dism-startcomponentcleanup";
 
     private const string SystemCategory = "Reparación del sistema";
 
@@ -96,6 +98,30 @@ public static class WindowsCommandCatalog
             ["/Online", "/Cleanup-Image", "/RestoreHealth"],
             "DISM /Online /Cleanup-Image /RestoreHealth",
             "10–60 min",
+            Heavy: true,
+            DismLog),
+
+        new(
+            DismAnalyzeComponentStore,
+            "DISM — analizar el almacén de componentes",
+            "Analiza el almacén de componentes del sistema: muestra el tamaño actual, el tamaño después de una limpieza y si se puede reducir. No modifica nada.",
+            SystemCategory,
+            Path.Combine(System32, "Dism.exe"),
+            ["/Online", "/Cleanup-Image", "/AnalyzeComponentStore"],
+            "DISM /Online /Cleanup-Image /AnalyzeComponentStore",
+            "minutos",
+            Heavy: false,
+            DismLog),
+
+        new(
+            DismStartComponentCleanup,
+            "DISM — limpiar el almacén de componentes",
+            "Inicia la limpieza del almacén de componentes: elimina versiones anteriores de archivos actualizados y reduce el tamaño del almacén. Puede tardar varios minutos.",
+            SystemCategory,
+            Path.Combine(System32, "Dism.exe"),
+            ["/Online", "/Cleanup-Image", "/StartComponentCleanup"],
+            "DISM /Online /Cleanup-Image /StartComponentCleanup",
+            "5–15 min",
             Heavy: true,
             DismLog),
     ];

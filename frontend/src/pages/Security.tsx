@@ -16,6 +16,7 @@ import type { LucideIcon } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type { ActiveConnectionResult, SecurityStatusResult } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
 
 /**
  * Página "Seguridad" (Task 012 / §14): Centro de seguridad de Windows en
@@ -238,6 +239,7 @@ function PortsTableSkeleton() {
 }
 
 export function Security() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<SecurityStatusResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -311,10 +313,9 @@ export function Security() {
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Seguridad</h1>
+          <h1 className="text-2xl font-semibold">{t('sidebar.security')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            Centro de seguridad de Windows en solo lectura: Defender, firewall por perfil,
-            antivirus, puertos abiertos y diagnóstico — sin modificaciones ni elevación.
+            {t('pages.security.subtitle')}
           </p>
         </div>
         <button

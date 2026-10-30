@@ -11,7 +11,6 @@ import {
   Wrench,
   Terminal,
   Puzzle,
-  Sparkles,
   Package,
   Boxes,
   Bug,
@@ -21,6 +20,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { CleanerIcon } from '../components/icons/CleanerIcon';
+import { AICPUIcon } from '../components/icons/AICPUIcon';
 import { pageKey, toggleFavorite, useFavorites } from '../favorites';
 import { openHelp } from '../shortcuts';
 import { bridge } from '../services/pcsuiteBridge';
@@ -28,6 +29,7 @@ import { OperationIds } from '../types/bridge';
 import type { AppUpdateCheckResult } from '../types/bridge';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { UpdateCenter, UpdateStartupModal } from '../components/UpdateCenter';
+import { useTranslation } from '../hooks/useTranslation';
 
 export type PageId =
   | 'home'
@@ -44,6 +46,7 @@ export type PageId =
   | 'files'
   | 'cipher'
   | 'windows'
+  | 'ai'
   | 'activity'
   | 'settings';
 
@@ -61,7 +64,7 @@ interface AppLayoutProps {
 
 interface NavItem {
   id: PageId;
-  label: string;
+  labelKey: string;
   icon: typeof Home;
   enabled: boolean;
 }
@@ -71,26 +74,28 @@ interface NavItem {
  * Solo las páginas implementadas están habilitadas.
  */
 export const NAV_ITEMS: NavItem[] = [
-  { id: 'home', label: 'Inicio', icon: Home, enabled: true },
-  { id: 'tools', label: 'Herramientas', icon: Wrench, enabled: true },
-  { id: 'localshare', label: 'Local Share', icon: MonitorSmartphone, enabled: true },
-  { id: 'winget', label: 'Paquetes', icon: Package, enabled: true },
-  { id: 'wsl', label: 'WSL', icon: Boxes, enabled: true },
-  { id: 'clamav', label: 'ClamAV', icon: Bug, enabled: true },
-  { id: 'cleaner', label: 'Limpiador', icon: Sparkles, enabled: true },
-  { id: 'certificates', label: 'Certificados', icon: FileKey, enabled: true },
-  { id: 'files', label: 'Archivos', icon: FolderOpen, enabled: true },
-  { id: 'cipher', label: 'Cifrador', icon: Binary, enabled: true },
-  { id: 'windows', label: 'Windows', icon: Monitor, enabled: true },
-  { id: 'security', label: 'Seguridad', icon: ShieldCheck, enabled: true },
-  { id: 'devtools', label: 'Herramientas dev', icon: Terminal, enabled: true },
-  { id: 'plugins', label: 'Plugins', icon: Puzzle, enabled: true },
-  { id: 'activity', label: 'Actividad', icon: Activity, enabled: true },
-  { id: 'settings', label: 'Ajustes', icon: Settings, enabled: true },
+  { id: 'home', labelKey: 'sidebar.home', icon: Home, enabled: true },
+  { id: 'tools', labelKey: 'sidebar.tools', icon: Wrench, enabled: true },
+  { id: 'localshare', labelKey: 'sidebar.localshare', icon: MonitorSmartphone, enabled: true },
+  { id: 'winget', labelKey: 'sidebar.winget', icon: Package, enabled: true },
+  { id: 'wsl', labelKey: 'sidebar.wsl', icon: Boxes, enabled: true },
+  { id: 'clamav', labelKey: 'sidebar.clamav', icon: Bug, enabled: true },
+  { id: 'cleaner', labelKey: 'sidebar.cleaner', icon: CleanerIcon, enabled: true },
+  { id: 'certificates', labelKey: 'sidebar.certificates', icon: FileKey, enabled: true },
+  { id: 'files', labelKey: 'sidebar.files', icon: FolderOpen, enabled: true },
+  { id: 'cipher', labelKey: 'sidebar.cipher', icon: Binary, enabled: true },
+  { id: 'windows', labelKey: 'sidebar.windows', icon: Monitor, enabled: true },
+  { id: 'ai', labelKey: 'sidebar.ai', icon: AICPUIcon, enabled: true },
+  { id: 'security', labelKey: 'sidebar.security', icon: ShieldCheck, enabled: true },
+  { id: 'devtools', labelKey: 'sidebar.devtools', icon: Terminal, enabled: true },
+  { id: 'plugins', labelKey: 'sidebar.plugins', icon: Puzzle, enabled: true },
+  { id: 'activity', labelKey: 'sidebar.activity', icon: Activity, enabled: true },
+  { id: 'settings', labelKey: 'sidebar.settings', icon: Settings, enabled: true },
 ];
 
 export function AppLayout({ children, page, onNavigate, readyNotice, currentToolId, currentToolName }: AppLayoutProps) {
   const favorites = useFavorites();
+  const { t } = useTranslation();
 
   // 14.3.6 — Sidebar colapsable (icon-only mode) con persistencia
   const [collapsed, setCollapsed] = useState(() => {
@@ -186,7 +191,7 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
                   type="button"
                   disabled={!item.enabled}
                   aria-current={active ? 'page' : undefined}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed ? t(item.labelKey) : undefined}
                   onClick={() => item.enabled && onNavigate(item.id)}
                   className={[
                     'flex w-full items-center gap-3 rounded-md py-1.5 text-left text-sm transition-colors',
@@ -206,9 +211,11 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
                     .join(' ')}
                 >
                   <Icon size={16} className="shrink-0" aria-hidden />
-                  {!collapsed && <span className="truncate">{item.label}</span>}
+                  {!collapsed && <span className="truncate">{t(item.labelKey)}</span>}
                   {!item.enabled && !collapsed && (
-                    <span className="ml-auto text-xs text-(--pcs-text-muted)">pronto</span>
+                    <span className="ml-auto text-xs text-(--pcs-text-muted)">
+                      {t('sidebar.soon')}
+                    </span>
                   )}
                 </button>
                 {item.enabled && !collapsed && (
@@ -216,10 +223,12 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
                     type="button"
                     aria-pressed={starred}
                     aria-label={
-                      starred ? `Quitar ${item.label} de favoritos` : `Añadir ${item.label} a favoritos`
+                      starred
+                        ? `Quitar ${t(item.labelKey)} de favoritos`
+                        : `Añadir ${t(item.labelKey)} a favoritos`
                     }
                     onClick={() =>
-                      toggleFavorite({ key: pageKey(item.id), label: item.label, page: item.id })
+                      toggleFavorite({ key: pageKey(item.id), labelKey: item.labelKey, page: item.id })
                     }
                     className={`pcs-touch-target absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-2 transition-opacity cursor-pointer ${
                       starred
@@ -248,11 +257,11 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
           {!collapsed && (
             <>
               <div className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-(--pcs-text-muted)">
-                Favoritos
+                {t('sidebar.favorites')}
               </div>
               {favorites.length === 0 ? (
                 <p className="px-3 text-xs text-(--pcs-text-muted)">
-                  Pulsa la estrella de una página o herramienta para fijarla aquí.
+                  {t('sidebar.favoritesHint')}
                 </p>
               ) : (
                 favorites.map((favorite) => {
@@ -267,11 +276,11 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
                         className="flex w-full items-center gap-3 rounded-md px-3 py-1 pr-8 text-left text-sm text-(--pcs-text) transition-colors cursor-pointer hover:bg-(--pcs-surface-2) focus-visible:bg-(--pcs-surface-2)"
                       >
                         <Icon size={14} className="shrink-0 text-(--pcs-accent)" aria-hidden />
-                        <span className="truncate">{favorite.label}</span>
+                        <span className="truncate">{t(favorite.labelKey || favorite.label || '')}</span>
                       </button>
                       <button
                         type="button"
-                        aria-label={`Quitar ${favorite.label} de favoritos`}
+                        aria-label={`Quitar ${t(favorite.labelKey || favorite.label || '')} de favoritos`}
                         onClick={() => toggleFavorite(favorite)}
                         className="pcs-touch-target absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-2 text-(--pcs-accent) transition-opacity cursor-pointer opacity-0 pointer-events-none group-hover/fav:opacity-100 group-hover/fav:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto"
                       >
@@ -287,8 +296,8 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
           {collapsed && favorites.length > 0 && (
             <button
               type="button"
-              aria-label={`${favorites.length} favoritos fijados — expandir menú`}
-              title="Favoritos"
+              aria-label={t('sidebar.favoritesCount', { count: favorites.length })}
+              title={t('sidebar.favorites')}
               onClick={() => setCollapsed(false)}
               className="mx-auto mt-2 flex items-center justify-center rounded-md bg-(--pcs-surface-2) p-2 text-(--pcs-accent) transition-colors cursor-pointer hover:brightness-110"
             >
@@ -300,7 +309,7 @@ export function AppLayout({ children, page, onNavigate, readyNotice, currentTool
         <footer
           className={`flex items-center gap-2 border-t border-(--pcs-border) px-3 py-3 text-xs text-(--pcs-text-muted) ${collapsed ? 'justify-center' : 'justify-between'}`}
         >
-          {!collapsed && <span className="truncate">{readyNotice ?? 'Cargando…'}</span>}
+          {!collapsed && <span className="truncate">{readyNotice ?? t('common.loading')}</span>}
           <button
             type="button"
             aria-label="Ver atajos de teclado"

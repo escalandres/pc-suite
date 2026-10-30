@@ -1,6 +1,7 @@
 import { ChevronRight, Home } from 'lucide-react';
 import { NAV_ITEMS } from '../layouts/AppLayout';
 import type { PageId } from '../layouts/AppLayout';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface BreadcrumbsProps {
   /** Página actual */
@@ -18,6 +19,7 @@ interface BreadcrumbsProps {
  * Se muestra en páginas: Tools (cuando hay tool seleccionada), DevTools, Plugins.
  */
 export function Breadcrumbs({ currentPage, toolId, toolName, onNavigate }: BreadcrumbsProps) {
+  const { t } = useTranslation();
   const pageItem = NAV_ITEMS.find((item) => item.id === currentPage);
 
   // Páginas que no necesitan breadcrumb (raíz)
@@ -25,11 +27,11 @@ export function Breadcrumbs({ currentPage, toolId, toolName, onNavigate }: Bread
   if (rootPages.includes(currentPage) && !toolId) return null;
 
   const crumbs: { label: string; page?: PageId; toolId?: string; isLast: boolean }[] = [
-    { label: 'Inicio', page: 'home', isLast: false },
+    { label: t('sidebar.home'), page: 'home', isLast: false },
   ];
 
   if (pageItem) {
-    crumbs.push({ label: pageItem.label, page: currentPage, isLast: !toolId });
+    crumbs.push({ label: t(pageItem.labelKey), page: currentPage, isLast: !toolId });
   }
 
   if (toolId && toolName) {
@@ -64,7 +66,7 @@ export function Breadcrumbs({ currentPage, toolId, toolName, onNavigate }: Bread
             style={{ color: 'var(--pcs-text-muted)', cursor: 'pointer' }}
           >
             <Home size={12} aria-hidden />
-            <span className="sr-only">Inicio</span>
+            <span className="sr-only">{t('sidebar.home')}</span>
           </button>
         </li>
       );
@@ -99,7 +101,7 @@ export function Breadcrumbs({ currentPage, toolId, toolName, onNavigate }: Bread
   return (
     <nav
       className="mb-6 flex flex-wrap items-center gap-1.5 text-sm"
-      aria-label="Ruta de navegación"
+      aria-label={t('common.breadcrumbs')}
       style={{ color: 'var(--pcs-text-muted)' }}
     >
       <ol className="flex items-center gap-1.5" role="list">

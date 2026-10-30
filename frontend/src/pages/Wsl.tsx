@@ -3,6 +3,8 @@ import { Boxes, Power, Play, RefreshCw, ArrowUpCircle } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type { WslListResult, WslMutationResult, WslStatusResult } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
+import { t } from '../lib/i18n';
 
 /**
  * Página "WSL" (Task 007): estado del subsistema (wsl.status), distribuciones
@@ -34,14 +36,15 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 const STATE_LABELS: Record<string, string> = {
-  running: 'En ejecución',
-  stopped: 'Detenido',
-  unknown: 'Desconocido',
+  running: t('pages.wslState.running'),
+  stopped: t('pages.wslState.stopped'),
+  unknown: t('pages.wslState.unknown'),
 };
 
 const RUNNING_STATES = new Set(['running']);
 
 export function Wsl() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<WslStatusResult | null>(null);
   const [distributions, setDistributions] = useState<WslListResult['distributions']>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +74,7 @@ export function Wsl() {
         setDistributions([]);
       }
     } catch (error) {
-      setLoadError(errorMessage(error, 'No se pudo consultar WSL.'));
+      setLoadError(errorMessage(error, t('pages.wsl.loadError')));
     } finally {
       setLoading(false);
     }
@@ -105,7 +108,7 @@ export function Wsl() {
         });
       }
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error, 'La operación falló.') });
+      setNotice({ kind: 'error', text: errorMessage(error, t('pages.wsl.opFailed')) });
     } finally {
       setBusy(null);
     }
@@ -119,10 +122,9 @@ export function Wsl() {
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">WSL</h1>
+          <h1 className="text-2xl font-semibold">{t('sidebar.wsl')}</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-            Subsistema de Windows para Linux: estado, distribuciones, actualización y
-            apagado — solo operaciones fijas, nunca argumentos arbitrarios.
+            {t('pages.wsl.subtitle')}
           </p>
         </div>
         <button
@@ -133,13 +135,13 @@ export function Wsl() {
           style={{ background: 'var(--pcs-accent)', color: '#fff' }}
         >
           <RefreshCw size={14} aria-hidden className={loading ? 'animate-spin' : undefined} />
-          Actualizar
+          {t('common.refresh')}
         </button>
       </header>
 
       {loading && (
         <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Consultando wsl…
+          {t('pages.wsl.loading')}
         </p>
       )}
 
@@ -172,19 +174,18 @@ export function Wsl() {
         <section
           className="rounded-lg border p-4"
           style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
-          aria-label="Estado de WSL"
+          aria-label={t('pages.wsl.statusAria')}
         >
           {!installed ? (
             <p className="text-sm" style={{ color: 'var(--pcs-danger)' }}>
-              wsl.exe no está en la PATH. Instala el subsistema de Windows para Linux para
-              usar esta página.
+              {t('pages.wsl.notInstalled')}
             </p>
           ) : (
             <div className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <StatusCell label="Versión" value={status.version ?? '—'} />
-              <StatusCell label="Estado" value={STATE_LABELS[state] ?? state} />
-              <StatusCell label="Distribución por defecto" value={status.defaultDistro ?? '—'} />
-              <StatusCell label="Ejecutable" value={status.path ?? '—'} mono />
+              <StatusCell label={t('pages.wsl.labelVersion')} value={status.version ?? t('common.dash')} />
+              <StatusCell label={t('pages.wsl.labelState')} value={STATE_LABELS[state] ?? state} />
+              <StatusCell label={t('pages.wsl.labelDefaultDistro')} value={status.defaultDistro ?? t('common.dash')} />
+              <StatusCell label={t('pages.wsl.labelExecutable')} value={status.path ?? t('common.dash')} mono />
             </div>
           )}
         </section>
@@ -192,16 +193,16 @@ export function Wsl() {
 
       {/* Acciones */}
       {!loading && status && installed && (
-        <section className="flex flex-wrap gap-2" aria-label="Operaciones WSL">
+        <section className="flex flex-wrap gap-2" aria-label={t('pages.wsl.actionsAria')}>
           <ActionButton
             busy={busy === 'update'}
-            label={busy === 'update' ? 'Actualizando…' : 'Actualizar WSL'}
+            label={busy === 'update' ? t('pages.wsl.updating') : t('pages.wsl.updateWSL')}
             icon={<ArrowUpCircle size={14} aria-hidden />}
             primary
             onClick={() => {
               if (
                 !window.confirm(
-                  '¿Actualizar WSL a la última versión disponible? Windows puede mostrar un control de cuentas de usuario (UAC).',
+                  t('pages.wsl.confirmUpdate')
                 )
               ) {
                 return;
@@ -210,32 +211,32 @@ export function Wsl() {
                 'update',
                 OperationIds.wslUpdate,
                 UPDATE_TIMEOUT_MS,
-                'Se ejecutó la actualización de WSL.',
+                t('pages.wsl.updateDone'),
               );
             }}
           />
           <ActionButton
             busy={busy === 'start'}
-            label={busy === 'start' ? 'Arrancando…' : 'Arrancar distribución'}
+            label={busy === 'start' ? t('pages.wsl.starting') : t('pages.wsl.startDistro')}
             icon={<Play size={14} aria-hidden />}
             onClick={() =>
               void run(
                 'start',
                 OperationIds.wslStart,
                 MUTATE_TIMEOUT_MS,
-                'La distribución por defecto se está arrancando.',
+                t('pages.wsl.startingDistro'),
               )
             }
           />
           <ActionButton
             busy={busy === 'shutdown'}
-            label={busy === 'shutdown' ? 'Apagando…' : 'Apagar subsistema'}
+            label={busy === 'shutdown' ? t('pages.wsl.shuttingDown') : t('pages.wsl.shutdown')}
             icon={<Power size={14} aria-hidden />}
             danger
             onClick={() => {
               if (
                 !window.confirm(
-                  '¿Apagar el subsistema WSL? Se detendrán todas las distribuciones en ejecución (incluido docker-desktop si está corriendo).',
+                  t('pages.wsl.confirmShutdown')
                 )
               ) {
                 return;
@@ -244,7 +245,7 @@ export function Wsl() {
                 'shutdown',
                 OperationIds.wslShutdown,
                 MUTATE_TIMEOUT_MS,
-                'El subsistema WSL se apagó.',
+                t('pages.wsl.shutdownSuccess'),
               );
             }}
           />
@@ -253,14 +254,14 @@ export function Wsl() {
 
       {/* Distribuciones */}
       {!loading && status && installed && (
-        <section aria-label="Distribuciones">
+        <section aria-label={t('pages.wsl.distributionsAria')}>
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
             <Boxes size={15} aria-hidden />
-            Distribuciones
+            {t('pages.wsl.distributions')}
           </h2>
           {distributions.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-              No se encontraron distribuciones instaladas.
+              {t('pages.wsl.noDistros')}
             </p>
           ) : (
             <ul className="space-y-2">
@@ -282,10 +283,10 @@ export function Wsl() {
                         color: running ? 'var(--pcs-success)' : 'var(--pcs-text-muted)',
                       }}
                     >
-                      {running ? 'En ejecución' : 'Detenida'}
+                      {running ? t('pages.wsl.running') : t('pages.wsl.stopped')}
                     </span>
                     <span className="ml-auto text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                      WSL {distro.version}
+                      {t('pages.wsl.wslVersion', { version: distro.version })}
                     </span>
                   </li>
                 );
@@ -297,8 +298,7 @@ export function Wsl() {
 
       {!loading && status && !isRunning && installed && distributions.length > 0 && (
         <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-          El subsistema está detenido: la distribución por defecto se arrancará en la próxima
-          operación.
+          {t('pages.wsl.stoppedNotice')}
         </p>
       )}
     </div>
@@ -347,7 +347,7 @@ function ActionButton(props: {
       style={{ background, color }}
     >
       {props.icon}
-      {props.label}
+      {props.busy ? t('pages.wsl.processing') : props.label}
     </button>
   );
 }

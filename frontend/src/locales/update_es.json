@@ -1,0 +1,17 @@
+    "update": {
+      "title": "Actualizaciones",
+      "subtitle": "Preferencias de PCSuite. Se guardan localmente en este equipo.",
+      "appearance": "Apariencia",
+      "themeSystemNote": "«Sistema» sigue el tema de Windows; el oscuro es la experiencia principal.",
+      "behavior": "Comportamiento",
+      "notifications": "Notificaciones",
+      "notificationsDesc": "Avisos emergentes cuando terminan las operaciones.",
+      "density": "Densidad de interfaz",
+      "densityCompact": "Compacto",
+      "densityComfy": "Cómodo",
+      "densityNote": "«Compacto» reduce espaciado y tamaños; «Cómodo» usa valores estándar.",
+      "about": "Acerca de",
+      "aboutAria": "Acerca de PCSuite",
+      "aboutDesc": "Utilidades de mantenimiento, seguridad y desarrollo para Windows.",
+      "copyright": "© {{year}} {{name}} — desarrollado por {{name}}."
+    }

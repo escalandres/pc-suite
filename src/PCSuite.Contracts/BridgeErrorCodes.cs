@@ -79,4 +79,10 @@ public static class BridgeErrorCodes
     // catálogo de comandos de reparación (id desconocido, UAC cancelado,
     // ejecutable ausente, salida con error) con mensaje apto para la UI.
     public const string WindowsFailed = "WINDOWS_FAILED";
+
+    // Códigos de las operaciones ai.* (Task 038): detección/instalación de
+    // markItDown y conversión de archivos a Markdown; mensajes aptos para la UI.
+    public const string AiFailed = "AI_FAILED";
+    public const string AiNotInstalled = "AI_NOT_INSTALLED";
+    public const string AiConversionFailed = "AI_CONVERSION_FAILED";
 }

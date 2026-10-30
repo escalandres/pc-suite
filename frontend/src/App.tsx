@@ -11,6 +11,7 @@ import { Certificates } from './pages/Certificates';
 import { FileTools } from './pages/FileTools';
 import { Cipher } from './pages/Cipher';
 import { WindowsPage } from './pages/Windows';
+import { AiPage } from './pages/Ai';
 import { Cleaner } from './pages/Cleaner';
 import { Security } from './pages/Security';
 import { Settings } from './pages/Settings';
@@ -30,6 +31,10 @@ import {
 import type { AppReadyEvent, SystemInfoResult } from './types/bridge';
 import { EventIds, OperationIds } from './types/bridge';
 import { usePreference, PREF_DENSITY } from './prefs';
+import { initI18n } from './lib/i18n';
+
+// Inicializa i18n al cargar la app (idioma guardado o del navegador).
+initI18n();
 
 /** Páginas válidas para deep-link: EL MISMO registro del sidebar.
  *  (Fix 2026-10-26: la lista manual olvidó files/cipher — al navegar se
@@ -234,6 +239,8 @@ function renderPage(
       return <Cipher />;
     case 'windows':
       return <WindowsPage />;
+    case 'ai':
+      return <AiPage />;
     case 'security':
       return <Security />;
     case 'cleaner':

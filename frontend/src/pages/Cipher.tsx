@@ -9,31 +9,34 @@ import {
 } from 'lucide-react';
 import { bridge } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
+import { t } from '../lib/i18n';
 
 /**
  * Página "Cifrador" (Task 034): codificación de texto, hash y cifrado
  * de mensajes. Todo en proceso, sin red.
  */
 export function Cipher() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'encode' | 'hash' | 'encrypt'>('encode');
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Cifrador</h1>
+        <h1 className="text-2xl font-semibold">{t('sidebar.cipher')}</h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Codificación, hash y cifrado de texto — todo local.
+          {t('pages.cipher.subtitle')}
         </p>
       </header>
 
       <div className="flex gap-2">
         {(
           [
-            { id: 'encode', label: 'Codificar', icon: Code },
-            { id: 'hash', label: 'Hash', icon: Hash },
-            { id: 'encrypt', label: 'Cifrar', icon: Lock },
+            { id: 'encode', labelKey: 'pages.cipher.tabEncode', icon: Code },
+            { id: 'hash', labelKey: 'pages.cipher.tabHash', icon: Hash },
+            { id: 'encrypt', labelKey: 'pages.cipher.tabEncrypt', icon: Lock },
           ] as const
-        ).map(({ id, label, icon: Icon }) => (
+        ).map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             type="button"
@@ -47,7 +50,7 @@ export function Cipher() {
             }}
           >
             <Icon size={14} aria-hidden />
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>
@@ -62,13 +65,13 @@ export function Cipher() {
 // --- Codificadores ---
 
 const ALGORITHMS = [
-  { value: 'base64', label: 'Base64' },
-  { value: 'hex', label: 'Hex' },
-  { value: 'url', label: 'URL' },
-  { value: 'rot13', label: 'ROT13' },
-  { value: 'caesar', label: 'César' },
-  { value: 'binary', label: 'Binario' },
-  { value: 'morse', label: 'Morse' },
+  { value: 'base64', labelKey: 'pages.cipher.algoBase64' },
+  { value: 'hex', labelKey: 'pages.cipher.algoHex' },
+  { value: 'url', labelKey: 'pages.cipher.algoUrl' },
+  { value: 'rot13', labelKey: 'pages.cipher.algoRot13' },
+  { value: 'caesar', labelKey: 'pages.cipher.algoCesar' },
+  { value: 'binary', labelKey: 'pages.cipher.algoBinary' },
+  { value: 'morse', labelKey: 'pages.cipher.algoMorse' },
 ] as const;
 
 function EncodePanel() {
@@ -117,7 +120,7 @@ function EncodePanel() {
           className="rounded-md border px-3 py-2 text-sm"
           style={{ background: 'var(--pcs-surface-2)', borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
         >
-          {ALGORITHMS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+          {ALGORITHMS.map(a => <option key={a.value} value={a.value}>{t(a.labelKey)}</option>)}
         </select>
         {algorithm === 'caesar' && (
           <input

@@ -11,6 +11,7 @@ import {
   setPreference as setStoredPreference,
   usePreference,
 } from '../prefs';
+import { useTranslation } from '../hooks/useTranslation';
 
 /**
  * Página Ajustes (Task 010, parte 10.2): preferencias de UX sobre el
@@ -24,18 +25,19 @@ import {
 const DEVELOPER_NAME = 'AES Studio';
 const DEVELOPER_WEBSITE = 'https://aes-studio.dev';
 
-const THEME_OPTIONS: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
-  { value: 'dark', label: 'Oscuro', icon: Moon },
-  { value: 'light', label: 'Claro', icon: Sun },
-  { value: 'system', label: 'Sistema', icon: Monitor },
+const THEME_OPTIONS: { value: ThemePreference; labelKey: string; icon: LucideIcon }[] = [
+  { value: 'dark', labelKey: 'theme.dark', icon: Moon },
+  { value: 'light', labelKey: 'theme.light', icon: Sun },
+  { value: 'system', labelKey: 'theme.system', icon: Monitor },
 ];
 
-const DENSITY_OPTIONS: { value: 'compact' | 'comfy'; label: string; icon: LucideIcon }[] = [
-  { value: 'compact', label: 'Compacto', icon: Layout },
-  { value: 'comfy', label: 'Cómodo', icon: Layout },
+const DENSITY_OPTIONS: { value: 'compact' | 'comfy'; labelKey: string; icon: LucideIcon }[] = [
+  { value: 'compact', labelKey: 'pages.settings.densityCompact', icon: Layout },
+  { value: 'comfy', labelKey: 'pages.settings.densityComfy', icon: Layout },
 ];
 
 export function Settings() {
+  const { t, setLang, isSpanish, isEnglish } = useTranslation();
   const { preference, setPreference } = useTheme();
   const notifications = usePreference<boolean>(PREF_NOTIFICATIONS, true);
   const density = usePreference<'compact' | 'comfy'>(PREF_DENSITY, 'comfy');
@@ -53,18 +55,54 @@ export function Settings() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Ajustes</h1>
+        <h1 className="text-2xl font-semibold">{t('pages.settings.title')}</h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Preferencias de PCSuite. Se guardan localmente en este equipo.
+          {t('pages.settings.subtitle')}
         </p>
       </header>
+
+      {/* Idioma */}
+      <section
+        className="space-y-3 rounded-lg border p-4"
+        style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
+      >
+        <h2 className="text-sm font-semibold">{t('common.language')}</h2>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-pressed={isSpanish}
+            onClick={() => void setLang('es')}
+            className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors"
+            style={{
+              background: isSpanish ? 'var(--pcs-accent)' : 'var(--pcs-surface-2)',
+              borderColor: isSpanish ? 'var(--pcs-accent)' : 'var(--pcs-border)',
+              color: isSpanish ? '#fff' : 'var(--pcs-text)',
+            }}
+          >
+            {t('common.spanish')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={isEnglish}
+            onClick={() => void setLang('en')}
+            className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors"
+            style={{
+              background: isEnglish ? 'var(--pcs-accent)' : 'var(--pcs-surface-2)',
+              borderColor: isEnglish ? 'var(--pcs-accent)' : 'var(--pcs-border)',
+              color: isEnglish ? '#fff' : 'var(--pcs-text)',
+            }}
+          >
+            {t('common.english')}
+          </button>
+        </div>
+      </section>
 
       {/* Apariencia */}
       <section
         className="space-y-3 rounded-lg border p-4"
         style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
       >
-        <h2 className="text-sm font-semibold">Apariencia</h2>
+        <h2 className="text-sm font-semibold">{t('pages.settings.appearance')}</h2>
         <div className="flex flex-wrap gap-2">
           {THEME_OPTIONS.map((option) => {
             const Icon = option.icon;
@@ -83,13 +121,13 @@ export function Settings() {
                 }}
               >
                 <Icon size={15} aria-hidden />
-                {option.label}
+                {t(option.labelKey)}
               </button>
             );
           })}
         </div>
         <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-          «Sistema» sigue el tema de Windows; el oscuro es la experiencia principal.
+          {t('pages.settings.themeSystemNote')}
         </p>
       </section>
 
@@ -98,11 +136,11 @@ export function Settings() {
         className="space-y-1 rounded-lg border p-4"
         style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
       >
-        <h2 className="mb-2 text-sm font-semibold">Comportamiento</h2>
+        <h2 className="mb-2 text-sm font-semibold">{t('pages.settings.behavior')}</h2>
         <ToggleRow
           icon={Bell}
-          title="Notificaciones"
-          description="Avisos emergentes cuando terminan las operaciones."
+          title={t('pages.settings.notifications')}
+          description={t('pages.settings.notificationsDesc')}
           checked={notifications}
           onChange={(value) => setStoredPreference(PREF_NOTIFICATIONS, value)}
         />
@@ -113,7 +151,7 @@ export function Settings() {
         className="space-y-3 rounded-lg border p-4"
         style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
       >
-        <h2 className="text-sm font-semibold">Densidad de interfaz</h2>
+        <h2 className="text-sm font-semibold">{t('pages.settings.density')}</h2>
         <div className="flex flex-wrap gap-2">
           {DENSITY_OPTIONS.map((option) => {
             const active = density === option.value;
@@ -131,13 +169,13 @@ export function Settings() {
                 }}
               >
                 <option.icon size={15} aria-hidden />
-                {option.label}
+                {t(option.labelKey)}
               </button>
             );
           })}
         </div>
         <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-          «Compacto» reduce espaciado y tamaños; «Cómodo» usa valores estándar.
+          {t('pages.settings.densityNote')}
         </p>
       </section>
 
@@ -148,16 +186,16 @@ export function Settings() {
       <section
         className="space-y-3 rounded-lg border p-4"
         style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
-        aria-label="Acerca de PCSuite"
+        aria-label={t('pages.settings.aboutAria')}
       >
-        <h2 className="text-sm font-semibold">Acerca de</h2>
+        <h2 className="text-sm font-semibold">{t('pages.settings.about')}</h2>
 
         <div className="flex items-center gap-3">
           <img src="./pcsuite-icon.svg" alt="" aria-hidden className="h-9 w-9 shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-medium">PCSuite</p>
             <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-              Utilidades de mantenimiento, seguridad y desarrollo para Windows.
+              {t('pages.settings.aboutDesc')}
             </p>
           </div>
         </div>
@@ -167,11 +205,7 @@ export function Settings() {
           style={{ borderColor: 'var(--pcs-border)' }}
         >
           <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-            © {new Date().getFullYear()} {DEVELOPER_NAME} — desarrollado por{' '}
-            <span className="font-medium" style={{ color: 'var(--pcs-text)' }}>
-              {DEVELOPER_NAME}
-            </span>
-            .
+            {t('pages.settings.copyright', { year: new Date().getFullYear(), name: DEVELOPER_NAME })}
           </p>
           <button
             type="button"

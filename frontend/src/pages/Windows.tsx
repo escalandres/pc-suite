@@ -13,6 +13,7 @@ import {
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
 import type { JobSnapshot, WindowsCommandInfo, WindowsRunJobResult } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
 
 /**
  * Página "Windows" (Task 036): catálogo de comandos de reparación (sfc,
@@ -22,6 +23,7 @@ import type { JobSnapshot, WindowsCommandInfo, WindowsRunJobResult } from '../ty
  * el progreso nativo de la herramienta; el desenlace llega por el job.
  */
 export function WindowsPage() {
+  const { t } = useTranslation();
   const [commands, setCommands] = useState<WindowsCommandInfo[] | null>(null);
   const [confirming, setConfirming] = useState<WindowsCommandInfo | null>(null);
   const [running, setRunning] = useState<{ jobId: string; command: WindowsCommandInfo; startedAt: number } | null>(null);
@@ -106,10 +108,9 @@ export function WindowsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Windows</h1>
+        <h1 className="text-2xl font-semibold">{t('sidebar.windows')}</h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Comandos de reparación y mantenimiento del sistema — predefinidos, con UAC por operación.
-          El progreso nativo se ve en la consola elevada que Windows abre.
+          {t('pages.windows.subtitle')}
         </p>
       </header>
 
@@ -118,9 +119,8 @@ export function WindowsPage() {
         className="rounded-md border px-3 py-2.5 text-xs"
         style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface-2)', color: 'var(--pcs-text-muted)' }}
       >
-        <strong style={{ color: 'var(--pcs-text)' }}>Secuencia de reparación recomendada:</strong>{' '}
-        DISM CheckHealth → ScanHealth → RestoreHealth → <code>sfc /scannow</code> — el almacén sano
-        es la fuente de la que bebe SFC.
+        <strong style={{ color: 'var(--pcs-text)' }}>{t('pages.windows.recommendedLabel')}: </strong>
+        DISM CheckHealth → ScanHealth → RestoreHealth → <code>sfc /scannow</code> — {t('pages.windows.recommendedNote')}
       </div>
 
       {/* Comando en curso */}
@@ -134,7 +134,7 @@ export function WindowsPage() {
             <div>
               <p className="text-sm font-medium">{running.command.name}</p>
               <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                {mmss} transcurridos — el progreso nativo vive en la consola elevada.
+                {t('pages.windows.elapsed', { n: mmss })} — {t('pages.windows.nativeProgress')}
               </p>
             </div>
           </div>
@@ -145,7 +145,7 @@ export function WindowsPage() {
             style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
             title="Detiene la espera; la consola elevada puede quedar abierta y se cierra a mano"
           >
-            Cancelar
+            {t('common.cancel')}
           </button>
         </section>
       )}
@@ -173,7 +173,7 @@ export function WindowsPage() {
             className="flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium"
             style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text)' }}
           >
-            <RotateCcw size={12} aria-hidden /> Ejecutar otro comando
+            <RotateCcw size={12} aria-hidden /> {t('pages.windows.runAnother')}
           </button>
         </section>
       )}
@@ -232,7 +232,7 @@ export function WindowsPage() {
                     onClick={() => void copyCommand(command.displayCommand)}
                     className="shrink-0 cursor-pointer rounded border px-1.5 py-1 text-xs"
                     style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text-muted)' }}
-                    title="Copiar comando al portapapeles"
+                    title={t('pages.windows.copyCommand')}
                   >
                     <Copy size={12} aria-hidden />
                   </button>
@@ -245,7 +245,7 @@ export function WindowsPage() {
                   style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                 >
                   <Play size={14} aria-hidden />
-                  Ejecutar{command.heavy ? ' (reparación)' : ''}
+                  {command.heavy ? t('pages.windows.runHeavy') : t('pages.windows.run')}
                 </button>
               </article>
             ))}
@@ -277,16 +277,15 @@ export function WindowsPage() {
 
               <div className="space-y-2 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
                 <p>
-                  Se abrirá el control de cuentas de usuario (UAC) y después una{' '}
-                  <strong>consola de administrador visible</strong> con el progreso nativo.
+                  {t('pages.windows.modalDesc')}
                 </p>
                 {confirming.heavy && (
                   <p className="flex items-center gap-1.5" style={{ color: 'var(--pcs-warning, #d97706)' }}>
                     <AlertTriangle size={12} aria-hidden className="shrink-0" />
-                    Puede tardar {confirming.durationHint} — no cierres la consola a mitad.
+                    {t('pages.windows.modalHeavy', { durationHint: confirming.durationHint })}
                   </p>
                 )}
-                <p>Comando: <code>{confirming.displayCommand}</code></p>
+                <p>{t('pages.windows.modalCommand', { displayCommand: confirming.displayCommand })}</p>
               </div>
 
               <div className="flex justify-end gap-2">
@@ -296,7 +295,7 @@ export function WindowsPage() {
                   className="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium"
                   style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text)' }}
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
@@ -304,7 +303,7 @@ export function WindowsPage() {
                   className="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium"
                   style={{ background: 'var(--pcs-accent)', color: '#fff' }}
                 >
-                  Ejecutar
+                  {t('pages.windows.run')}
                 </button>
               </div>
             </div>

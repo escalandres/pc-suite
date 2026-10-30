@@ -113,6 +113,16 @@ public sealed class WindowsRepairService : IWindowsRepairService
                 0 => "La reparación del almacén de componentes se completó.",
                 _ => $"RestoreHealth no pudo completar la reparación (código {exitCode}) — revisá el dism.log; si fue por fuente faltante, puede requerir un medio de instalación de Windows.",
             },
+            WindowsCommandCatalog.DismAnalyzeComponentStore => exitCode switch
+            {
+                0 => "El análisis del almacén de componentes se completó.",
+                _ => $"AnalyzeComponentStore no pudo completar el análisis (código {exitCode}) — revisá el dism.log.",
+            },
+            WindowsCommandCatalog.DismStartComponentCleanup => exitCode switch
+            {
+                0 => "La limpieza del almacén de componentes se completó.",
+                _ => $"StartComponentCleanup no pudo completar la limpieza (código {exitCode}) — revisá el dism.log.",
+            },
             _ => $"El comando terminó con código {exitCode}.",
         };
 

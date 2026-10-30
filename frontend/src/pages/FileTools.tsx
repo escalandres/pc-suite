@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
+import { useTranslation } from '../hooks/useTranslation';
 
 /**
  * Página "Archivos" (Task 033): utilidades de seguridad de archivos —
@@ -17,14 +18,15 @@ import { OperationIds } from '../types/bridge';
  * Esteganografía (33.2) llegará en una sub-tarea futura.
  */
 export function FileTools() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'encrypt' | 'hash' | 'shred'>('encrypt');
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Archivos</h1>
+        <h1 className="text-2xl font-semibold">{t('sidebar.files')}</h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          Utilidades de seguridad de archivos — todo local, sin red.
+          {t('pages.files.subtitle')}
         </p>
       </header>
 
@@ -32,11 +34,11 @@ export function FileTools() {
       <div className="flex gap-2">
         {(
           [
-            { id: 'encrypt', label: 'Encriptar', icon: Lock },
-            { id: 'hash', label: 'Hash', icon: Hash },
-            { id: 'shred', label: 'Borrado seguro', icon: Trash2 },
+            { id: 'encrypt', labelKey: 'pages.files.tabEncrypt', icon: Lock },
+            { id: 'hash', labelKey: 'pages.files.tabHash', icon: Hash },
+            { id: 'shred', labelKey: 'pages.files.tabShred', icon: Trash2 },
           ] as const
-        ).map(({ id, label, icon: Icon }) => (
+        ).map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             type="button"
@@ -50,7 +52,7 @@ export function FileTools() {
             }}
           >
             <Icon size={14} aria-hidden />
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>
