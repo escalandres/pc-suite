@@ -36,7 +36,7 @@ public sealed class AiService : IAiService
     private const string ConvertTimeoutMessage =
         "La conversión a Markdown superó el tiempo límite. Intenta con un archivo más pequeño.";
 
-    private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan InstallTimeout = TimeSpan.FromMinutes(10);
     // Sin tope de reloj para la conversión (lección 024): los archivos grandes
     // pueden tardar minutos. El control es del usuario (cancelación vía puente).

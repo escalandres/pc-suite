@@ -91,7 +91,7 @@ export function AiPage() {
       const collection = await bridge.call<OllamaModelCollectionResult>(
         OperationIds.ollamaListModels,
         undefined,
-        15_000,
+        60_000,
       );
       setOllamaModels(collection.models ?? []);
       if (collection.models.length === 0) {
