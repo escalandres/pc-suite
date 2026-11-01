@@ -138,12 +138,17 @@ public sealed class PluginService : IPluginService
                     if (pluginType != null)
                     {
                         // Leer metadatos del archivo (asumiendo que están disponibles)
+                        var asmVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                            ?? assembly.GetName().Version?.ToString()
+                            ?? "desconocida";
                         var meta = new PluginMetadata
                         {
                             Id = Path.GetFileNameWithoutExtension(dllFile),
                             Name = Path.GetFileNameWithoutExtension(dllFile),
-                            Version = "desconocida",
-                            Status = PluginStatus.Active
+                            Version = asmVersion,
+                            Status = _loadedPlugins.ContainsKey(Path.GetFileNameWithoutExtension(dllFile))
+                                ? PluginStatus.Active
+                                : PluginStatus.Inactive
                         };
                         metadataList.Add(meta);
                     }
@@ -176,14 +181,14 @@ public sealed class PluginService : IPluginService
             };
         }
 
-        // En una implementación completa, aquí compararía versiones
-        // con una fuente de actualizaciones (directorio, API, etc.)
+        // No hay fuente de actualizaciones configurada: el sistema de plugins
+        // es de descubrimiento local únicamente en esta versión.
         return new PluginOperationResult
         {
-            Succeeded = true,
-            CurrentVersion = "1.0.0",
-            LatestVersion = "1.0.1",
-            Detail = "Se detectó una versión disponible"
+            Succeeded = false,
+            CurrentVersion = "desconocida",
+            LatestVersion = "desconocida",
+            Detail = "No hay fuente de actualizaciones configurada."
         };
     }
 
@@ -207,15 +212,14 @@ public sealed class PluginService : IPluginService
 
         try
         {
-            var plugin = _loadedPlugins[pluginId];
-            // Ejecutar la acción principal del plugin
-            // El plugin define su propia lógica a través de la interfaz IPlugin
+            // Los plugins se descubren pero no exponen una acción de lanzamiento
+            // en esta versión (solo descubrimiento + metadatos).
             return new PluginOperationResult
             {
-                Succeeded = true,
-                Detail = "Plugin ejecutado correctamente",
-                CurrentVersion = "1.0.0",
-                LatestVersion = "1.0.1"
+                Succeeded = false,
+                Detail = "El plugin no expone una acción de lanzamiento en esta versión.",
+                CurrentVersion = "desconocida",
+                LatestVersion = "desconocida"
             };
         }
         catch (Exception ex)

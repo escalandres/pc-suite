@@ -578,19 +578,7 @@ export function Clamav() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              void bridge.call(OperationIds.blazorToggle, undefined, READ_TIMEOUT_MS).catch(() => {
-                // Sin host nativo (dev en navegador): sin feedback.
-              });
-            }}
-            title="Piloto Blazor (Task 015.2: bloqueado — el componente no renderiza)"
-            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer hover:bg-(--pcs-surface-2)"
-            style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text-muted)' }}
-          >
-            Ver en Blazor
-          </button>
+{/* Piloto Blazor oculto (Task 015: bloqueado) */}
           <button
             type="button"
             onClick={() => void refresh()}
