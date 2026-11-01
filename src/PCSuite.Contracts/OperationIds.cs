@@ -361,6 +361,7 @@ public static class OperationIds
 
     /// <summary>Extrae el payload oculto de una imagen PNG (Task 033).</summary>
     public const string FilesStegoExtract = "files.stegoExtract";
+    public const string FilesStegoVerify = "files.stegoVerify";
 
     /// <summary>Sobrescribe y borra un archivo de forma segura (Task 033).</summary>
     public const string FilesShred = "files.shred";

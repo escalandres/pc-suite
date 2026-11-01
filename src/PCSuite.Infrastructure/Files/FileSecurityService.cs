@@ -556,6 +556,59 @@ public sealed class FileSecurityService : IFileSecurityService
         return Task.FromResult(new StegoExtractResult(text, outFile, hasFile));
     }
 
+    public Task<StegoVerifyResult> StegoVerifyAsync(
+        StegoVerifyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null) throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(request.ImagePath)) throw new ArgumentException("ImagePath es obligatorio.", nameof(request));
+
+        using var bmp = new Bitmap(request.ImagePath);
+        int capacityBits = bmp.Width * bmp.Height * 3;
+        if (capacityBits < 32)
+            return Task.FromResult(new StegoVerifyResult(false, 0, false));
+
+        // Read 4-byte length header (MSB-first per pixel channel).
+        var header = new byte[4];
+        for (int i = 0; i < 32; i++)
+        {
+            int x = (i / 3) % bmp.Width;
+            int y = (i / 3) / bmp.Width;
+            if (y >= bmp.Height) return Task.FromResult(new StegoVerifyResult(false, 0, false));
+            var c = bmp.GetPixel(x, y);
+            int channel = i % 3;
+            int bit = channel == 0 ? (c.R & 1) : channel == 1 ? (c.G & 1) : (c.B & 1);
+            header[i / 8] = (byte)((header[i / 8] << 1) | bit);
+        }
+        int len = BitConverter.ToInt32(header, 0);
+        if (len <= 0 || len > capacityBits / 8 - 4)
+            return Task.FromResult(new StegoVerifyResult(false, 0, false));
+
+        // Read payload and check if valid UTF-8 text.
+        var payload = new byte[len];
+        for (int i = 0; i < len * 8; i++)
+        {
+            int globalBit = 32 + i;
+            int x = (globalBit / 3) % bmp.Width;
+            int y = (globalBit / 3) / bmp.Width;
+            if (y >= bmp.Height) return Task.FromResult(new StegoVerifyResult(false, 0, false));
+            var c = bmp.GetPixel(x, y);
+            int channel = globalBit % 3;
+            int bit = channel == 0 ? (c.R & 1) : channel == 1 ? (c.G & 1) : (c.B & 1);
+            payload[i / 8] = (byte)((payload[i / 8] << 1) | bit);
+        }
+
+        bool isText = true;
+        try
+        {
+            var text = Encoding.UTF8.GetString(payload);
+            if (text.Contains('\0')) isText = false;
+        }
+        catch { isText = false; }
+
+        return Task.FromResult(new StegoVerifyResult(true, len, isText));
+    }
+
     private static byte[] XorWithPassword(byte[] data, string password)
     {
         var key = Encoding.UTF8.GetBytes(password);

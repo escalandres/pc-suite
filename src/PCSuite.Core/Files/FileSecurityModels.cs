@@ -56,6 +56,10 @@ public sealed record StegoExtractResult(
     string? OutputFilePath,
     bool HasFilePayload);
 
+// --- Esteganografía: verificador (33.2) ---
+public sealed record StegoVerifyRequest(string ImagePath);
+public sealed record StegoVerifyResult(bool HasHiddenData, int EstimatedSizeBytes, bool IsText);
+
 // --- Interfaz ---
 
 public interface IFileSecurityService
@@ -66,4 +70,5 @@ public interface IFileSecurityService
     Task<FileHashResult> HashAsync(string path, CancellationToken cancellationToken = default);
     Task<StegoEmbedResult> StegoEmbedAsync(StegoEmbedRequest request, CancellationToken cancellationToken = default);
     Task<StegoExtractResult> StegoExtractAsync(StegoExtractRequest request, CancellationToken cancellationToken = default);
+    Task<StegoVerifyResult> StegoVerifyAsync(StegoVerifyRequest request, CancellationToken cancellationToken = default);
 }

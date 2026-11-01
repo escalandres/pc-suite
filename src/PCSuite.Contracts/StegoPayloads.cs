@@ -11,6 +11,11 @@ public sealed class FilesStegoEmbedPayload
     public string? OutputPath { get; init; }
 }
 
+public sealed class FilesStegoVerifyPayload
+{
+    public string? ImagePath { get; init; }
+}
+
 public sealed class FilesStegoExtractPayload
 {
     public string? ImagePath { get; init; }
