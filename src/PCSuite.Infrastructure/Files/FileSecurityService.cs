@@ -1,6 +1,9 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Runtime.Versioning;
+using System.Drawing;
+using System.Drawing.Imaging;
 using PCSuite.Core.Files;
 
 namespace PCSuite.Infrastructure.Files;
@@ -21,6 +24,7 @@ namespace PCSuite.Infrastructure.Files;
 ///   y una sola pasada por disco. La restauración extrae con guard
 ///   anti-zip-slip y jamás sobrescribe carpetas existentes.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class FileSecurityService : IFileSecurityService
 {
     private const string MagicHeader = "PCS1";
@@ -440,14 +444,126 @@ public sealed class FileSecurityService : IFileSecurityService
         StegoEmbedRequest request,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("Esteganografía se implementa en la sub-tarea 33.2.");
+        if (request is null) throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(request.ImagePath)) throw new ArgumentException("ImagePath es obligatorio.", nameof(request));
+        if (string.IsNullOrWhiteSpace(request.TextPayload) && string.IsNullOrWhiteSpace(request.FilePayloadPath))
+            throw new ArgumentException("Se requiere TextPayload o FilePayloadPath.");
+
+        var payloadBytes = !string.IsNullOrWhiteSpace(request.FilePayloadPath)
+            ? File.ReadAllBytes(request.FilePayloadPath!)
+            : Encoding.UTF8.GetBytes(request.TextPayload!);
+
+        if (!string.IsNullOrWhiteSpace(request.Password))
+            payloadBytes = XorWithPassword(payloadBytes, request.Password!);
+
+        // Prefijo de 4 bytes (little-endian) con la longitud del payload.
+        var full = new byte[4 + payloadBytes.Length];
+        BitConverter.GetBytes(payloadBytes.Length).CopyTo(full, 0);
+        payloadBytes.CopyTo(full, 4);
+
+        using var bmp = new Bitmap(request.ImagePath);
+        int capacityBits = bmp.Width * bmp.Height * 3;
+        if (full.Length * 8 > capacityBits)
+            throw new FileSecurityException("La imagen no tiene capacidad suficiente para el payload.");
+
+        int bitIndex = 0;
+        for (int y = 0; y < bmp.Height && bitIndex < full.Length * 8; y++)
+        {
+            for (int x = 0; x < bmp.Width && bitIndex < full.Length * 8; x++)
+            {
+                var c = bmp.GetPixel(x, y);
+                int r = c.R, g = c.G, b = c.B;
+                // embed 3 bits per pixel
+                if (bitIndex < full.Length * 8) { r = (r & 0xFE) | ((full[bitIndex / 8] >> (7 - (bitIndex % 8))) & 1); bitIndex++; }
+                if (bitIndex < full.Length * 8) { g = (g & 0xFE) | ((full[bitIndex / 8] >> (7 - (bitIndex % 8))) & 1); bitIndex++; }
+                if (bitIndex < full.Length * 8) { b = (b & 0xFE) | ((full[bitIndex / 8] >> (7 - (bitIndex % 8))) & 1); bitIndex++; }
+                bmp.SetPixel(x, y, Color.FromArgb(c.A, r, g, b));
+            }
+        }
+
+        var outPath = Path.Combine(Path.GetDirectoryName(request.ImagePath)!, Path.GetFileNameWithoutExtension(request.ImagePath) + ".stego.png");
+        bmp.Save(outPath, ImageFormat.Png);
+        return Task.FromResult(new StegoEmbedResult(outPath));
     }
 
     public Task<StegoExtractResult> StegoExtractAsync(
         StegoExtractRequest request,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("Esteganografía se implementa en la sub-tarea 33.2.");
+        if (request is null) throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(request.ImagePath)) throw new ArgumentException("ImagePath es obligatorio.", nameof(request));
+
+        using var bmp = new Bitmap(request.ImagePath);
+        // read 4-byte length
+        var header = new byte[4];
+        int bitIndex = 0;
+        for (int i = 0; i < 32; i++)
+        {
+            int x = (i / 3) % bmp.Width;
+            int y = (i / 3) / bmp.Width;
+            if (y >= bmp.Height) throw new FileSecurityException("Imagen demasiado pequeña.");
+            var c = bmp.GetPixel(x, y);
+            int channel = i % 3;
+            int bit = channel == 0 ? (c.R & 1) : channel == 1 ? (c.G & 1) : (c.B & 1);
+            header[i / 8] = (byte)((header[i / 8] << 1) | bit);
+        }
+        // header bits were packed MSB-first? We packed MSB-first in embed. Re-read accordingly: above packs MSB. Good.
+        int len = BitConverter.ToInt32(header, 0);
+        if (len < 0 || len > bmp.Width * bmp.Height * 3 / 8 - 4)
+            throw new FileSecurityException("Longitud de payload inválida (¿imagen sin datos o contraseña incorrecta?).");
+
+        var payload = new byte[len];
+        int totalBits = 32 + len * 8;
+        bitIndex = 32;
+        for (int i = 0; i < len * 8; i++)
+        {
+            int globalBit = 32 + i;
+            int x = (globalBit / 3) % bmp.Width;
+            int y = (globalBit / 3) / bmp.Width;
+            if (y >= bmp.Height) throw new FileSecurityException("Datos incompletos.");
+            var c = bmp.GetPixel(x, y);
+            int channel = globalBit % 3;
+            int bit = channel == 0 ? (c.R & 1) : channel == 1 ? (c.G & 1) : (c.B & 1);
+            payload[i / 8] = (byte)((payload[i / 8] << 1) | bit);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Password))
+            payload = XorWithPassword(payload, request.Password!);
+
+        // Try as text
+        string? text = null;
+        string? outFile = null;
+        bool hasFile = false;
+        try
+        {
+            text = Encoding.UTF8.GetString(payload);
+            // Heuristic: if contains null bytes, treat as binary file
+            if (text.Contains(' '))
+            {
+                hasFile = true;
+                text = null;
+                outFile = Path.Combine(Path.GetDirectoryName(request.ImagePath)!, "extracted_payload.bin");
+                File.WriteAllBytes(outFile, payload);
+            }
+        }
+        catch
+        {
+            hasFile = true;
+            outFile = Path.Combine(Path.GetDirectoryName(request.ImagePath)!, "extracted_payload.bin");
+            File.WriteAllBytes(outFile, payload);
+        }
+
+        return Task.FromResult(new StegoExtractResult(text, outFile, hasFile));
+    }
+
+    private static byte[] XorWithPassword(byte[] data, string password)
+    {
+        var key = Encoding.UTF8.GetBytes(password);
+        if (key.Length == 0) return data;
+        var result = new byte[data.Length];
+        for (int i = 0; i < data.Length; i++)
+            result[i] = (byte)(data[i] ^ key[i % key.Length]);
+        return result;
     }
 
     // ------------------------------------------------------------------

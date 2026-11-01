@@ -429,6 +429,8 @@ public partial class MainForm : Form
                 new FilesDecryptOperation(fileSecurityService),
                 new FilesShredOperation(fileSecurityService),
                 new FilesHashOperation(fileSecurityService),
+                new FilesStegoEmbedOperation(fileSecurityService),
+                new FilesStegoExtractOperation(fileSecurityService),
                 new CipherEncodeOperation(cipherService),
                 new CipherHashOperation(cipherService),
                 new CipherEncryptAesOperation(cipherService),
