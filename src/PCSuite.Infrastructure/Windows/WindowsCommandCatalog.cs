@@ -139,7 +139,7 @@ public static class WindowsCommandCatalog
             "Muestra configuración detallada del equipo: SO, BIOS, memoria, red, hotfixes instalados. Solo lectura. La consola se mantiene abierta para que puedas leer y copiar la información.",
             DiagnosticsCategory,
             Path.Combine(System32, "cmd.exe"),
-            ["/c", "systeminfo & pause"],
+            ["/k", "systeminfo"],
             "systeminfo",
             "segundos",
             Heavy: false,
