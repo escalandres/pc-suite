@@ -439,6 +439,8 @@ public partial class MainForm : Form
                 new CipherXorOperation(cipherService),
                 new WindowsListCommandsOperation(windowsRepairService),
                 new WindowsRunCommandOperation(windowsRepairService, jobManager),
+                new WindowsListProcessesOperation(),
+                new WindowsKillProcessOperation(),
                 new AiDetectOperation(aiService),
                 new AiInstallOperation(aiService),
                 new AiConvertOperation(aiService),

@@ -70,6 +70,8 @@ export const OperationIds = {
   /** Task 036: Windows — catálogo de comandos de reparación (sfc, DISM). */
   windowsListCommands: 'windows.listCommands',
   windowsRunCommand: 'windows.runCommand',
+  windowsListProcesses: 'windows.listProcesses',
+  windowsKillProcess: 'windows.killProcess',
   toolsList: 'tools.list',
   toolsSearch: 'tools.search',
   toolExecute: 'tool.execute',

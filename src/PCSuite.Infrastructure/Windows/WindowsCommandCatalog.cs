@@ -28,8 +28,17 @@ public static class WindowsCommandCatalog
     public const string DismRestoreHealth = "dism-restorehealth";
     public const string DismAnalyzeComponentStore = "dism-analyzecomponentstore";
     public const string DismStartComponentCleanup = "dism-startcomponentcleanup";
+    public const string SystemInfo = "systeminfo";
+    public const string Chkdsk = "chkdsk";
+    public const string CleanMgr = "cleanmgr";
+    public const string TaskMgr = "taskmgr";
+    public const string ShutdownRebootAdvanced = "shutdown-reboot-advanced";
+    public const string PowerCfgEnergy = "powercfg-energy";
+    public const string WinSat = "winsat";
+    public const string PerfmonReport = "perfmon-report";
 
     private const string SystemCategory = "Reparación del sistema";
+    private const string DiagnosticsCategory = "Diagnóstico y sistema";
 
     private static readonly string CbsLog = Path.Combine(
         Environment.GetEnvironmentVariable("SystemRoot") ?? Environment.SystemDirectory,
@@ -124,6 +133,101 @@ public static class WindowsCommandCatalog
             "5–15 min",
             Heavy: true,
             DismLog),
+        new(
+            SystemInfo,
+            "Información del sistema (systeminfo)",
+            "Muestra configuración detallada del equipo: SO, BIOS, memoria, red, hotfixes instalados. Solo lectura.",
+            DiagnosticsCategory,
+            Path.Combine(System32, "systeminfo.exe"),
+            [],
+            "systeminfo",
+            "segundos",
+            Heavy: false,
+            ""),
+
+        new(
+            Chkdsk,
+            "CHKDSK - comprobar disco (/f)",
+            "Comprueba el sistema de archivos y corrige errores lógicos. En la unidad del sistema programa la comprobación para el próximo reinicio (pide confirmación).",
+            DiagnosticsCategory,
+            Path.Combine(System32, "chkdsk.exe"),
+            ["/f"],
+            "chkdsk /f",
+            "minutos",
+            Heavy: true,
+            ""),
+
+        new(
+            CleanMgr,
+            "Liberador de espacio en disco (cleanmgr)",
+            "Abre la herramienta de limpieza de disco de Windows para eliminar archivos temporales y del sistema.",
+            DiagnosticsCategory,
+            Path.Combine(System32, "cleanmgr.exe"),
+            [],
+            "cleanmgr",
+            "segundos",
+            Heavy: false,
+            ""),
+
+        new(
+            TaskMgr,
+            "Administrador de tareas (taskmgr)",
+            "Abre el Administrador de tareas de Windows.",
+            DiagnosticsCategory,
+            Path.Combine(System32, "taskmgr.exe"),
+            [],
+            "taskmgr",
+            "segundos",
+            Heavy: false,
+            ""),
+
+        new(
+            ShutdownRebootAdvanced,
+            "Reiniciar a opciones avanzadas (shutdown /r /o)",
+            "Reinicia el equipo y entra en el entorno de recuperación (WinRE) para opciones avanzadas. Requiere administrador.",
+            DiagnosticsCategory,
+            Path.Combine(System32, "shutdown.exe"),
+            ["/r", "/o", "/f", "/t", "0"],
+            "shutdown /r /o /f /t 0",
+            "segundos",
+            Heavy: true,
+            ""),
+
+        new(
+            PowerCfgEnergy,
+            "Informe de energía (powercfg /energy)",
+            "Genera un informe HTML de consumo energético (energy-report.html) en el directorio actual. Requiere administrador.",
+            DiagnosticsCategory,
+            Path.Combine(System32, "powercfg.exe"),
+            ["/energy"],
+            "powercfg /energy",
+            "60 s",
+            Heavy: false,
+            ""),
+
+        new(
+            WinSat,
+            "Evaluación de rendimiento (WinSAT)",
+            "Ejecuta la evaluación formal del sistema (CPU, memoria, disco, gráficos) y guarda los resultados en WinSAT. Requiere administrador.",
+            DiagnosticsCategory,
+            Path.Combine(System32, "winsat.exe"),
+            ["formal"],
+            "winsat formal",
+            "minutos",
+            Heavy: true,
+            ""),
+
+        new(
+            PerfmonReport,
+            "Informe de rendimiento (perfmon /report)",
+            "Genera un informe de diagnóstico de rendimiento del sistema (perfmon /report).",
+            DiagnosticsCategory,
+            Path.Combine(System32, "perfmon.exe"),
+            ["/report"],
+            "perfmon /report",
+            "60 s",
+            Heavy: false,
+            ""),
     ];
 
     /// <summary>Resuelve un id del catálogo (o null si no está: SIN UAC para desconocidos).</summary>

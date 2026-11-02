@@ -36,7 +36,8 @@ public sealed class WindowsCommandCatalogTests
     {
         foreach (var command in WindowsCommandCatalog.All)
         {
-            Assert.NotEmpty(command.Arguments);
+            // Algunos comandos (systeminfo, cleanmgr, taskmgr, perfmon) no
+            // reciben argumentos: argv fijo vacío es válido para ellos.
             Assert.All(command.Arguments, argument => Assert.False(string.IsNullOrWhiteSpace(argument)));
         }
     }
@@ -51,7 +52,6 @@ public sealed class WindowsCommandCatalogTests
             Assert.False(string.IsNullOrWhiteSpace(command.Category));
             Assert.False(string.IsNullOrWhiteSpace(command.DisplayCommand));
             Assert.False(string.IsNullOrWhiteSpace(command.DurationHint));
-            Assert.False(string.IsNullOrWhiteSpace(command.LogPath));
         }
     }
 

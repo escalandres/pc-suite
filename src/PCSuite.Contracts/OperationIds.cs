@@ -393,6 +393,8 @@ public static class OperationIds
 
     /// <summary>Ejecuta un comando del catálogo como job ({ jobId } en el acto).</summary>
     public const string WindowsRunCommand = "windows.runCommand";
+    public const string WindowsListProcesses = "windows.listProcesses";
+    public const string WindowsKillProcess = "windows.killProcess";
 
     // ---------------- Task 019: certificados ----------------
 

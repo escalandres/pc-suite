@@ -32,6 +32,10 @@ export function WindowsPage() {
   const [outcomeFor, setOutcomeFor] = useState<WindowsCommandInfo | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showProc, setShowProc] = useState(false);
+  const [procs, setProcs] = useState<{ pid: number; name: string; memory: number }[] | null>(null);
+  const [procFilter, setProcFilter] = useState('');
+  const [killing, setKilling] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,10 +109,33 @@ export function WindowsPage() {
 
   const mmss = `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`;
 
+  const loadProcs = async () => {
+    setShowProc(true);
+    setProcs(null);
+    try {
+      const res = await bridge.call<{ pid: number; name: string; memory: number }[]>(OperationIds.windowsListProcesses, undefined, 15_000);
+      setProcs(Array.isArray(res) ? res : []);
+    } catch { setProcs([]); }
+  };
+
+  const killProc = async (pid: number) => {
+    setKilling(pid);
+    try {
+      await bridge.call(OperationIds.windowsKillProcess, { pid }, 15_000);
+      setProcs((prev) => (prev ? prev.filter((p) => p.pid !== pid) : prev));
+    } catch { /* ignore */ }
+    finally { setKilling(null); }
+  };
+
   return (
     <div className="space-y-6">
       <header>
+        <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">{t('sidebar.windows')}</h1>
+        <button type="button" onClick={() => void loadProcs()} className="rounded-md border px-3 py-1.5 text-xs font-medium cursor-pointer" style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}>
+          Matar proceso
+        </button>
+      </div>
         <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
           {t('pages.windows.subtitle')}
         </p>
@@ -310,6 +337,50 @@ export function WindowsPage() {
           </div>,
           document.body,
         )}
+      {showProc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowProc(false)}>
+          <div className="w-full max-w-2xl rounded-lg border p-4 space-y-3" style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Procesos activos</h2>
+              <button type="button" onClick={() => setShowProc(false)} className="text-sm cursor-pointer" style={{ color: 'var(--pcs-text-muted)' }}>Cerrar</button>
+            </div>
+            <input type="text" value={procFilter} onChange={(e) => setProcFilter(e.target.value)} placeholder="Filtrar..." className="w-full rounded-md border px-3 py-2 text-sm" style={{ background: 'var(--pcs-bg)', color: 'var(--pcs-text)', borderColor: 'var(--pcs-border)' }} />
+            <div className="max-h-96 overflow-auto">
+              {procs === null ? (
+                <p className="text-sm" style={{ color: 'var(--pcs-text-muted)' }}>Cargando…</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ color: 'var(--pcs-text-muted)' }}>
+                      <th className="text-left px-2 py-1">PID</th>
+                      <th className="text-left px-2 py-1">Nombre</th>
+                      <th className="text-right px-2 py-1">Memoria</th>
+                      <th className="px-2 py-1"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {procs
+                      .filter((p) => p.name.toLowerCase().includes(procFilter.toLowerCase()))
+                      .slice(0, 100)
+                      .map((p) => (
+                        <tr key={p.pid} style={{ borderTop: '1px solid var(--pcs-border)' }}>
+                          <td className="px-2 py-1 font-mono">{p.pid}</td>
+                          <td className="px-2 py-1">{p.name}</td>
+                          <td className="px-2 py-1 text-right">{Math.round(p.memory / 1024 / 1024)} MB</td>
+                          <td className="px-2 py-1">
+                            <button type="button" onClick={() => void killProc(p.pid)} disabled={killing === p.pid} className="text-xs rounded px-2 py-1 cursor-pointer disabled:opacity-50" style={{ background: 'var(--pcs-danger)', color: '#fff' }}>
+                              {killing === p.pid ? '…' : 'Terminar'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
