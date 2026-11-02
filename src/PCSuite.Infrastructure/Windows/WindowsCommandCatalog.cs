@@ -136,10 +136,10 @@ public static class WindowsCommandCatalog
         new(
             SystemInfo,
             "Información del sistema (systeminfo)",
-            "Muestra configuración detallada del equipo: SO, BIOS, memoria, red, hotfixes instalados. Solo lectura.",
+            "Muestra configuración detallada del equipo: SO, BIOS, memoria, red, hotfixes instalados. Solo lectura. La consola se mantiene abierta para que puedas leer y copiar la información.",
             DiagnosticsCategory,
-            Path.Combine(System32, "systeminfo.exe"),
-            [],
+            Path.Combine(System32, "cmd.exe"),
+            ["/c", "systeminfo & pause"],
             "systeminfo",
             "segundos",
             Heavy: false,
