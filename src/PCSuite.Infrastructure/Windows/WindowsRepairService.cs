@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text;
 using PCSuite.Contracts;
 using PCSuite.Core.Processes;
 using PCSuite.Core.Windows;
@@ -35,6 +37,13 @@ public sealed class WindowsRepairService : IWindowsRepairService
             throw new WindowsRepairException(
                 BridgeErrorCodes.WindowsFailed,
                 $"Comando desconocido: '{commandId}'. Usa uno del catálogo.");
+        }
+
+        // systeminfo: no requiere elevación y se captura la salida para
+        // exportarla a un archivo (la consola se cierra antes de leerla).
+        if (commandId == WindowsCommandCatalog.SystemInfo)
+        {
+            return await ExportSystemInfoAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (!File.Exists(command.FileName))
@@ -76,6 +85,55 @@ public sealed class WindowsRepairService : IWindowsRepairService
         }
 
         return Summarize(command, result.ExitCode);
+    }
+
+    private async Task<WindowsRunOutcome> ExportSystemInfoAsync(CancellationToken cancellationToken)
+    {
+        var outPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            "systeminfo.txt");
+
+        var lines = new List<string>();
+        ProcessResult result;
+        try
+        {
+            result = await _processRunner.ExecuteAsync(
+                new ProcessRequest
+                {
+                    FileName = Path.Combine(Environment.SystemDirectory, "systeminfo.exe"),
+                    Arguments = [],
+                    Timeout = TimeSpan.FromSeconds(120),
+                    WorkingDirectory = Environment.SystemDirectory,
+                    RequiresElevation = false,
+                    OnStandardOutput = line => lines.Add(line),
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            throw new WindowsRepairException(
+                BridgeErrorCodes.WindowsFailed,
+                "No se pudo ejecutar systeminfo.");
+        }
+
+        try
+        {
+            File.WriteAllLines(outPath, lines, Encoding.UTF8);
+        }
+        catch (Exception)
+        {
+            throw new WindowsRepairException(
+                BridgeErrorCodes.WindowsFailed,
+                "No se pudo escribir el archivo de salida.");
+        }
+
+        return new WindowsRunOutcome(
+            result.ExitCode == 0,
+            result.ExitCode,
+            result.ExitCode == 0
+                ? $"Información del sistema exportada a: {outPath}"
+                : $"systeminfo terminó con código {result.ExitCode}. Revisá el archivo: {outPath}",
+            outPath);
     }
 
     /// <summary>
