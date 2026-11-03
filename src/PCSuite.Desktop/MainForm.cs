@@ -346,6 +346,7 @@ public partial class MainForm : Form
                 new DeveloperCheckUpdateOperation(developerRegistry),
                 new DeveloperUpdateOperation(developerRegistry),
                 new DeveloperLaunchOperation(developerRegistry),
+                new DeveloperNpkillOperation(),
                 new WinGetDetectOperation(wingetService),
                 new WinGetSearchOperation(wingetService),
                 new WinGetListOperation(wingetService),

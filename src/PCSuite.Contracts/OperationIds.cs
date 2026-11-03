@@ -51,6 +51,7 @@ public static class OperationIds
 
     /// <summary>Lanza la interfaz interactiva (REPL/TUI) de una tool.</summary>
     public const string DeveloperLaunch = "developer.launch";
+    public const string DeveloperNpkill = "developer.npkill";
 
     // --- WinGet (Task 006 / Stage 7) -------------------------------------
     // El frontend envía SIEMPRE payloads estructurados (p. ej. {"packageId"}):

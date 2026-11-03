@@ -365,8 +365,8 @@ export function DevTools() {
                 const result = await bridge.call<{ cancelled: boolean; paths: string[] }>(OperationIds.systemPickFolder, undefined, 60_000);
                 if (result.cancelled || result.paths.length === 0) return;
                 const path = result.paths[0];
-                // Invocar powershell con npx npkill
-                await bridge.call(OperationIds.systemWriteClipboard, { command: 'npx npkill --directory "' + path + '"' }, 10 * 60_000);
+                // Lanzar npkill en PowerShell elevado (UAC por operación).
+                await bridge.call(OperationIds.developerNpkill, { path }, 10 * 60_000);
               } catch (e) {
                 // best effort
               }

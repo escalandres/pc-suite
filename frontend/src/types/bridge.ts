@@ -79,6 +79,7 @@ export const OperationIds = {
   developerCheckUpdate: 'developer.checkUpdate',
   developerUpdate: 'developer.update',
   developerLaunch: 'developer.launch',
+  developerNpkill: 'developer.npkill',
   wingetDetect: 'winget.detect',
   wingetSearch: 'winget.search',
   wingetList: 'winget.list',
