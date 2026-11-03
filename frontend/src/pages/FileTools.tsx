@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   FileSearch,
   FolderOpen,
@@ -511,6 +511,19 @@ function StegoPanel() {
   const [extractedFile, setExtractedFile] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<{ has: boolean; size: number; isText: boolean } | null>(null);
 
+  // Limpiar inputs al cambiar de modo.
+  useEffect(() => {
+    setImagePath('');
+    setTextPayload('');
+    setFilePayloadPath('');
+    setPassword('');
+    setOutputPath('');
+    setExtractedText(null);
+    setExtractedFile(null);
+    setVerifyResult(null);
+    setNotice(null);
+  }, [mode]);
+
   const pickImage = async () => {
     try {
       const result = await bridge.call<{ cancelled: boolean; paths: string[] }>(OperationIds.systemPickFiles, undefined, 60_000);
@@ -579,8 +592,6 @@ function StegoPanel() {
       const result = await bridge.call<{ hasHiddenData: boolean; estimatedSizeBytes: number; isText: boolean }>(
         OperationIds.filesStegoVerify, { imagePath });
       setVerifyResult({ has: result.hasHiddenData, size: result.estimatedSizeBytes, isText: result.isText });
-      if (!result.hasHiddenData) setNotice({ kind: 'success', text: t('pages.files.stegoNoHidden') });
-      else setNotice({ kind: 'success', text: t('pages.files.stegoHasHidden', { size: result.estimatedSizeBytes, type: result.isText ? 'texto' : 'archivo' }) });
     } catch (e) {
       setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : t('common.errorFetch') });
     } finally { setBusy(false); }
