@@ -21,7 +21,8 @@
     "favoritesHint": "Pulsa la estrella en una página o herramienta para fijarla aquí.",
     "soon": "próximamente",
     "language": "Idioma",
-    "favoritesCount": "{{count}} favoritos fijados — expandir menú"
+    "favoritesCount": "{{count}} favoritos fijados — expandir menú",
+    "web": "Web"
   },
   "common": {
     "cancel": "Cancelar",
@@ -630,6 +631,20 @@
       "downloading": "Descargando con verificación SHA-256… {{percent}}%",
       "launching": "Lanzando…",
       "upToDate": "PCSuite {{version}} está actualizado."
+    },
+    "web": {
+      "subtitle": "Detecta ataques homográficos (IDN): URLs que parecen legítimas pero contienen caracteres de un alfabeto distinto.",
+      "urlLabel": "URL a verificar",
+      "check": "Verificar",
+      "invalidUrl": "URL inválida.",
+      "safe": "No se detectaron caracteres sospechosos.",
+      "suspicious": "Sospechoso: posible ataque homográfico.",
+      "host": "Host",
+      "scripts": "Alfabetos detectados",
+      "punycode": "Punycode (IDN)",
+      "punycodeYes": "Sí — el dominio usa codificación punycode.",
+      "suspiciousChars": "Caracteres sospechosos",
+      "explanation": "El host mezcla caracteres de distintos alfabetos (p. ej., una \"а\" cirílica en lugar de una \"a\" latina). Es una técnica de phishing común (ataque homográfico). No confíes en esta URL."
     }
   },
   "clamav": {

@@ -19,6 +19,7 @@ import {
   Star,
   ChevronLeft,
   ChevronRight,
+  Globe,
 } from 'lucide-react';
 import { CleanerIcon } from '../components/icons/CleanerIcon';
 import { AICPUIcon } from '../components/icons/AICPUIcon';
@@ -47,6 +48,7 @@ export type PageId =
   | 'cipher'
   | 'windows'
   | 'ai'
+  | 'web'
   | 'activity'
   | 'settings';
 
@@ -86,6 +88,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'cipher', labelKey: 'sidebar.cipher', icon: Binary, enabled: true },
   { id: 'windows', labelKey: 'sidebar.windows', icon: Monitor, enabled: true },
   { id: 'ai', labelKey: 'sidebar.ai', icon: AICPUIcon, enabled: true },
+  { id: 'web', labelKey: 'sidebar.web', icon: Globe, enabled: true },
   { id: 'security', labelKey: 'sidebar.security', icon: ShieldCheck, enabled: true },
   { id: 'devtools', labelKey: 'sidebar.devtools', icon: Terminal, enabled: true },
   { id: 'plugins', labelKey: 'sidebar.plugins', icon: Puzzle, enabled: true },

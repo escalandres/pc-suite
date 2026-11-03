@@ -12,6 +12,7 @@ import { FileTools } from './pages/FileTools';
 import { Cipher } from './pages/Cipher';
 import { WindowsPage } from './pages/Windows';
 import { AiPage } from './pages/Ai';
+import { Web } from './pages/Web';
 import { Cleaner } from './pages/Cleaner';
 import { Security } from './pages/Security';
 import { Settings } from './pages/Settings';
@@ -241,6 +242,8 @@ function renderPage(
       return <WindowsPage />;
     case 'ai':
       return <AiPage />;
+    case 'web':
+      return <Web />;
     case 'security':
       return <Security />;
     case 'cleaner':

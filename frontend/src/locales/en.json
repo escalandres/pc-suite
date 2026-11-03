@@ -21,7 +21,8 @@
     "favoritesHint": "Press the star on a page or tool to pin it here.",
     "soon": "soon",
     "language": "Language",
-    "favoritesCount": "{{count}} favorites pinned — expand menu"
+    "favoritesCount": "{{count}} favorites pinned — expand menu",
+    "web": "Web"
   },
   "common": {
     "cancel": "Cancel",
@@ -630,6 +631,20 @@
       "downloading": "Downloading with SHA-256 verification… {{percent}}%",
       "launching": "Launching…",
       "upToDate": "PCSuite {{version}} is up to date."
+    },
+    "web": {
+      "subtitle": "Detect homograph (IDN) attacks: URLs that look legitimate but contain characters from a different alphabet.",
+      "urlLabel": "URL to check",
+      "check": "Check",
+      "invalidUrl": "Invalid URL.",
+      "safe": "No suspicious characters detected.",
+      "suspicious": "Suspicious: possible homograph attack.",
+      "host": "Host",
+      "scripts": "Scripts detected",
+      "punycode": "Punycode (IDN)",
+      "punycodeYes": "Yes — domain uses punycode encoding.",
+      "suspiciousChars": "Suspicious characters",
+      "explanation": "The host mixes characters from different alphabets (e.g., a Cyrillic \"а\" instead of a Latin \"a\"). This is a common phishing technique (homograph attack). Do not trust this URL."
     }
   },
   "clamav": {
