@@ -97,7 +97,11 @@ export function WindowsPage() {
   };
 
   const copyCommand = async (text: string) => {
-    try { await bridge.call(OperationIds.systemWriteClipboard, { text }); } catch { /* */ }
+    try {
+      await bridge.call(OperationIds.systemWriteClipboard, { text });
+      setNotice('Comando copiado al portapapeles.');
+      setTimeout(() => setNotice(null), 2000);
+    } catch { /* */ }
   };
 
   const categories = new Map<string, WindowsCommandInfo[]>();
