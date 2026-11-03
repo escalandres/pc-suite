@@ -524,6 +524,15 @@ function StegoPanel() {
     setNotice(null);
   }, [mode]);
 
+  // Sugerir ruta de salida por defecto al elegir imagen.
+  useEffect(() => {
+    if (imagePath && !outputPath) {
+      const dir = imagePath.replace(/[^\\/]+$/, '');
+      const name = imagePath.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '');
+      setOutputPath(dir + name + '.stego.png');
+    }
+  }, [imagePath]);
+
   const pickImage = async () => {
     try {
       const result = await bridge.call<{ cancelled: boolean; paths: string[] }>(OperationIds.systemPickFiles, undefined, 60_000);
@@ -663,9 +672,14 @@ function StegoPanel() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">{t('pages.files.stegoOutput')}</label>
-              <input type="text" value={outputPath} onChange={(e) => setOutputPath(e.target.value)} placeholder="auto (.stego.png)"
-                className="w-full rounded-md border px-3 py-2 text-sm"
-                style={{ background: 'var(--pcs-bg)', color: 'var(--pcs-text)', borderColor: 'var(--pcs-border)' }} />
+              <div className="flex gap-2">
+                <input type="text" value={outputPath} onChange={(e) => setOutputPath(e.target.value)} placeholder="auto (.stego.png)"
+                  className="flex-1 rounded-md border px-3 py-2 text-sm"
+                  style={{ background: 'var(--pcs-bg)', color: 'var(--pcs-text)', borderColor: 'var(--pcs-border)' }} />
+                <button type="button" onClick={() => { if (imagePath) { const dir = imagePath.replace(/[^\\/]+$/, ''); const name = imagePath.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, ''); setOutputPath(dir + name + '.stego.png'); } }} className="rounded-md border px-3 py-2 text-sm cursor-pointer" style={{ borderColor: 'var(--pcs-border)' }}>
+                  Auto
+                </button>
+              </div>
             </div>
 
             <button type="button" onClick={() => void doEmbed()} disabled={busy} className="rounded-md px-4 py-2 text-sm font-medium cursor-pointer disabled:opacity-50" style={{ background: 'var(--pcs-accent)', color: '#fff' }}>

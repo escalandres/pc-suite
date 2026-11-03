@@ -454,7 +454,7 @@ public sealed class FileSecurityService : IFileSecurityService
             : Encoding.UTF8.GetBytes(request.TextPayload!);
 
         if (!string.IsNullOrWhiteSpace(request.Password))
-            payloadBytes = XorWithPassword(payloadBytes, request.Password!);
+            payloadBytes = EncryptStegoPayload(payloadBytes, request.Password!);
 
         // Prefijo de 4 bytes (little-endian) con la longitud del payload.
         var full = new byte[4 + payloadBytes.Length];
@@ -528,7 +528,7 @@ public sealed class FileSecurityService : IFileSecurityService
         }
 
         if (!string.IsNullOrWhiteSpace(request.Password))
-            payload = XorWithPassword(payload, request.Password!);
+            payload = DecryptStegoPayload(payload, request.Password!);
 
         // Try as text
         string? text = null;
@@ -609,14 +609,56 @@ public sealed class FileSecurityService : IFileSecurityService
         return Task.FromResult(new StegoVerifyResult(true, len, isText));
     }
 
-    private static byte[] XorWithPassword(byte[] data, string password)
+    private static byte[] EncryptStegoPayload(byte[] data, string password)
     {
-        var key = Encoding.UTF8.GetBytes(password);
-        if (key.Length == 0) return data;
-        var result = new byte[data.Length];
-        for (int i = 0; i < data.Length; i++)
-            result[i] = (byte)(data[i] ^ key[i % key.Length]);
+        var salt = new byte[16];
+        var nonce = new byte[12];
+        var tag = new byte[16];
+        RandomNumberGenerator.Fill(salt);
+        RandomNumberGenerator.Fill(nonce);
+
+        var key = DeriveStegoKey(password, salt);
+        var cipher = new byte[data.Length];
+        using (var aes = new AesGcm(key, 16))
+        {
+            aes.Encrypt(nonce, data, cipher, tag);
+        }
+
+        var result = new byte[salt.Length + nonce.Length + tag.Length + cipher.Length];
+        Buffer.BlockCopy(salt, 0, result, 0, salt.Length);
+        Buffer.BlockCopy(nonce, 0, result, salt.Length, nonce.Length);
+        Buffer.BlockCopy(tag, 0, result, salt.Length + nonce.Length, tag.Length);
+        Buffer.BlockCopy(cipher, 0, result, salt.Length + nonce.Length + tag.Length, cipher.Length);
         return result;
+    }
+
+    private static byte[] DecryptStegoPayload(byte[] data, string password)
+    {
+        if (data.Length < 16 + 12 + 16)
+            throw new FileSecurityException("Payload cifrado inválido o contraseña incorrecta.");
+
+        var salt = new byte[16];
+        var nonce = new byte[12];
+        var tag = new byte[16];
+        Buffer.BlockCopy(data, 0, salt, 0, 16);
+        Buffer.BlockCopy(data, 16, nonce, 0, 12);
+        Buffer.BlockCopy(data, 28, tag, 0, 16);
+        var cipher = new byte[data.Length - 44];
+        Buffer.BlockCopy(data, 44, cipher, 0, cipher.Length);
+
+        var key = DeriveStegoKey(password, salt);
+        var plain = new byte[cipher.Length];
+        using (var aes = new AesGcm(key, 16))
+        {
+            aes.Decrypt(nonce, cipher, tag, plain);
+        }
+        return plain;
+    }
+
+    private static byte[] DeriveStegoKey(string password, byte[] salt)
+    {
+        using var kdf = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
+        return kdf.GetBytes(32);
     }
 
     // ------------------------------------------------------------------
