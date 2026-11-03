@@ -9,6 +9,7 @@ public sealed class FilesStegoEmbedPayload
     public string? FilePayloadPath { get; init; }
     public string? Password { get; init; }
     public string? OutputPath { get; init; }
+    public bool? DeleteOriginal { get; init; }
 }
 
 public sealed class FilesStegoVerifyPayload

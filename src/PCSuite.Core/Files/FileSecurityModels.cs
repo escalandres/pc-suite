@@ -43,7 +43,8 @@ public sealed record StegoEmbedRequest(
     string ImagePath,
     string? TextPayload = null,
     string? FilePayloadPath = null,
-    string? Password = null);
+    string? Password = null,
+    bool? DeleteOriginal = null);
 
 public sealed record StegoEmbedResult(string OutputPath);
 

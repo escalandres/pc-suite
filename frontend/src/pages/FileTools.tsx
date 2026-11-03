@@ -503,6 +503,7 @@ function StegoPanel() {
   const [textPayload, setTextPayload] = useState('');
   const [filePayloadPath, setFilePayloadPath] = useState('');
   const [password, setPassword] = useState('');
+  const [deleteOriginal, setDeleteOriginal] = useState(false);
   const [outputPath, setOutputPath] = useState('');
   const [payloadMode, setPayloadMode] = useState<'text' | 'file'>('text');
   const [busy, setBusy] = useState(false);
@@ -517,21 +518,13 @@ function StegoPanel() {
     setTextPayload('');
     setFilePayloadPath('');
     setPassword('');
+    setDeleteOriginal(false);
     setOutputPath('');
     setExtractedText(null);
     setExtractedFile(null);
     setVerifyResult(null);
     setNotice(null);
   }, [mode]);
-
-  // Sugerir ruta de salida por defecto al elegir imagen.
-  useEffect(() => {
-    if (imagePath && !outputPath) {
-      const dir = imagePath.replace(/[^\\/]+$/, '');
-      const name = imagePath.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '');
-      setOutputPath(dir + name + '.stego.png');
-    }
-  }, [imagePath]);
 
   const pickImage = async () => {
     try {
@@ -557,6 +550,16 @@ function StegoPanel() {
     }
   };
 
+  const pickOutputFile = async () => {
+    try {
+      const result = await bridge.call<{ cancelled: boolean; paths: string[] }>(OperationIds.systemPickFiles, undefined, 60_000);
+      if (result.cancelled || result.paths.length === 0) return;
+      setOutputPath(result.paths[0]);
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : t('common.errorFetch') });
+    }
+  };
+
   const doEmbed = async () => {
     if (!imagePath) { setNotice({ kind: 'error', text: t('pages.files.stegoImage') + ' requerido.' }); return; }
     setBusy(true); setNotice(null);
@@ -567,6 +570,7 @@ function StegoPanel() {
         filePayloadPath: payloadMode === 'file' ? filePayloadPath : undefined,
         password: password || undefined,
         outputPath: outputPath || undefined,
+        deleteOriginal,
       });
       setNotice({ kind: 'success', text: t('pages.files.stegoSuccess', { path: result.outputPath }) });
     } catch (e) {
@@ -668,6 +672,22 @@ function StegoPanel() {
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-md border px-3 py-2 text-sm"
                 style={{ background: 'var(--pcs-bg)', color: 'var(--pcs-text)', borderColor: 'var(--pcs-border)' }} />
+              {password.length > 0 && (
+                <p className="text-xs" style={{ color: password.length < 8 ? 'var(--pcs-danger)' : password.length < 12 ? 'var(--pcs-warning)' : 'var(--pcs-success)' }}>
+                  {password.length < 8 ? 'Contraseña débil (mín. 8 caracteres)' : password.length < 12 ? 'Contraseña aceptable' : 'Contraseña fuerte'}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={deleteOriginal} onChange={(e) => setDeleteOriginal(e.target.checked)} />
+                Borrar el original tras ocultar
+              </label>
+            </div>
+
+            <div className="rounded-md border px-3 py-2 text-xs" style={{ borderColor: 'var(--pcs-warning)', color: 'var(--pcs-warning)', background: 'color-mix(in srgb, var(--pcs-warning) 10%, transparent)' }}>
+              Advertencia: guarda la imagen de salida como PNG. Si la recomprimes (JPEG/WebP) se destruyen los datos ocultos.
             </div>
 
             <div className="space-y-2">
@@ -676,8 +696,8 @@ function StegoPanel() {
                 <input type="text" value={outputPath} onChange={(e) => setOutputPath(e.target.value)} placeholder="auto (.stego.png)"
                   className="flex-1 rounded-md border px-3 py-2 text-sm"
                   style={{ background: 'var(--pcs-bg)', color: 'var(--pcs-text)', borderColor: 'var(--pcs-border)' }} />
-                <button type="button" onClick={() => { if (imagePath) { const dir = imagePath.replace(/[^\\/]+$/, ''); const name = imagePath.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, ''); setOutputPath(dir + name + '.stego.png'); } }} className="rounded-md border px-3 py-2 text-sm cursor-pointer" style={{ borderColor: 'var(--pcs-border)' }}>
-                  Auto
+                <button type="button" onClick={() => void pickOutputFile()} className="rounded-md border px-3 py-2 text-sm cursor-pointer" style={{ borderColor: 'var(--pcs-border)' }}>
+                  {t('pages.files.stegoPickImage')}
                 </button>
               </div>
             </div>

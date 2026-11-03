@@ -26,7 +26,8 @@ public sealed class FilesStegoEmbedOperation : FileSecurityOperation
                 payload.ImagePath ?? string.Empty,
                 payload.TextPayload,
                 payload.FilePayloadPath,
-                payload.Password),
+                payload.Password,
+                payload.DeleteOriginal),
             cancellationToken).ConfigureAwait(false);
 
         return BridgeJson.ToJson(result);

@@ -483,6 +483,12 @@ public sealed class FileSecurityService : IFileSecurityService
 
         var outPath = Path.Combine(Path.GetDirectoryName(request.ImagePath)!, Path.GetFileNameWithoutExtension(request.ImagePath) + ".stego.png");
         bmp.Save(outPath, ImageFormat.Png);
+
+        if (request.DeleteOriginal == true && !string.Equals(outPath, request.ImagePath, StringComparison.OrdinalIgnoreCase))
+        {
+            try { File.Delete(request.ImagePath); } catch { /* best effort */ }
+        }
+
         return Task.FromResult(new StegoEmbedResult(outPath));
     }
 
