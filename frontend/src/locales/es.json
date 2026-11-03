@@ -347,7 +347,7 @@
       "signFile": "Sign File",
       "signatureGenerated": "Signature Generated",
       "signing": "Signing",
-      "subtitle": "Subtitle",
+      "subtitle": "Certificados, CSR y claves PGP — generación, inspección y conversión.",
       "verify": "Verify",
       "verifyError": "Verify Error",
       "verifyFile": "Verify File",
