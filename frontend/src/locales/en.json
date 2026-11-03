@@ -352,7 +352,22 @@
       "verifyError": "Verify Error",
       "verifyFile": "Verify File",
       "verifyNote": "Verify Note",
-      "verifying": "Verifying"
+      "verifying": "Verifying",
+      "algoRsa2048": "Algo Rsa2048",
+      "algoRsa4096": "Algo Rsa4096",
+      "algoEcdsaP256": "Algo Ecdsa P256",
+      "algoEcdsaP384": "Algo Ecdsa P384",
+      "algoEd25519": "Algo Ed25519",
+      "convertPem2der": "Convert Pem2der",
+      "convertDer2pem": "Convert Der2pem",
+      "convertPem2pfx": "Convert Pem2pfx",
+      "convertPfx2pem": "Convert Pfx2pem",
+      "convertOpenSsh2pem": "Convert Open Ssh2pem",
+      "tabX509": "Tab X509",
+      "tabCsr": "Tab Csr",
+      "tabInspect": "Tab Inspect",
+      "tabConvert": "Tab Convert",
+      "tabSign": "Tab Sign"
     },
     "security": {
       "title": "Security",
