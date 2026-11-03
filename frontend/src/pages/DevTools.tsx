@@ -350,6 +350,34 @@ export function DevTools() {
           })}
         </ul>
       )}
+
+      {/* npkill - liberar espacio de node_modules */}
+      <section className="space-y-3 rounded-lg border p-4" style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}>
+        <h2 className="text-sm font-semibold">Liberar espacio (npkill)</h2>
+        <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+          Ejecuta npx npkill para detectar y eliminar node_modules antiguos. Selecciona la ruta raíz a revisar.
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const result = await bridge.call<{ cancelled: boolean; paths: string[] }>(OperationIds.systemPickFolder, undefined, 60_000);
+                if (result.cancelled || result.paths.length === 0) return;
+                const path = result.paths[0];
+                // Invocar powershell con npx npkill
+                await bridge.call(OperationIds.systemWriteClipboard, { command: 'npx npkill --directory "' + path + '"' }, 10 * 60_000);
+              } catch (e) {
+                // best effort
+              }
+            }}
+            className="rounded-md px-3 py-2 text-sm font-medium cursor-pointer"
+            style={{ background: 'var(--pcs-accent)', color: '#fff' }}
+          >
+            Seleccionar carpeta y ejecutar npkill
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
