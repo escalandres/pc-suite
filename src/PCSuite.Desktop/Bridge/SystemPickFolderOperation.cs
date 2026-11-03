@@ -44,36 +44,21 @@ public sealed class SystemPickFolderOperation : IOperation
 
     public Task<OperationResult> ExecuteAsync(OperationContext context, CancellationToken ct)
     {
-        using var dialog = new OpenFileDialog
+        using var dialog = new FolderBrowserDialog
         {
-            ValidateNames = false, // el "archivo" centinela no existe
-            CheckFileExists = false,
-            DereferenceLinks = true,
-            FileName = SentinelFileName,
-            Title = "Selecciona una carpeta",
+            Description = "Selecciona una carpeta",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false,
         };
 
         var result = _owner is null ? dialog.ShowDialog() : dialog.ShowDialog(_owner);
-        if (result != DialogResult.OK)
+        if (result != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
         {
             return Task.FromResult(OperationResult.Ok(BridgeJson.ToJson(
                 new SystemPickFolderResult { Cancelled = true })));
         }
 
-        var chosen = dialog.FileName;
-        if (!Directory.Exists(chosen))
-        {
-            // El centinela quedó "dentro" de la carpeta abierta: la ruta
-            // real es su carpeta contenedora.
-            var parent = Path.GetDirectoryName(chosen);
-            if (parent is null || !Directory.Exists(parent))
-            {
-                return Task.FromResult(OperationResult.Ok(BridgeJson.ToJson(
-                    new SystemPickFolderResult { Cancelled = true })));
-            }
-
-            chosen = parent;
-        }
+        var chosen = dialog.SelectedPath;
 
         return Task.FromResult(OperationResult.Ok(BridgeJson.ToJson(
             new SystemPickFolderResult { Cancelled = false, Path = chosen })));
