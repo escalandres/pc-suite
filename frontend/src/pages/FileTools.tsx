@@ -18,6 +18,25 @@ import { useTranslation } from '../hooks/useTranslation';
  * encriptar con contraseña, borrado seguro, hash multi-algoritmo.
  * Esteganografía (33.2) llegará en una sub-tarea futura.
  */
+function passwordEntropy(pwd: string): number {
+  if (!pwd) return 0;
+  let charset = 0;
+  if (/[a-z]/.test(pwd)) charset += 26;
+  if (/[A-Z]/.test(pwd)) charset += 26;
+  if (/[0-9]/.test(pwd)) charset += 10;
+  if (/[^a-zA-Z0-9]/.test(pwd)) charset += 32;
+  if (charset === 0) return 0;
+  return pwd.length * Math.log2(charset);
+}
+
+function passwordStrength(pwd: string): { label: string; color: string } {
+  const e = passwordEntropy(pwd);
+  if (e < 28) return { label: 'Contraseña débil', color: 'var(--pcs-danger)' };
+  if (e < 36) return { label: 'Contraseña aceptable', color: 'var(--pcs-warning)' };
+  if (e < 60) return { label: 'Contraseña fuerte', color: 'var(--pcs-success)' };
+  return { label: 'Contraseña muy fuerte', color: 'var(--pcs-success)' };
+}
+
 export function FileTools() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<'encrypt' | 'hash' | 'shred' | 'stego'>('encrypt');
@@ -235,6 +254,11 @@ function EncryptPanel() {
         style={{ background: 'var(--pcs-surface-2)', borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)' }}
       />
 
+      {password.length > 0 && (
+        <p className="text-xs" style={{ color: passwordStrength(password).color }}>
+          {passwordStrength(password).label} ({Math.round(passwordEntropy(password))} bits)
+        </p>
+      )}
       {mode === 'encrypt' && !isFolder && (
         <label className="flex cursor-pointer items-center gap-2 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
           <input
