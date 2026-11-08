@@ -308,10 +308,14 @@ export function LocalShare() {
     try {
       await bridge.call(OperationIds.localShareSend, { deviceId: selectedDevice, paths }, SEND_TIMEOUT);
       setNotice({ kind: 'success', text: 'Transferencia iniciada. Esperando aprobación del receptor.' });
-      await refresh();
     } catch (e) {
       setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo enviar.' });
-    } finally { setSending(false); }
+      setSending(false);
+      return;
+    }
+    // Refresco best-effort: la lista se actualiza también por eventos.
+    try { await refresh(); } catch { /* best-effort */ }
+    setSending(false);
   };
 
   /** Task 016.8: mensaje de texto al par seleccionado — mismo pipeline y consentimiento. */
@@ -327,10 +331,13 @@ export function LocalShare() {
       await bridge.call(OperationIds.localShareSendMessage, { deviceId: selectedDevice, text }, SEND_TIMEOUT);
       setMessageText('');
       setNotice({ kind: 'success', text: 'Mensaje enviado. Esperando aprobación del receptor.' });
-      await refresh();
     } catch (e) {
       setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'No se pudo enviar el mensaje.' });
-    } finally { setSendingMessage(false); }
+      setSendingMessage(false);
+      return;
+    }
+    try { await refresh(); } catch { /* best-effort */ }
+    setSendingMessage(false);
   };
 
   /**
