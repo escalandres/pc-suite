@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Download, Info, RefreshCw, Rocket } from 'lucide-react';
 import { bridge, BridgeError } from '../services/pcsuiteBridge';
 import { OperationIds } from '../types/bridge';
-import type { DeveloperCollectionResult, DeveloperToolInfo, UpdateCheckResult } from '../types/bridge';
+import type { DeveloperCollectionResult, DeveloperToolInfo, SystemPickFolderResult, UpdateCheckResult } from '../types/bridge';
 
 /**
  * Página "Herramientas dev": detecta las tools de desarrollador
@@ -362,13 +362,14 @@ export function DevTools() {
             type="button"
             onClick={async () => {
               try {
-                const result = await bridge.call<{ cancelled: boolean; paths: string[] }>(OperationIds.systemPickFolder, undefined, 60_000);
-                if (result.cancelled || result.paths.length === 0) return;
-                const path = result.paths[0];
+                const result = await bridge.call<SystemPickFolderResult>(OperationIds.systemPickFolder, undefined, 60_000);
+                if (result.cancelled || !result.path) return;
+                const path = result.path;
                 // Lanzar npkill en PowerShell elevado (UAC por operación).
                 await bridge.call(OperationIds.developerNpkill, { path }, 10 * 60_000);
               } catch (e) {
-                // best effort
+                console.error('npkill launch failed:', e);
+                alert(e instanceof Error ? e.message : String(e));
               }
             }}
             className="rounded-md px-3 py-2 text-sm font-medium cursor-pointer"

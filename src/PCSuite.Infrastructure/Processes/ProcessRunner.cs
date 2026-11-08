@@ -116,6 +116,7 @@ public sealed class ProcessRunner : IProcessRunner
             {
                 throw new InvalidOperationException("No se pudo iniciar el proceso.");
             }
+            request.OnProcessStarted?.Invoke(process.Id);
         }
         catch (System.ComponentModel.Win32Exception exception)
             when (request.RequiresElevation && exception.NativeErrorCode == 1223)

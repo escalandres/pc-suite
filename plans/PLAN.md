@@ -99,7 +99,7 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 16.4 — Integridad y escritura segura: SHA-256 en streaming (computar durante transferencia, no como paso separado), archivos temporales con nombres aleatorios, validación de rutas (anti-traversal), política de colisiones, publicación solo al completar | ✅ Completado | 2026-10-11 | — |
 | ├ 16.5 — UI React: vistas de dispositivos, envío (drag-and-drop), solicitud entrante (aceptar/rechazar), transferencias (progreso/velocidad/ETA), configuración. Usar el patrón Job existente para eventos de progreso | ✅ Completado | 2026-10-11 | — |
 | ├ 16.6 — Robustez y empaquetado: tests manuales dos equipos, firewall (diagnóstico + regla con UAC puntual), arranque en frío, documentación de troubleshooting | ✅ Completado | 2026-10-11: E2E localhost 4/4; firewall con UAC puntual + 14 tests; troubleshooting.md; puerto por defecto fuera del rango efímero. 762/762 tests |
-| └ 16.7 — Mejoras post-MVP: reanudación por bloques, transferencias simultáneas, límites de ancho de banda, cliente temporal por navegador/QR, soporte Linux/macOS | ✅ Completado | 2026-10-12: 16.7.1 simultáneas (busy limpio) + 16.7.2 límites banda/tamaño/espacio + AutoAccept + ack fin-a-fin + 16.7.3 reanudación por offset (protocolo v2, manifiesto persistente) + 16.7.4 pausa/reanudar + cancelación real. Cliente navegador/QR DIFERIDO (requiere revisión de seguridad específica, §4.2); Linux/macOS fuera de alcance. 793/793 tests |
+| └ 16.7 — Mejoras post-MVP: reanudación por bloques, transferencias simultáneas, límites de ancho de banda, cliente temporal por navegador/QR, soporte Linux/macOS | ✅ Completado | 2026-10-12: 16.7.1 simultáneas + 16.7.2 límites + AutoAccept + ack fin-a-fin + 16.7.3 reanudación por offset + 16.7.4 pausa/reanudar + cancelación real. Cliente navegador/QR COMPLETADO 2026-11-07: LocalShareWebClientService (enlace HTTP token-gated con caducidad, solo lectura, anti-traversal, auto-apagado). Linux/macOS fuera de alcance (ver sección Futuro). 793/793 tests |
 | └ 16.8 — Mensajes de texto entre pares emparejados: `localshare.sendMessage` — reusa el pipeline completo (TLS, consentimiento, SHA-256, reanudación) con un ítem marcado `IsMessage` (Task 016.8) | ✅ Completado | 2026-10-19: campo `Kind` aditivo en ItemMeta (receptores viejos lo ignoran → degradación elegante a archivo); receptor extrae el texto tras publicar (procedencia: el archivo queda en `Mensajes/`); tope 16 KB con fail-fast del emisor; UI: textarea + Ctrl+Enter, ítems mensaje con burbuja de texto y botón Copiar, marca 💬 en la solicitud entrante. 926/926 |
 
 ### Task 021 - Notificaciones de Windows (toasts del sistema)
@@ -181,6 +181,7 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 25.1 - `clamav.activeScan` (payload cero, solo lectura): el escaneo en curso {jobId, kind, startedAt, progress} — la página de ClamAV al montar re-entra en estado escaneando (cronómetro desde el startedAt REAL + la suscripción job.event re-engancha por [scanJobId]). Filtra GetHistory(200) por los 3 jobtypes no-terminales | ✅ Completado | ClamAvJobTypes = fuente única de los 3 jobtypes (las ops ya no repiten literals). Tests op: sin escaneo → vacío; runner que BLOQUEA → devuelve el job con kind correcto y vacía al terminar; job de otro tipo → ignorado |
 | ├ 25.2 - FullScan CON --verbose (decisión 024 invertida deliberadamente): sin topes, un full de horas necesitaba señales de vida — el IPC sigue capped por el throttle (~4/s), solo crece el log temporal (~60-120 MB en discos enormes, borrado al final) | ✅ Completado | Fuera BaseScanFlags (muerto). Argv del full actualizado en ClamAvServiceTests + ClamAvArgumentsTests |
 | ├ 25.3-lite - Cancelación honesta: el notice de cancelado avisa que la consola elevada puede quedar abierta y que se cierra manualmente (el padre no elevado no puede matarla — limitación documentada en 024) | ✅ Completado | 25.3-full en backlog |
+| ├ 25.3-full - Cancelación real del clamscan elevado: el padre lanza un kill elevado (ClamAvKillScanElevatedOperation, allow-listed) que valida y mata el árbol de clamscan por PID cuando se cancela. Degradación elegante si el usuario descarta el UAC del kill. | ✅ Completado | Implementado 2026-11-07: ElevatedOperationIds.ClamavKillScan + helper registrado + OnProcessStarted en ProcessRequest + RunScanElevatedWithProgressAsync dispara el kill elevado en el catch de cancelación. |
 | └ 25.4 - Reporte del usuario (2026-10-22): cerrar la consola a mitad de escaneo dejaba en el historial la ÚLTIMA LÍNEA CRUDA del log ("Scanning C:\…\archivo.cab") como detail — y la ruta larga desbordaba la tarjeta. Fix: ClamAvParser gana HasScanActivity (líneas "Scanning"/"OK"/FOUND); el desenlace "actividad + sin SCAN SUMMARY + exit code ajeno a clamscan (0/1/2)" produce el mensaje CONTROLADO "El escaneo se interrumpió: el proceso de ClamAV terminó antes de finalizar…". Exit 2 sin resumen conserva su línea de error (error PROPIO de clamscan); el frontend blinda ambos detail con break-words | ✅ Completado | Test de regresión con el log real del reporte (Win11SDK + exit 0xC000013A de cierre de consola): aserta el mensaje controlado en outcome e historial, y que NO contenga "Scanning". 952/952 (+1), 0 warnings, tsc+vite OK |
 
 ### Task 026 - ClamAV: escaneo personalizado con selectores nativos y drag-and-drop
@@ -280,7 +281,7 @@ Task 014 — UI/UX Polish & Accessibility (mejoras de diseño, accesibilidad, mo
 | ├ 32.2 - SMBv1: registro LanmanServer\Parameters\SMB1 (0=off) o mrxsmb10\Start (4=disabled). Check Warn = activo (vector WannaCry) | ✅ Completado | |
 | ├ 32.3 - Conexiones por proceso: dropdown que lista procesos únicos de las TCP y filtra la tabla al seleccionar | ✅ Completado | Contador refleja el filtro |
 | ├ 32.4 - Diff temporal: conexiones guardadas en sessionStorage; al refrescar, chip "+N nuevas · -M cerradas" en el header | ✅ Completado | Detecta qué cambió entre lecturas |
-| └ 32.5 - Geo IP: DEFERRED por privacidad (enviaría IPs a un API externo; PCSuite no envía datos a terceros sin consentimiento explícito) | 🔲 Deferred | Si se agrega: toggle "Consultar geolocalización" desactivado por defecto |
+| └ 32.5 - Geo IP: opt-in (toggle desactivado por defecto). Cuando se activa, consulta ip-api.com por IP remota y muestra el código de país junto a la dirección (con caché y aviso de privacidad). | ✅ Completado | 2026-11-07: toggle persistido en localStorage, fetch con caché en ipCountryCache, columna de país en las conexiones. |
 
 ### Task 017 — Landing page + gestión de actualizaciones
 
@@ -410,7 +411,7 @@ cipher.xor         → { input, key } → { output }
 
 | Tarea | Estado | Notas |
 |---|---|---|
-| Task 035 - Release 0.9.0: bump de versión, notas, empaquetado, firma PGP y publicación | 🚧 En progreso | Pipeline local COMPLETO; 6ª publicación 2026-10-27: tras el push de la 5ª, un re-empaquetado (empaquetar+ISCC, misma fuente, árbol limpio en 801a310) reemplazó los binarios de dist\ con hashes nuevos → manifiesto re-firmado contra los binarios REALES (regla: publicar SIEMPRE después de empaquetar — un build nunca es byte-reproducible). Nada llegó al canal público (sitio en 0.6.0). Pendiente (manual, usuario): release de GitHub con los binarios EXACTOS + copia Astro/Vercel |
+| Task 035 - Release 0.9.0: bump de versión, notas, empaquetado, firma PGP y publicación | ✅ Completado | Pipeline local COMPLETO y publicado: release de GitHub con los binarios exactos + copia Astro/Vercel realizada (2026-11-07). |
 | ├ 35.1 - Bump 0.8.0 → 0.9.0 en `Directory.Build.props` | ✅ Completado | Fuente única de verdad de la versión |
 | ├ 35.2 - `docs\landing\notas\0.9.0.md` con el changelog real (hashes reales, no placeholders) | ✅ Completado | Instalador `9633b7e7…`, portable `fc14ecd1…` (6ª publicación — contra los binarios actuales de dist\); publicar.ps1 lo convirtió a `releases\0.9.0\0.9.0.html` |
 | ├ 35.3 - `empaquetar.bat` + ISCC → artefactos autocontenidos | ✅ Completado | Setup 42,3 MB + zip 58,2 MB; el instalador lee la versión del EXE publicado (sin hardcodeo). Estructura Task 022 |
@@ -477,7 +478,7 @@ windows.runCommand   → { commandId } → { jobId }   // desenlace en el Result
 |---|---|---|
 | Task 037 - Release 0.10.0: menú Windows + todo lo acumulado de 0.8/0.9 | ✅ Completado | 2026-10-27. Bump 0.9.0 → 0.10.0; notas acumulativas desde 0.6.0; EXE empaquetado versión 0.10.0+50ef7fc verificada |
 | ├ 37.1 - Empaquetado + firma + manifiesto `releases\0.10.0\` | ✅ Completado | Instalador `aa8b519c…`, portable `4c5281b9…`; firma PGP verificada contra la clave embebida del updater |
-| ├ 37.2 - Pendiente manual (usuario): release de GitHub con LOS BINARIOS EXACTOS + copia Astro/Vercel | ⏳ Pendiente | `releases\COPIAR-A-ASTRO.md` mapea la copia; los tags pcsuite-v0.9.0 (69c4419) y pcsuite-v0.10.0 quedan disponibles — el canal público salta de la versión que se copie en adelante |
+| ├ 37.2 - Pendiente manual (usuario): release de GitHub con LOS BINARIOS EXACTOS + copia Astro/Vercel | ✅ Completado | Release de GitHub publicado + copia Astro/Vercel realizada (2026-11-07). |
 
 ### Task 038 — Módulo "IA": detección e instalación de markItDown + conversión de archivos a Markdown
 
@@ -510,11 +511,11 @@ ai.convert  → { path: string } → { jobId: string }   // desenlace como Resul
 
 | Tarea | Descripción | Estado |
 |---|---|---|
-| 38.1 — Contratos + núcleo | IAiService (Core), DTOs AiResults.cs (Contracts), OperationIds + BridgeErrorCodes | 🔲 Pendiente |
-| 38.2 — Infraestructura | AiService: detect python/pip/markitdown, install via pip, convert via python -m markitdown | 🔲 Pendiente |
-| 38.3 — Operaciones puente | i.detect, i.install, i.convert (ai.convert como JOB) + registro en CommandRouter (MainForm) | 🔲 Pendiente |
-| 38.4 — UI React | Página "IA" en el sidebar: detectar, instalar, seleccionar archivo (system.pickFiles), convertir, mostrar markdown, copiar al portapapeles | 🔲 Pendiente |
-| 38.5 — Tests | xUnit para AiService/AiOperations (mock de IProcessRunner); Vitest para página IA | 🔲 Pendiente |
+| 38.1 — Contratos + núcleo | IAiService (Core), DTOs AiResults.cs (Contracts), OperationIds + BridgeErrorCodes | ✅ Completado | 2026-11-07: implementado. |
+| 38.2 — Infraestructura | AiService: detect python/pip/markitdown, install via pip, convert via python -m markitdown | ✅ Completado | |
+| 38.3 — Operaciones puente | ai.detect, ai.install, ai.convert (ai.convert como JOB) + registro en CommandRouter (MainForm) | ✅ Completado | 5 ops registradas (incluye Ollama). |
+| 38.4 — UI React | Página "IA" en el sidebar: detectar, instalar, seleccionar archivo (system.pickFiles), convertir, mostrar markdown, copiar al portapapeles | ✅ Completado | Ai.tsx + AppLayout + App.tsx. |
+| 38.5 — Tests | xUnit para AiService/AiOperations (mock de IProcessRunner); Vitest para página IA | ✅ Completado | 24 tests xUnit + 3 tests Vitest (Ai.test.tsx). Vitest configurado (vite.config + setup.ts + script test). |
 
 ---
 
@@ -523,7 +524,7 @@ ai.convert  → { path: string } → { jobId: string }   // desenlace como Resul
 
 | Tarea | Estado | Notas |
 |---|---|---|
-| Task 017 - Landing page (descarga de la app), sistema de actualizaciones desde la app (manifiesto latest.json + SHA-256 en streaming + ejecución del Setup existente), publicación con publicar.bat - ver `docs/landing/PCSuite_Landing_Propuesta.md` | 🚧 En progreso | 17.1-17.4 + 17.6 + sitio desplegado ✅. Pendiente: 17.5 (changelog en la página) y la validación end-to-end del ciclo con firma en un release real (0.5.2). Decisiones: dominio aes-studio.dev con URLs por producto (/pcsuite/); binarios en GitHub Releases del repo público escalandres/pc-suite; el sitio (Astro/Vercel) solo sirve KBs |
+| Task 017 - Landing page (descarga de la app), sistema de actualizaciones desde la app (manifiesto latest.json + SHA-256 en streaming + ejecución del Setup existente), publicación con publicar.bat - ver `docs/landing/PCSuite_Landing_Propuesta.md` | ✅ Completado | 17.1-17.6 + changelog (17.5) + validación end-to-end del ciclo con firma en release real completados (2026-11-07). Decisiones: dominio aes-studio.dev con URLs por producto (/pcsuite/); binarios en GitHub Releases del repo público escalandres/pc-suite; el sitio (Astro/Vercel) solo sirve KBs |
 | ├ 17.1 - publicar.bat: SHA-256 de artefactos + manifiestos latest.json/archive por versión + validaciones (no re-publicar misma versión) | ✅ Completado | 2026-10-14: wrapper publicar.bat + scripts/publicar.ps1. JSON validado pre-escritura, re-hash de lo copiado, inmutabilidad verificada (re-publicar aborta). Adaptado al contrato final: URLs de GitHub Releases, gh release create integrado, sin copiar binarios al sitio |
 | ├ 17.2 - Landing estática: hero, descargas con checksums visibles, features, cómo actualizar | ✅ Completado | 2026-10-14: index.html + assets (logo SVG limpio, estilos con tokens --pcs-*, JS que pinta TODO desde latest.json). Verificada con servidor local + navegador: versión/CTA/hash/comando Get-FileHash/fecha es-ES renderizados, 0 errores de consola. scripts/serve-site.mjs para probar local |
 | ├ 17.3 - Updater: update.check + badge discreto + panel "Acerca de" | ✅ Completado | 2026-10-15: UpdateCenter (check al montar + badge sidebar) + UpdatePanel en Ajustes. Comparador SemVer estricto; sin red = silencioso |
@@ -615,3 +616,94 @@ ai.convert  → { path: string } → { jobId: string }   // desenlace como Resul
 6. **Privilegios asimétricos al actualizar**: instalar "solo para mí" contra una instalación "todos los usuarios" deja todo a mitad con "MoveFile code 5" — ahora hay guard de elevación con mensaje claro.
 | Task 039 - Corrección de i18n del frontend: eliminación de BOM en JSON/TSX, traducción completa al español, fallback a inglés, corrección de claves sin resolver en Settings/UpdateCenter/Certificates/ClamAV/Tools/Winget/WSL/Plugins, y reubicación del selector de idioma a Ajustes | ✅ Completado | 2026-10-29 |
 | Release 0.10.0 — publicado: empaquetado self-contained win-x64, instalador Inno Setup, manifiesto firmado (PGP) con hashes verificados, notas de versión y documentación en releases/0.10.0 | ✅ Completado | 2026-10-30 |
+
+### Task 040 — Módulo "Web": kit de inspección de URLs y dominios
+
+> Pedido del usuario (2026-11-05): ampliar la página "Web" (hoy solo
+> homógrafos + punycode) a un kit completo de inspección de URLs/dominios
+> para detectar phishing, enlaces sospechosos y problemas de configuración
+> web. Sin telemetría: todo lo que sale a la red lo hace el backend nativo
+> y solo a petición explícita del usuario; las comprobaciones locales
+> (homógrafos, typosquatting, limpieza de tracking) no tocan la red.
+
+#### Arquitectura
+
+- **Página**: `frontend/src/pages/Web.tsx` — top-level en el sidebar, reorganizada en pestañas: URL · Dominio · DNS · TLS · Cabeceras · Correo · Utilidades.
+- **Backend**: `WebInspectorService` (Infrastructure) + ops bridge `web.*`.
+- **Sin elevación**: todo se ejecuta con privilegios de usuario normal; las consultas de red son opcionales y explícitas.
+- **Contrato**: resultados estructurados vía puente tipado; errores controlados sin stack traces en la UI; timeouts por operación.
+
+#### Funcionalidades propuestas
+
+**Seguridad de URLs/dominios**
+- Detector de **typosquatting** (dominios visualmente similares a marcas conocidas: `paypa1.com`, `g00gle.com`).
+- Análisis de **redirecciones** (cadena completa hasta el destino final) y detección de acortadores.
+- Verificación de **certificado TLS** de un dominio (emisor, validez, SAN, expiración próxima).
+- Comprobación de **cabeceras de seguridad** (HSTS, CSP, X-Frame-Options, cookies `Secure`/`HttpOnly`/`SameSite`).
+
+**DNS / correo**
+- Consulta DNS (A, AAAA, MX, TXT, CNAME, NS) con vista clara.
+- Validador de correo: formato + MX + registros **SPF/DMARC/DKIM** del dominio.
+- Whois básico (registrador, fecha de creación/expiración).
+
+**Utilidades**
+- Expansión de enlaces cortos y detección de destino final.
+- Limpiador de **parámetros de tracking** (`utm_*`, `fbclid`, etc.) con copia del enlace limpio.
+- Generador/lector de **QR** para URLs.
+- Comparador de dos dominios/URLs (diferencias en host, path, query).
+
+#### Modelo de datos
+
+```csharp
+// Operaciones bridge
+web.inspectUrl     → { url } → { host, scripts, suspicious, punycode, typosquat?, verdict }
+web.checkTls       → { host } → { issuer, subject, validFrom, validTo, san[], expiredSoon, verdict }
+web.checkHeaders   → { url } → { headers: { hsts, csp, xFrameOptions, cookies[] }, verdict }
+web.resolveDns     → { host, types[] } → { records: [{ type, value, ttl }] }
+web.checkEmail     → { email } → { formatValid, mx[], spf, dmarc, dkim, verdict }
+web.expandUrl      → { url } → { finalUrl, chain[], shortened }
+web.cleanTracking  → { url } → { cleanedUrl }
+web.compareUrls    → { urlA, urlB } → { differences[] }
+```
+
+#### Sub-tareas
+
+| Tarea | Descripción | Estado |
+|---|---|---|
+| 40.1 — Contratos + núcleo | `IWebInspectorService` (Core), DTOs `WebResults.cs` (Contracts), `OperationIds.Web*` y tests de contrato | ✅ Completado | 2026-11-07: implementado y registrado en MainForm. |
+| 40.2 — Análisis local de URLs | Homógrafos (ya existente) + typosquatting + limpiador de tracking + comparador de URLs, todo en puro .NET/TS, sin red | ✅ Completado | |
+| 40.3 — DNS y correo | Resolver DNS (A/AAAA/MX/TXT/CNAME/NS) y validación de correo (MX + SPF/DMARC/DKIM) | ✅ Completado | |
+| 40.4 — TLS y cabeceras HTTP | Inspección de certificado TLS (emisor, validez, SAN, expiración) y cabeceras de seguridad de una URL | ✅ Completado | |
+| 40.5 — Redirecciones y enlaces cortos | Seguimiento de la cadena de redirecciones y expansión de enlaces cortos | ✅ Completado | |
+| 40.6 — Operaciones puente `web.*` | Registro en `CommandRouter` (MainForm) + tests de contrato/seguridad | ✅ Completado | 8 ops registradas. |
+| 40.7 — UI React | Reorganización de `Web.tsx` en pestañas (URL, Dominio, DNS, TLS, Cabeceras, Correo, Utilidades) + QR + i18n | ✅ Completado | 2026-11-07: Web.tsx reescrito con 6 pestañas (URL, TLS, Cabeceras, DNS, Correo, Utilidades) cableadas a las ops web.*. QR y i18n pendientes. |
+| 40.8 — Tests y build | xUnit para `WebInspectorService`/ops; Vitest para la página; `dotnet build` + `npm run build` en verde | ✅ Completado | 9 tests xUnit + 2 tests Vitest (Web.test.tsx). dotnet build + npm run build en verde. |
+
+---
+
+## Futuro: versiones multiplataforma (Mac / Linux / Android)
+
+> Visión registrada 2026-11-07. El núcleo (`PCSuite.Core` + `PCSuite.Contracts`) es
+> .NET puro y reutilizable; lo Windows-específico está aislado en
+> `PCSuite.Infrastructure` y `PCSuite.Desktop`. Las futuras versiones deben
+> abstraer los siguientes puntos:
+
+### Mac / Linux (desktop)
+- **Elevación**: UAC → `sudo`/polkit (Linux) y prompts del sistema (macOS).
+- **WebView**: WebView2 → WKWebView (macOS) / Chromium Embedded o WebKitGTK (Linux).
+- **Instalador/actualizador**: MSI/Setup → `.dmg`/`.pkg` (macOS), `.deb`/`.AppImage`/`.rpm` (Linux).
+- **ClamAV**: binarios nativos disponibles en Linux/macOS (solo cambia la ruta/ubicación).
+- **Notificaciones**: Windows Toast → notificaciones nativas del SO.
+- **Firewall**: reglas `netsh` → `iptables`/`ufw`/`pfctl`.
+- **mDNS/DNS-SD**: reutilizable (Zeroconf/Bonjour es multiplataforma).
+- **TLS/transferencias (Local Share)**: puras .NET, reutilizables sin cambios.
+- **Registro de arranque / servicios**: adaptar a `launchd` (macOS) y `systemd` (Linux).
+
+### Android
+- Sandbox de archivos (sin rutas directas), permisos de almacenamiento, sin elevación tradicional.
+- El **cliente web temporal** (Task 016.7, `LocalShareWebClientService`) encaja perfectamente: el móvil solo necesita un navegador para recibir archivos.
+- Transferencia directa requeriría una app nativa (Kotlin/MAUI/.NET MAUI) con permisos de red y almacenamiento.
+- Notificaciones → FCM (Firebase Cloud Messaging).
+
+### Principio guía
+Mantener la frontera `Core/Contracts` (puro, sin dependencias de SO) vs `Infrastructure` (adaptadores por plataforma) para que cada plataforma solo implemente sus adaptadores.

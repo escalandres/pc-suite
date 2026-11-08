@@ -91,7 +91,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 /** Task 032: fila de conexión TCP (extraída para el filtro por proceso). */
-function renderConnectionRow(connection: ActiveConnectionResult, index: number) {
+function renderConnectionRow(connection: ActiveConnectionResult, index: number, geoIpEnabled: boolean) {
   return (
     <tr
       key={`${connection.localAddress}-${connection.localPort}-${connection.remoteAddress}-${connection.remotePort}-${index}`}
@@ -102,6 +102,11 @@ function renderConnectionRow(connection: ActiveConnectionResult, index: number) 
       </td>
       <td className="px-3 py-1.5 font-mono">
         {connection.remoteAddress}:{connection.remotePort}
+        {geoIpEnabled && ipCountryCache.get(connection.remoteAddress) && (
+          <span className="ml-1 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+            ({ipCountryCache.get(connection.remoteAddress)})
+          </span>
+        )}
       </td>
       <td className="px-3 py-1.5 font-mono">{connection.pid ?? '—'}</td>
       <td
@@ -238,6 +243,8 @@ function PortsTableSkeleton() {
   );
 }
 
+const ipCountryCache = new Map<string, string>();
+
 export function Security() {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<SecurityStatusResult | null>(null);
@@ -247,6 +254,29 @@ export function Security() {
   const [connectionFilter, setConnectionFilter] = useState<string>('all');
   /** Task 032: diff temporal de conexiones desde la última lectura */
   const [connDiff, setConnDiff] = useState<{ added: number; removed: number } | null>(null);
+  /** Task 032.5: geolocalización opt-in (envía IPs a un servicio externo). */
+  const [geoIpEnabled, setGeoIpEnabled] = useState<boolean>(() => {
+    try { return localStorage.getItem('pcsuite.security.geoip') === '1'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    if (!geoIpEnabled || !snapshot) return;
+    const ips = [...new Set(snapshot.connections.map((c) => c.remoteAddress))]
+      .filter((ip) => ip && !ip.startsWith('127.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.'));
+    ips.forEach((ip) => {
+      if (ipCountryCache.has(ip)) return;
+      ipCountryCache.set(ip, '…');
+      fetch(`http://ip-api.com/json/${ip}?fields=countryCode`)
+        .then((r) => r.json())
+        .then((d) => {
+          ipCountryCache.set(ip, (d?.countryCode as string) || '—');
+          setSnapshot((s) => (s ? { ...s } : s));
+        })
+        .catch(() => {
+          ipCountryCache.set(ip, '—');
+        });
+    });
+  }, [geoIpEnabled, snapshot]);
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -600,7 +630,23 @@ export function Security() {
                     {connDiff.removed > 0 && `-${connDiff.removed} cerradas`}
                   </span>
                 )}
-                {/* Task 032: filtro por proceso */}
+                {/* Task 032.5: geolocalización opt-in */}
+                <label
+                  className="flex items-center gap-1 text-xs"
+                  style={{ color: 'var(--pcs-text-muted)' }}
+                  title="Envía las IPs remotas a un servicio externo (ip-api.com) para obtener el país. Desactivado por defecto por privacidad."
+                >
+                  <input
+                    type="checkbox"
+                    checked={geoIpEnabled}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setGeoIpEnabled(v);
+                      try { localStorage.setItem('pcsuite.security.geoip', v ? '1' : '0'); } catch { /* noop */ }
+                    }}
+                  />
+                  Geo IP
+                </label>
                 <select
                   value={connectionFilter}
                   onChange={(e) => setConnectionFilter(e.target.value)}
@@ -662,10 +708,10 @@ export function Security() {
                         </thead>
                         <tbody>
                   {connectionFilter === 'all'
-                    ? snapshot.connections.map((connection, index) => renderConnectionRow(connection, index))
+                    ? snapshot.connections.map((connection, index) => renderConnectionRow(connection, index, geoIpEnabled))
                     : snapshot.connections
                         .filter((c) => c.process?.name === connectionFilter)
-                        .map((connection, index) => renderConnectionRow(connection, index))}
+                        .map((connection, index) => renderConnectionRow(connection, index, geoIpEnabled))}
                         </tbody>
                       </table>
                     </div>

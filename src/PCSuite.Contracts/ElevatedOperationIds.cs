@@ -33,6 +33,7 @@ public static class ElevatedOperationIds
     // elevados desde 2026-10-18 por runas DIRECTO de clamscan con --log
     // temporal (tail en vivo) — no pasan por este helper. Nunca un shell.
     public const string ClamavUpdateDefinitions = "elevated.clamav.updateDefinitions";
+    public const string ClamavKillScan = "elevated.clamav.killScan";
 
     // Regla de firewall de Local Share (Task 016.6): la ÚNICA mutación de
     // firewall. El payload solo aporta el puerto, que se REVALIDA (entero
@@ -62,6 +63,7 @@ public static class ElevatedOperationIds
         WingetUninstall,
         WslUpdate,
         ClamavUpdateDefinitions,
+        ClamavKillScan,
         LocalShareFirewallRule,
         UninstallRunOfficial,
         UninstallCleanup,

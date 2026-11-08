@@ -159,6 +159,15 @@ export const OperationIds = {
   /** Task 038: Ollama — detección y listado de modelos. */
   ollamaDetect: 'ollama.detect',
   ollamaListModels: 'ollama.listModels',
+  /** Task 040: inspección web. */
+  webInspectUrl: 'web.inspectUrl',
+  webCleanTracking: 'web.cleanTracking',
+  webCompareUrls: 'web.compareUrls',
+  webCheckTls: 'web.checkTls',
+  webCheckHeaders: 'web.checkHeaders',
+  webExpandUrl: 'web.expandUrl',
+  webResolveDns: 'web.resolveDns',
+  webCheckEmail: 'web.checkEmail',
 } as const;
 
 export const EventIds = {
@@ -1262,4 +1271,74 @@ export interface ActivityEntry {
 /** Resultado de activity/history. */
 export interface ActivityHistoryResult {
   entries: ActivityEntry[];
+}/** Resultados web.* (Task 040). */
+export interface WebUrlInspectionResult {
+  host: string;
+  scripts: string[];
+  suspicious: { char: string; script: string }[];
+  punycode: boolean;
+  mixedScripts: boolean;
+  verdict: string;
+  typosquatCandidates: string[];
+}
+export interface WebUrlCleanResult {
+  originalUrl: string;
+  cleanedUrl: string;
+  removed: string[];
+}
+export interface WebUrlCompareResult {
+  urlA: string;
+  urlB: string;
+  differences: string[];
+}
+export interface WebTlsInspectionResult {
+  host: string;
+  issuer?: string | null;
+  subject?: string | null;
+  validFrom?: string | null;
+  validTo?: string | null;
+  subjectAlternativeNames: string[];
+  expired: boolean;
+  expiresSoon: boolean;
+  verdict: string;
+  detail?: string | null;
+}
+export interface WebHttpHeadersInspectionResult {
+  url: string;
+  hsts?: string | null;
+  contentSecurityPolicy?: string | null;
+  xFrameOptions?: string | null;
+  xContentTypeOptions?: string | null;
+  cookies: string[];
+  statusCode: number;
+  verdict: string;
+  detail?: string | null;
+}
+export interface WebUrlExpansionResult {
+  originalUrl: string;
+  finalUrl: string;
+  chain: string[];
+  shortened: boolean;
+  detail?: string | null;
+}
+export interface WebDnsRecordResult {
+  type: string;
+  value: string;
+  ttl: number;
+}
+export interface WebDnsInspectionResult {
+  host: string;
+  records: WebDnsRecordResult[];
+  detail?: string | null;
+}
+export interface WebEmailInspectionResult {
+  email: string;
+  formatValid: boolean;
+  domain?: string | null;
+  mxRecords: string[];
+  spf?: string | null;
+  dmarc?: string | null;
+  dkimSelector?: string | null;
+  verdict: string;
+  detail?: string | null;
 }

@@ -214,6 +214,10 @@ public partial class MainForm : Form
         // archivos a Markdown. Todo local, sin elevación salvo que pip lo pida.
         var aiService = new AiService(locator, processRunner, _loggerFactory.CreateLogger<AiService>());
 
+        // Web (Task 040): inspección de URLs/dominios — comprobaciones locales
+        // sin red + TLS/cabeceras/redirecciones/DNS/correo con timeout.
+        var webInspectorService = new PCSuite.Infrastructure.Web.WebInspectorService();
+
         // Local Share (Task 016): servicio de transferencia de archivos en LAN.
         // elevationManager solo se usa para la regla de firewall (UAC puntual);
         // las transferencias corren con privilegios normales de usuario.
@@ -447,6 +451,14 @@ public partial class MainForm : Form
                 new AiConvertOperation(aiService),
                 new OllamaDetectOperation(aiService),
                 new OllamaListModelsOperation(aiService),
+                new WebInspectUrlOperation(webInspectorService),
+                new WebCleanTrackingOperation(webInspectorService),
+                new WebCompareUrlsOperation(webInspectorService),
+                new WebCheckTlsOperation(webInspectorService),
+                new WebCheckHeadersOperation(webInspectorService),
+                new WebExpandUrlOperation(webInspectorService),
+                new WebResolveDnsOperation(webInspectorService),
+                new WebCheckEmailOperation(webInspectorService),
                 new PluginListOperation(pluginService),
                 new PluginCheckUpdateOperation(pluginService),
                 new PluginLaunchOperation(pluginService),

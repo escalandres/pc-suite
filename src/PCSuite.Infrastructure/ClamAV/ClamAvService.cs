@@ -609,6 +609,7 @@ public sealed class ClamAvService : IClamAvService
         var logPath = Path.Combine(
             Path.GetTempPath(),
             $"pcsuite-clamav-scan-{Guid.NewGuid():N}.log");
+        int scanPid = 0;
         try
         {
             var executeTask = _processRunner.ExecuteAsync(
@@ -617,21 +618,49 @@ public sealed class ClamAvService : IClamAvService
                     FileName = clamscanPath,
                     Arguments = ClamAvArguments.WithScanLog(arguments, logPath),
                     RequiresElevation = true,
+                    OnProcessStarted = pid => scanPid = pid,
                 },
                 cancellationToken);
 
-            // Tail en vivo del log: mientras clamscan corre (y UAC pendiente),
-            // cada ciclo entrega solo las líneas NUEVAS al mismo reporter que
-            // usaban los pipes — el progreso por archivo es idéntico.
+            // Tail en vivo del log...
             var offset = 0L;
             var partialLine = new StringBuilder();
-            while (!executeTask.IsCompleted)
+            try
             {
-                await Task.Delay(ScanLogPollInterval, cancellationToken).ConfigureAwait(false);
-                foreach (var line in ClamAvScanLogTail.ReadNewLines(logPath, ref offset, partialLine))
+                while (!executeTask.IsCompleted)
                 {
-                    progressReporter.OnOutputLine(line);
+                    await Task.Delay(ScanLogPollInterval, cancellationToken).ConfigureAwait(false);
+                    foreach (var line in ClamAvScanLogTail.ReadNewLines(logPath, ref offset, partialLine))
+                    {
+                        progressReporter.OnOutputLine(line);
+                    }
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 25.3-full: matar el clamscan elevado de verdad (el padre no
+                // puede hacerlo por Access Denied). Se lanza un kill elevado;
+                // si el usuario descarta su UAC, el proceso sigue vivo y el
+                // usuario lo cierra a mano (degradación elegante, como el lite).
+                if (scanPid > 0)
+                {
+                    try
+                    {
+                        await _elevation.RunElevatedAsync(
+                            new ElevatedOperation
+                            {
+                                OperationId = ElevatedOperationIds.ClamavKillScan,
+                                Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { pid = scanPid }),
+                            },
+                            CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // Best-effort: si el kill elevado falla, el proceso queda
+                        // vivo y el usuario lo cierra manualmente.
+                    }
+                }
+                throw;
             }
 
             var result = await executeTask.ConfigureAwait(false);

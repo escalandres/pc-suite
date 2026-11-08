@@ -204,7 +204,7 @@ export function AiPage() {
               markItDown no está instalado. Se requiere Python + markItDown para
               convertir archivos a Markdown.
             </p>
-            {status.detail && (
+            {status?.detail && (
               <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>{status.detail}</p>
             )}
             <button
@@ -353,7 +353,7 @@ export function AiPage() {
               Ollama no está instalado. Para usar modelos locales, instálalo desde
               <a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="text-(--pcs-accent) hover:underline">ollama.com</a>.
             </p>
-            {ollamaStatus.detail && (
+            {ollamaStatus?.detail && (
               <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>{ollamaStatus.detail}</p>
             )}
           </div>

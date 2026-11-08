@@ -32,7 +32,7 @@ public sealed class DeveloperNpkillOperation : IOperation
             var psi = new ProcessStartInfo
             {
                 FileName = powershell,
-                Arguments = $"-NoProfile -Command \"npx npkill --directory '{path}'\"",
+                Arguments = $"-NoProfile -NoExit -ExecutionPolicy Bypass -Command \"npx npkill --directory '{path}'\"",
                 UseShellExecute = true,
                 Verb = "runas",
                 WorkingDirectory = path,

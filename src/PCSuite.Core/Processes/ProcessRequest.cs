@@ -49,4 +49,7 @@ public sealed record ProcessRequest
 
     /// <summary>Se invoca por cada línea de stderr conforme llega (streaming).</summary>
     public Action<string>? OnStandardError { get; init; }
+
+    /// <summary>Se invoca con el PID del proceso justo después de arrancarlo (útil para cancelación de procesos elevados que el padre no puede matar directamente).</summary>
+    public Action<int>? OnProcessStarted { get; init; }
 }

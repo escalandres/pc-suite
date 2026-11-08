@@ -430,4 +430,30 @@ public static class OperationIds
 
     /// <summary>Aplica la limpieza de residuos sobre el plan aprobado (elevado, UAC puntual).</summary>
     public const string UninstallCleanup = "uninstall.cleanup";
+
+    // ---------------- Task 040: inspección web ----------------
+
+    /// <summary>Inspección local de una URL (homógrafos, punycode, typosquatting).</summary>
+    public const string WebInspectUrl = "web.inspectUrl";
+
+    /// <summary>Limpia parámetros de tracking de una URL.</summary>
+    public const string WebCleanTracking = "web.cleanTracking";
+
+    /// <summary>Compara dos URLs y devuelve sus diferencias.</summary>
+    public const string WebCompareUrls = "web.compareUrls";
+
+    /// <summary>Inspección TLS de un host.</summary>
+    public const string WebCheckTls = "web.checkTls";
+
+    /// <summary>Inspección de cabeceras HTTP de una URL.</summary>
+    public const string WebCheckHeaders = "web.checkHeaders";
+
+    /// <summary>Expande una URL (cadena de redirecciones).</summary>
+    public const string WebExpandUrl = "web.expandUrl";
+
+    /// <summary>Consulta DNS de un host.</summary>
+    public const string WebResolveDns = "web.resolveDns";
+
+    /// <summary>Validación de un correo electrónico (formato + MX + SPF/DMARC/DKIM).</summary>
+    public const string WebCheckEmail = "web.checkEmail";
 }

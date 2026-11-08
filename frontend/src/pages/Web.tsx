@@ -1,162 +1,416 @@
 import { useState } from 'react';
-import { ShieldAlert, ShieldCheck } from 'lucide-react';
-import { useTranslation } from '../hooks/useTranslation';
+import { Globe } from 'lucide-react';
+import { bridge, BridgeError } from '../services/pcsuiteBridge';
+import { OperationIds } from '../types/bridge';
+import type {
+  WebUrlInspectionResult,
+  WebUrlCleanResult,
+  WebUrlCompareResult,
+  WebTlsInspectionResult,
+  WebHttpHeadersInspectionResult,
+  WebUrlExpansionResult,
+  WebDnsInspectionResult,
+  WebEmailInspectionResult,
+} from '../types/bridge';
 
-function scriptOf(ch: string): string {
-  const code = ch.codePointAt(0)!;
-  // Latin
-  if ((code >= 0x0041 && code <= 0x005A) || (code >= 0x0061 && code <= 0x007A) ||
-      (code >= 0x00C0 && code <= 0x024F) || (code >= 0x1E00 && code <= 0x1EFF)) return 'Latin';
-  // Cyrillic
-  if (code >= 0x0400 && code <= 0x04FF) return 'Cyrillic';
-  // Greek
-  if (code >= 0x0370 && code <= 0x03FF) return 'Greek';
-  // Armenian
-  if (code >= 0x0530 && code <= 0x058F) return 'Armenian';
-  // Hebrew
-  if (code >= 0x0590 && code <= 0x05FF) return 'Hebrew';
-  // Arabic
-  if (code >= 0x0600 && code <= 0x06FF) return 'Arabic';
-  // Hangul
-  if (code >= 0xAC00 && code <= 0xD7AF) return 'Hangul';
-  // CJK
-  if (code >= 0x4E00 && code <= 0x9FFF) return 'CJK';
-  // Digits / punctuation / symbols
-  if (code >= 0x0030 && code <= 0x0039) return 'Digit';
-  if (code <= 0x007F) return 'ASCII';
-  return 'Other';
+type Tab = 'url' | 'tls' | 'headers' | 'dns' | 'email' | 'utils';
+
+const TAB_SUBTITLES: Record<Tab, string> = {
+  url: 'Analiza un dominio en busca de homógrafos, punycode y typosquatting (suplantación de marcas).',
+  tls: 'Inspecciona el certificado TLS de un host: emisor, validez, SAN y expiración.',
+  headers: 'Comprueba las cabeceras de seguridad HTTP de una URL (HSTS, CSP, X-Frame-Options, etc.).',
+  dns: 'Consulta registros DNS (A, AAAA, MX, TXT, CNAME, NS) de un host.',
+  email: 'Valida un correo: formato, MX, SPF, DMARC y DKIM.',
+  utils: 'Limpia parámetros de tracking, compara dos URLs y expande enlaces cortos.',
+};
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'url', label: 'URL' },
+  { id: 'tls', label: 'TLS' },
+  { id: 'headers', label: 'Cabeceras' },
+  { id: 'dns', label: 'DNS' },
+  { id: 'email', label: 'Correo' },
+  { id: 'utils', label: 'Utilidades' },
+];
+
+function errMessage(e: unknown, fallback: string): string {
+  return e instanceof BridgeError ? e.message : fallback;
 }
 
 export function Web() {
-  const { t } = useTranslation();
-  const [url, setUrl] = useState('');
-  const [result, setResult] = useState<{
-    host: string;
-    scripts: string[];
-    suspicious: { char: string; script: string }[];
-    punycode: boolean;
-    verdict: 'safe' | 'suspicious' | 'invalid';
-  } | null>(null);
+  const [tab, setTab] = useState<Tab>('url');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const check = () => {
-    let parsed: URL;
+  // URL tab
+  const [urlInput, setUrlInput] = useState('');
+  const [urlResult, setUrlResult] = useState<WebUrlInspectionResult | null>(null);
+  // TLS
+  const [tlsHost, setTlsHost] = useState('');
+  const [tlsResult, setTlsResult] = useState<WebTlsInspectionResult | null>(null);
+  // Headers
+  const [headersUrl, setHeadersUrl] = useState('');
+  const [headersResult, setHeadersResult] = useState<WebHttpHeadersInspectionResult | null>(null);
+  // DNS
+  const [dnsHost, setDnsHost] = useState('');
+  const [dnsType, setDnsType] = useState('A');
+  const [dnsResult, setDnsResult] = useState<WebDnsInspectionResult | null>(null);
+  // Email
+  const [emailInput, setEmailInput] = useState('');
+  const [emailResult, setEmailResult] = useState<WebEmailInspectionResult | null>(null);
+  // Utils
+  const [cleanInput, setCleanInput] = useState('');
+  const [cleanResult, setCleanResult] = useState<WebUrlCleanResult | null>(null);
+  const [cmpA, setCmpA] = useState('');
+  const [cmpB, setCmpB] = useState('');
+  const [cmpResult, setCmpResult] = useState<WebUrlCompareResult | null>(null);
+  const [expInput, setExpInput] = useState('');
+  const [expResult, setExpResult] = useState<WebUrlExpansionResult | null>(null);
+
+  const run = async <T,>(fn: () => Promise<T>, onOk: (v: T) => void) => {
+    setBusy(true);
+    setError(null);
     try {
-      parsed = new URL(url.trim());
-    } catch {
-      setResult({ host: '', scripts: [], suspicious: [], punycode: false, verdict: 'invalid' });
-      return;
+      const v = await fn();
+      onOk(v);
+    } catch (e) {
+      setError(errMessage(e, 'Error'));
+    } finally {
+      setBusy(false);
     }
-    const host = parsed.hostname;
-    const punycode = host.startsWith('xn--') || host.includes('.xn--');
-
-    const chars = [...host];
-    const scriptCounts: Record<string, number> = {};
-    for (const ch of chars) {
-      const sc = scriptOf(ch);
-      scriptCounts[sc] = (scriptCounts[sc] || 0) + 1;
-    }
-    const scripts = Object.keys(scriptCounts);
-    // Dominant script (excluding ASCII/digit/punctuation)
-    const meaningful = scripts.filter((s) => s !== 'ASCII' && s !== 'Digit');
-    const dominant = meaningful.length > 0
-      ? meaningful.reduce((a, b) => (scriptCounts[a] >= scriptCounts[b] ? a : b))
-      : 'ASCII';
-
-    const suspicious = chars
-      .map((ch) => ({ char: ch, script: scriptOf(ch) }))
-      .filter((c) => c.script !== 'ASCII' && c.script !== 'Digit' && c.script !== dominant);
-
-    const mixedScripts = meaningful.length > 1;
-    const verdict = mixedScripts || punycode ? 'suspicious' : 'safe';
-
-    setResult({ host, scripts, suspicious, punycode, verdict });
   };
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">{t('sidebar.web')}</h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--pcs-text-muted)' }}>
-          {t('pages.web.subtitle')}
-        </p>
-      </header>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Globe size={18} aria-hidden />
+        <h1 className="text-lg font-semibold">Inspector web</h1>
+      </div>
 
-      <div className="space-y-4 rounded-lg border p-4" style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t('pages.web.urlLabel')}</label>
+      <div className="flex flex-wrap gap-1">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className="rounded-md border px-3 py-1 text-xs font-medium"
+            style={{
+              borderColor: 'var(--pcs-border)',
+              background: tab === t.id ? 'var(--pcs-accent)' : 'var(--pcs-surface)',
+              color: tab === t.id ? '#fff' : 'var(--pcs-text)',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+        {TAB_SUBTITLES[tab]}
+      </p>
+
+      {error && (
+        <div className="rounded-md border px-3 py-2 text-xs" style={{ borderColor: 'var(--pcs-danger)', color: 'var(--pcs-danger)' }}>
+          {error}
+        </div>
+      )}
+
+      {tab === 'url' && (
+        <section className="space-y-3 rounded-lg border p-4" style={{ borderColor: 'var(--pcs-border)' }}>
           <div className="flex gap-2">
             <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com"
-              className="flex-1 rounded-md border px-3 py-2 text-sm"
-              style={{ background: 'var(--pcs-bg)', color: 'var(--pcs-text)', borderColor: 'var(--pcs-border)' }}
+              className="flex-1 rounded-md border px-2 py-1 text-sm"
+              style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+              placeholder="https://ejemplo.com"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
             />
-            <button type="button" onClick={check} className="rounded-md px-4 py-2 text-sm font-medium cursor-pointer" style={{ background: 'var(--pcs-accent)', color: '#fff' }}>
-              {t('pages.web.check')}
+            <button
+              type="button"
+              disabled={busy || !urlInput.trim()}
+              onClick={() => run(
+                () => bridge.call<WebUrlInspectionResult>(OperationIds.webInspectUrl, { url: urlInput.trim() }),
+                setUrlResult,
+              )}
+              className="rounded-md px-3 py-1 text-xs font-medium text-white"
+              style={{ background: 'var(--pcs-accent)' }}
+            >
+              Inspeccionar
             </button>
           </div>
-        </div>
+          {urlResult && (
+            <div className="space-y-2 text-sm">
+              <div><strong>Host:</strong> {urlResult.host}</div>
+              <div><strong>Veredicto:</strong> {urlResult.verdict}</div>
+              <div><strong>Punycode:</strong> {String(urlResult.punycode)}</div>
+              <div><strong>Scripts mixtos:</strong> {String(urlResult.mixedScripts)}</div>
+              {urlResult.suspicious.length > 0 && (
+                <div><strong>Caracteres sospechosos:</strong> {urlResult.suspicious.map((s) => `${s.char}(${s.script})`).join(', ')}</div>
+              )}
+              {urlResult.typosquatCandidates.length > 0 && (
+                <div><strong>Typosquatting:</strong> {urlResult.typosquatCandidates.join(', ')}</div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
-        {result && (
-          <div className="space-y-3">
-            {result.verdict === 'invalid' && (
-              <p className="text-sm" style={{ color: 'var(--pcs-danger)' }}>{t('pages.web.invalidUrl')}</p>
-            )}
-            {result.verdict !== 'invalid' && (
-              <>
-                <div className="flex items-center gap-2">
-                  {result.verdict === 'safe' ? (
-                    <ShieldCheck size={20} style={{ color: 'var(--pcs-success)' }} />
-                  ) : (
-                    <ShieldAlert size={20} style={{ color: 'var(--pcs-danger)' }} />
-                  )}
-                  <span className="font-medium" style={{ color: result.verdict === 'safe' ? 'var(--pcs-success)' : 'var(--pcs-danger)' }}>
-                    {result.verdict === 'safe' ? t('pages.web.safe') : t('pages.web.suspicious')}
-                  </span>
-                </div>
+      {tab === 'tls' && (
+        <section className="space-y-3 rounded-lg border p-4" style={{ borderColor: 'var(--pcs-border)' }}>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border px-2 py-1 text-sm"
+              style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+              placeholder="example.com"
+              value={tlsHost}
+              onChange={(e) => setTlsHost(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={busy || !tlsHost.trim()}
+              onClick={() => run(
+                () => bridge.call<WebTlsInspectionResult>(OperationIds.webCheckTls, { host: tlsHost.trim() }),
+                setTlsResult,
+              )}
+              className="rounded-md px-3 py-1 text-xs font-medium text-white"
+              style={{ background: 'var(--pcs-accent)' }}
+            >
+              Comprobar TLS
+            </button>
+          </div>
+          {tlsResult && (
+            <div className="space-y-1 text-sm">
+              <div><strong>Veredicto:</strong> {tlsResult.verdict}</div>
+              <div><strong>Emisor:</strong> {tlsResult.issuer ?? '—'}</div>
+              <div><strong>Sujeto:</strong> {tlsResult.subject ?? '—'}</div>
+              <div><strong>Válido desde:</strong> {tlsResult.validFrom ?? '—'}</div>
+              <div><strong>Válido hasta:</strong> {tlsResult.validTo ?? '—'}</div>
+              <div><strong>Expirado:</strong> {String(tlsResult.expired)}</div>
+              <div><strong>SAN:</strong> {tlsResult.subjectAlternativeNames.join(', ') || '—'}</div>
+              {tlsResult.detail && <div><strong>Detalle:</strong> {tlsResult.detail}</div>}
+            </div>
+          )}
+        </section>
+      )}
 
-                <dl className="grid grid-cols-1 gap-2 text-sm">
-                  <div className="flex justify-between gap-4">
-                    <dt style={{ color: 'var(--pcs-text-muted)' }}>{t('pages.web.host')}</dt>
-                    <dd className="text-right font-mono break-all">{result.host}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt style={{ color: 'var(--pcs-text-muted)' }}>{t('pages.web.scripts')}</dt>
-                    <dd className="text-right">{result.scripts.join(', ')}</dd>
-                  </div>
-                  {result.punycode && (
-                    <div className="flex justify-between gap-4">
-                      <dt style={{ color: 'var(--pcs-text-muted)' }}>{t('pages.web.punycode')}</dt>
-                      <dd className="text-right" style={{ color: 'var(--pcs-warning)' }}>{t('pages.web.punycodeYes')}</dd>
-                    </div>
-                  )}
-                </dl>
+      {tab === 'headers' && (
+        <section className="space-y-3 rounded-lg border p-4" style={{ borderColor: 'var(--pcs-border)' }}>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border px-2 py-1 text-sm"
+              style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+              placeholder="https://ejemplo.com"
+              value={headersUrl}
+              onChange={(e) => setHeadersUrl(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={busy || !headersUrl.trim()}
+              onClick={() => run(
+                () => bridge.call<WebHttpHeadersInspectionResult>(OperationIds.webCheckHeaders, { url: headersUrl.trim() }),
+                setHeadersResult,
+              )}
+              className="rounded-md px-3 py-1 text-xs font-medium text-white"
+              style={{ background: 'var(--pcs-accent)' }}
+            >
+              Comprobar cabeceras
+            </button>
+          </div>
+          {headersResult && (
+            <div className="space-y-1 text-sm">
+              <div><strong>Estado:</strong> {headersResult.statusCode} · {headersResult.verdict}</div>
+              <div><strong>HSTS:</strong> {headersResult.hsts ?? '—'}</div>
+              <div><strong>CSP:</strong> {headersResult.contentSecurityPolicy ?? '—'}</div>
+              <div><strong>X-Frame-Options:</strong> {headersResult.xFrameOptions ?? '—'}</div>
+              <div><strong>X-Content-Type-Options:</strong> {headersResult.xContentTypeOptions ?? '—'}</div>
+              {headersResult.cookies.length > 0 && <div><strong>Cookies:</strong> {headersResult.cookies.join('; ')}</div>}
+              {headersResult.detail && <div><strong>Detalle:</strong> {headersResult.detail}</div>}
+            </div>
+          )}
+        </section>
+      )}
 
-                {result.suspicious.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{t('pages.web.suspiciousChars')}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {result.suspicious.map((c, i) => (
-                        <span key={i} className="rounded px-2 py-0.5 text-xs font-mono" style={{ background: 'color-mix(in srgb, var(--pcs-danger) 15%, transparent)', color: 'var(--pcs-danger)' }}>
-                          {c.char} ({c.script})
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+      {tab === 'dns' && (
+        <section className="space-y-3 rounded-lg border p-4" style={{ borderColor: 'var(--pcs-border)' }}>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border px-2 py-1 text-sm"
+              style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+              placeholder="ejemplo.com"
+              value={dnsHost}
+              onChange={(e) => setDnsHost(e.target.value)}
+            />
+            <select
+              value={dnsType}
+              onChange={(e) => setDnsType(e.target.value)}
+              className="rounded-md border px-2 py-1 text-xs"
+              style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+            >
+              {['A', 'AAAA', 'MX', 'TXT', 'CNAME', 'NS'].map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={busy || !dnsHost.trim()}
+              onClick={() => run(
+                () => bridge.call<WebDnsInspectionResult>(OperationIds.webResolveDns, { host: dnsHost.trim(), types: [dnsType] }),
+                setDnsResult,
+              )}
+              className="rounded-md px-3 py-1 text-xs font-medium text-white"
+              style={{ background: 'var(--pcs-accent)' }}
+            >
+              Consultar
+            </button>
+          </div>
+          {dnsResult && (
+            <div className="space-y-1 text-sm">
+              {dnsResult.records.length === 0 && <div>Sin registros.</div>}
+              {dnsResult.records.map((r, i) => (
+                <div key={i} className="font-mono text-xs">{r.type} {r.value} (ttl {r.ttl})</div>
+              ))}
+              {dnsResult.detail && <div><strong>Detalle:</strong> {dnsResult.detail}</div>}
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === 'email' && (
+        <section className="space-y-3 rounded-lg border p-4" style={{ borderColor: 'var(--pcs-border)' }}>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border px-2 py-1 text-sm"
+              style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+              placeholder="usuario@ejemplo.com"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={busy || !emailInput.trim()}
+              onClick={() => run(
+                () => bridge.call<WebEmailInspectionResult>(OperationIds.webCheckEmail, { email: emailInput.trim() }),
+                setEmailResult,
+              )}
+              className="rounded-md px-3 py-1 text-xs font-medium text-white"
+              style={{ background: 'var(--pcs-accent)' }}
+            >
+              Validar
+            </button>
+          </div>
+          {emailResult && (
+            <div className="space-y-1 text-sm">
+              <div><strong>Veredicto:</strong> {emailResult.verdict}</div>
+              <div><strong>Formato válido:</strong> {String(emailResult.formatValid)}</div>
+              <div><strong>Dominio:</strong> {emailResult.domain ?? '—'}</div>
+              <div><strong>MX:</strong> {emailResult.mxRecords.join(', ') || '—'}</div>
+              <div><strong>SPF:</strong> {emailResult.spf ?? '—'}</div>
+              <div><strong>DMARC:</strong> {emailResult.dmarc ?? '—'}</div>
+              <div><strong>DKIM:</strong> {emailResult.dkimSelector ?? '—'}</div>
+              {emailResult.detail && <div><strong>Detalle:</strong> {emailResult.detail}</div>}
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === 'utils' && (
+        <section className="space-y-4 rounded-lg border p-4" style={{ borderColor: 'var(--pcs-border)' }}>
+          <div className="space-y-2">
+            <div className="text-xs font-semibold">Limpiar tracking</div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border px-2 py-1 text-sm"
+                style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+                placeholder="https://ejemplo.com/?utm_source=x&fbclid=y"
+                value={cleanInput}
+                onChange={(e) => setCleanInput(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={busy || !cleanInput.trim()}
+                onClick={() => run(
+                  () => bridge.call<WebUrlCleanResult>(OperationIds.webCleanTracking, { url: cleanInput.trim() }),
+                  setCleanResult,
                 )}
+                className="rounded-md px-3 py-1 text-xs font-medium text-white"
+                style={{ background: 'var(--pcs-accent)' }}
+              >
+                Limpiar
+              </button>
+            </div>
+            {cleanResult && <div className="text-xs font-mono break-all">{cleanResult.cleanedUrl}</div>}
+          </div>
 
-                {result.verdict === 'suspicious' && (
-                  <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-                    {t('pages.web.explanation')}
-                  </p>
+          <div className="space-y-2">
+            <div className="text-xs font-semibold">Comparar URLs</div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border px-2 py-1 text-sm"
+                style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+                placeholder="URL A"
+                value={cmpA}
+                onChange={(e) => setCmpA(e.target.value)}
+              />
+              <input
+                className="flex-1 rounded-md border px-2 py-1 text-sm"
+                style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+                placeholder="URL B"
+                value={cmpB}
+                onChange={(e) => setCmpB(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={busy || !cmpA.trim() || !cmpB.trim()}
+                onClick={() => run(
+                  () => bridge.call<WebUrlCompareResult>(OperationIds.webCompareUrls, { urlA: cmpA.trim(), urlB: cmpB.trim() }),
+                  setCmpResult,
                 )}
-              </>
+                className="rounded-md px-3 py-1 text-xs font-medium text-white"
+                style={{ background: 'var(--pcs-accent)' }}
+              >
+                Comparar
+              </button>
+            </div>
+            {cmpResult && (
+              <ul className="list-disc pl-5 text-xs">
+                {cmpResult.differences.map((d, i) => <li key={i}>{d}</li>)}
+              </ul>
             )}
           </div>
-        )}
-      </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-semibold">Expandir URL (redirecciones)</div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border px-2 py-1 text-sm"
+                style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+                placeholder="https://bit.ly/..."
+                value={expInput}
+                onChange={(e) => setExpInput(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={busy || !expInput.trim()}
+                onClick={() => run(
+                  () => bridge.call<WebUrlExpansionResult>(OperationIds.webExpandUrl, { url: expInput.trim() }),
+                  setExpResult,
+                )}
+                className="rounded-md px-3 py-1 text-xs font-medium text-white"
+                style={{ background: 'var(--pcs-accent)' }}
+              >
+                Expandir
+              </button>
+            </div>
+            {expResult && (
+              <div className="text-xs space-y-1">
+                <div><strong>Final:</strong> {expResult.finalUrl}</div>
+                {expResult.chain.length > 1 && <div><strong>Cadena:</strong> {expResult.chain.join(' → ')}</div>}
+                {expResult.detail && <div><strong>Detalle:</strong> {expResult.detail}</div>}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
