@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCSuite 0.11.0 — Notas de versión</title>
+  <link rel="stylesheet" href="/pcsuite/assets/styles.css">
+  <link rel="icon" type="image/svg+xml" href="/pcsuite/assets/logo.svg">
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/pcsuite/">
+      <img src="/pcsuite/assets/logo.svg" alt="PCSuite" width="28" height="28">
+      <span>PCSuite</span>
+    </a>
+    <div class="nav-links">
+      <a href="/pcsuite/#descarga">Descarga</a>
+      <a href="/pcsuite/#actualizar">Actualizar</a>
+    </div>
+    <span class="nav-studio">AES Studio</span>
+  </nav>
+  <main class="section">
+    <h1>PCSuite 0.11.0</h1>
+    <p class="section-sub">Publicado el 7 de noviembre de 2026</p>
+
+    <article class="notes-content">
+<h1>PCSuite 0.11.0 - Release notes</h1>\n\n<blockquote><p>Tag: <code>pcsuite-v0.11.0</code></p></blockquote>
+<blockquote><p>SHA-256: installer <code>TBD</code> - portable <code>TBD</code></p></blockquote>\n\n<hr>\n\n<h2>Title</h2>\n\n<p>`<code><code>
+PCSuite 0.11.0
+</code></code><code></p>\n\n<h2>Description (Markdown)</h2>\n\n<p></code>`<code><code>markdown
+<h3>New: "Web" module - URL and domain inspection kit</h3></p>\n\n<p>A complete toolkit to analyze URLs and domains without leaving the app:</p>\n\n<ul><li><strong>URL inspection</strong>: homoglyphs (characters from other alphabets that mimic Latin letters), punycode and typosquatting (detection of impersonated brands, e.g. "gogle" vs "google").</li>
+<li><strong>TLS</strong>: issuer, subject, validity, SANs and certificate expiry alert.</li>
+<li><strong>HTTP headers</strong>: HSTS, CSP, X-Frame-Options, X-Content-Type-Options, cookies and status code.</li>
+<li><strong>DNS</strong>: A/AAAA/MX/TXT/CNAME/NS records.</li>
+<li><strong>Email</strong>: format validation + MX + SPF/DMARC/DKIM.</li>
+<li><strong>Utilities</strong>: tracking parameter cleaner (utm_*, fbclid, ...), two-URL comparison and short-link expansion (redirect chain).</li>
+</ul>
+<h3>New: "AI" module - Markdown conversion and Ollama</h3>\n\n<ul><li><strong>markItDown</strong>: detects Python and markItDown, installs the package via pip if missing, and converts files (PDF, DOCX, XLSX, PPTX, images, audio, HTML...) to Markdown. The </code>.md<code> is generated next to the original file.</li>
+<li><strong>Ollama</strong>: detects the installation and lists local models (name, size, date).</li>
+</ul>
+<h3>ClamAV: real cancellation of elevated scans</h3>\n\n<p>Cancelling a scan now kills the elevated ClamAV process for real (previously only the wait was stopped and the console could stay open). Graceful degradation if the user declines the UAC prompt.</p>\n\n<h3>Local Share: temporary web client</h3>\n\n<p>Time-limited HTTP link protected by a cryptographic token, so any browser (without PCSuite installed) can download the shared files. Read-only, anti-traversal, auto-shutdown.</p>\n\n<h3>Security Center: opt-in Geo IP</h3>\n\n<p>"Geo IP" toggle (off by default for privacy) that looks up the country of remote IPs in TCP connections. Clear notice that IPs are sent to an external service.</p>\n\n<h3>Dev Tools: npkill fix</h3>\n\n<p>The "Select folder and run npkill" button now keeps the console open and shows errors instead of closing silently.</p>\n\n<h3>Documentation and quality</h3>\n\n<ul><li>Vitest configured for the frontend (tests for the AI and Web pages).</li>
+<li>xUnit: 24 tests for the AI module and 9 for the Web module.</li>
+<li>Cross-platform roadmap (Mac/Linux/Android) recorded in the plan.</li>
+</ul>
+#### Compatibility note\n\n<p>All protocol changes are additive: a PCSuite 0.10.x receiving transfers or messages from a 0.11.0 processes them exactly as before.
+</code></code><code><code></p>\n\n<h2>Create the release</h2>\n\n<p></code></code><code>powershell
+gh release create pcsuite-v0.11.0 </code>
+  --repo escalandres/pc-suite <code>
+  --title "PCSuite 0.11.0" </code>
+  --notes-file docs\landing\notas\0.11.0.md <code>
+  dist\instalador\PCSuite-Setup-0.11.0-win64.exe </code>
+  dist\PCSuite-0.11.0-win-x64.zip
+```</p>\n\n
+    </article>
+  </main>
+  <footer>
+    <p>Requiere Windows 10/11 x64 · WebView2 Runtime (preinstalado con Edge)</p>
+    <p>Sin telemetría: PCSuite no envía nada a ningún servidor salvo la consulta de actualizaciones (y con tu consentimiento para instalar).</p>
+    <p class="copyright">© 2026 AES Studio · sha256 por versión publicado en el manifiesto</p>
+  </footer>
+</body>
+</html>
