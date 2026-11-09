@@ -361,8 +361,9 @@ public sealed class FileCipherOperationTests : IDisposable
             }
         }
 
-        // files.stegoEmbed/stegoExtract (Task 033.2) quedan FUERA a propósito:
-        // la esteganografía no está implementada y no hay UI que las invoque.
+        // files.stegoEmbed/stegoExtract/stegoVerify (Task 033.2) quedan FUERA a propósito:
+        // la esteganografía SÍ está implementada (backend + ops + UI en FileTools),
+        // pero requiere una imagen PNG real y se cubre en FileSecurityServiceTests.
         Assert.Superset(
             new HashSet<string>
             {
