@@ -804,6 +804,10 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
                     () => IsTransferPaused(transferId),
                     bytes =>
                     {
+                        if (transfer.Status == TransferStatus.PendingApproval || transfer.Status == TransferStatus.Approved)
+                        {
+                            transfer.Status = TransferStatus.Transferring;
+                        }
                         RaiseProgress(new TransferProgress
                         {
                             TransferId = transferId,
