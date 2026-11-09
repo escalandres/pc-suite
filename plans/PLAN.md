@@ -695,8 +695,8 @@ web.compareUrls    → { urlA, urlB } → { differences[] }
 | Revocaci�n de certificados (OCSP/CRL) | 🔲 Futuro | Activar `CertificateRevocationCheckMode` (hoy `NoCheck` por robustez offline en LAN). Detectar�a certificados revocados, pero a�ade latencia y fallos sin conectividad. |
 | HMAC a nivel de aplicaci�n sobre el texto del mensaje | 🔲 Futuro | Defensa en profundidad adicional sobre el canal TLS. Costo/beneficio bajo: TLS ya garantiza integridad. |
 | Acortar ventana de emparejamiento | 🔲 Futuro | Reducir el timeout de `PairDecisionTimeout` (120s) y el c�digo a 4 d�gitos con m�s reintentos, o a 8 d�gitos. Trade-off UX vs seguridad. |
-| Bloqueo por huella (no solo por IP) | 🔲 Futuro | El rate limiting actual es por IP remota; un atacante con IP rotativa evita el bloqueo. Bloquear por huella del certificado (cuando no est� emparejado) ser�a m�s robusto. |
-| Auditor�a de conexiones desconocidas | 🔲 Futuro | Registrar en el log local cada conexi�n TLS de un par no emparejado (IP, huella, timestamp) para detecci�n de escaneo. |
+| Bloqueo por huella (no solo por IP) | ✅ Completado | Rate limiting ahora usa la huella del certificado (más robusto que por IP, que rota). Commit 752cfb5. | El rate limiting actual es por IP remota; un atacante con IP rotativa evita el bloqueo. Bloquear por huella del certificado (cuando no est� emparejado) ser�a m�s robusto. |
+| Auditor�a de conexiones desconocidas | ✅ Completado | El handshake TLS ya registra IP + huella de cada conexión; las transferencias de pares no emparejados se registran como "TRANSFER_REQUEST de {Ip} con huella no emparejada". | Registrar en el log local cada conexi�n TLS de un par no emparejado (IP, huella, timestamp) para detecci�n de escaneo. |
 
 ## Futuro: versiones multiplataforma (Mac / Linux / Android)
 
