@@ -1300,31 +1300,32 @@ private readonly Dictionary<string, (int Failures, DateTimeOffset LockoutUntil)>
         }
     }
 
-    private bool IsPairingLockedOut(string remoteIp)
+    private bool IsPairingLockedOut(string remoteIp, string? thumbprint = null)
     {
+        var key = string.IsNullOrEmpty(thumbprint) ? remoteIp : thumbprint!;
         lock (_lock)
         {
-            if (_pairingAttempts.TryGetValue(remoteIp, out var entry))
+            if (_pairingAttempts.TryGetValue(key, out var entry))
             {
                 if (entry.Item2 > DateTimeOffset.UtcNow)
                 {
                     return true;
                 }
-                // Lockout expirado: limpiar.
-                if (entry.LockoutUntil != DateTimeOffset.MinValue)
+                if (entry.Item2 != DateTimeOffset.MinValue)
                 {
-                    _pairingAttempts.Remove(remoteIp);
+                    _pairingAttempts.Remove(key);
                 }
             }
         }
         return false;
     }
 
-    private void RecordPairingFailure(string remoteIp)
+    private void RecordPairingFailure(string remoteIp, string? thumbprint = null)
     {
+        var key = string.IsNullOrEmpty(thumbprint) ? remoteIp : thumbprint!;
         lock (_lock)
         {
-            var entry = _pairingAttempts.TryGetValue(remoteIp, out var e)
+            var entry = _pairingAttempts.TryGetValue(key, out var e)
                 ? e
                 : (0, DateTimeOffset.MinValue);
             entry.Item1++;
@@ -1333,17 +1334,19 @@ private readonly Dictionary<string, (int Failures, DateTimeOffset LockoutUntil)>
                 entry.Item2 = DateTimeOffset.UtcNow.AddMinutes(5);
                 entry.Item1 = 0;
             }
-            _pairingAttempts[remoteIp] = entry;
+            _pairingAttempts[key] = entry;
         }
     }
 
-    private void RecordPairingSuccess(string remoteIp)
+    private void RecordPairingSuccess(string remoteIp, string? thumbprint = null)
     {
+        var key = string.IsNullOrEmpty(thumbprint) ? remoteIp : thumbprint!;
         lock (_lock)
         {
-            _pairingAttempts.Remove(remoteIp);
+            _pairingAttempts.Remove(key);
         }
     }
+
 
     // ------------------------------------------------------------------
     // Handlers internos
@@ -1428,9 +1431,10 @@ private readonly Dictionary<string, (int Failures, DateTimeOffset LockoutUntil)>
 
         if (reqType == ShareProtocol.MsgPairRequest)
         {
-            // Rate limiting anti-brute-force (hardening MITM): bloquear IP tras
-            // 5 intentos fallidos de emparejamiento durante 5 minutos.
-            if (IsPairingLockedOut(remoteIp))
+            // Rate limiting anti-brute-force (hardening MITM): bloquear por
+            // huella del certificado (más robusto que por IP, que rota) tras
+            // 5 intentos fallidos durante 5 minutos.
+            if (IsPairingLockedOut(remoteIp, clientThumbprint))
             {
                 await ShareProtocol.WriteControlAsync(
                     stream,
@@ -1972,7 +1976,7 @@ private readonly Dictionary<string, (int Failures, DateTimeOffset LockoutUntil)>
 
         if (!accepted)
         {
-            RecordPairingFailure(remoteIp);
+            RecordPairingFailure(remoteIp, clientThumbprint);
             await ShareProtocol.WriteControlAsync(
                 stream, ShareProtocol.MsgPairReject, new { }).ConfigureAwait(false);
             return;
@@ -1997,7 +2001,7 @@ private readonly Dictionary<string, (int Failures, DateTimeOffset LockoutUntil)>
         // ACCEPT entregado: registrar al iniciador con su huella VIVA y su
         // puerto de servicio (el del payload, no el efímero de la conexión).
         RegisterPairedDevice(pair.DeviceId, pair.DisplayName, remoteIp, pair.Port, clientThumbprint);
-        RecordPairingSuccess(remoteIp);
+        RecordPairingSuccess(remoteIp, clientThumbprint);
     }
 
     private string GetDeviceName(string deviceId)    {
