@@ -35,6 +35,8 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
     private readonly object _lock = new();
     private readonly Dictionary<string, SharedDevice> _devices = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (ShareTransfer Transfer, List<ShareTransferItem> Items)> _transfers = new(StringComparer.Ordinal);
+private readonly HashSet<string> _seenTransferIds = new(StringComparer.Ordinal);
+private readonly Dictionary<string, (int Failures, DateTimeOffset LockoutUntil)> _pairingAttempts = new(StringComparer.Ordinal);
     private DiscoveryService? _discovery;
     private readonly Dictionary<string, TaskCompletionSource<bool>> _pendingDecisions = new(StringComparer.Ordinal);
     private readonly IElevationManager? _elevation;
@@ -1298,6 +1300,51 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         }
     }
 
+    private bool IsPairingLockedOut(string remoteIp)
+    {
+        lock (_lock)
+        {
+            if (_pairingAttempts.TryGetValue(remoteIp, out var entry))
+            {
+                if (entry.Item2 > DateTimeOffset.UtcNow)
+                {
+                    return true;
+                }
+                // Lockout expirado: limpiar.
+                if (entry.LockoutUntil != DateTimeOffset.MinValue)
+                {
+                    _pairingAttempts.Remove(remoteIp);
+                }
+            }
+        }
+        return false;
+    }
+
+    private void RecordPairingFailure(string remoteIp)
+    {
+        lock (_lock)
+        {
+            var entry = _pairingAttempts.TryGetValue(remoteIp, out var e)
+                ? e
+                : (0, DateTimeOffset.MinValue);
+            entry.Item1++;
+            if (entry.Item1 >= 5)
+            {
+                entry.Item2 = DateTimeOffset.UtcNow.AddMinutes(5);
+                entry.Item1 = 0;
+            }
+            _pairingAttempts[remoteIp] = entry;
+        }
+    }
+
+    private void RecordPairingSuccess(string remoteIp)
+    {
+        lock (_lock)
+        {
+            _pairingAttempts.Remove(remoteIp);
+        }
+    }
+
     // ------------------------------------------------------------------
     // Handlers internos
     // ------------------------------------------------------------------
@@ -1381,6 +1428,17 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
         if (reqType == ShareProtocol.MsgPairRequest)
         {
+            // Rate limiting anti-brute-force (hardening MITM): bloquear IP tras
+            // 5 intentos fallidos de emparejamiento durante 5 minutos.
+            if (IsPairingLockedOut(remoteIp))
+            {
+                await ShareProtocol.WriteControlAsync(
+                    stream,
+                    ShareProtocol.MsgError,
+                    new ShareProtocol.ErrorPayload("rate_limited", "Demasiados intentos de emparejamiento. Reintenta en unos minutos."),
+                    CancellationToken.None).ConfigureAwait(false);
+                return;
+            }
             await HandlePairRequestAsync(stream, clientThumbprint, remoteIp, reqPayload)
                 .ConfigureAwait(false);
             return;
@@ -1412,6 +1470,30 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         var request = ShareProtocol.Deserialize<ShareProtocol.TransferRequestPayload>(reqPayload);
         if (request is null)
         {
+            return;
+        }
+
+        // Anti-replay (hardening MITM): un transferId ya visto se rechaza para
+        // evitar que un atacante reenvíe una solicitud capturada.
+        bool isReplay;
+        lock (_lock)
+        {
+            isReplay = !_seenTransferIds.Add(request.TransferId);
+            if (_seenTransferIds.Count > 1000)
+            {
+                _seenTransferIds.Clear();
+                _seenTransferIds.Add(request.TransferId);
+            }
+        }
+
+        if (isReplay)
+        {
+            _logger?.LogWarning("TRANSFER_REQUEST replay detectado: {Id}", request.TransferId);
+            await ShareProtocol.WriteControlAsync(
+                stream,
+                ShareProtocol.MsgError,
+                new ShareProtocol.ErrorPayload("replay", "Solicitud duplicada (replay)."),
+                CancellationToken.None).ConfigureAwait(false);
             return;
         }
 
@@ -1890,6 +1972,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
 
         if (!accepted)
         {
+            RecordPairingFailure(remoteIp);
             await ShareProtocol.WriteControlAsync(
                 stream, ShareProtocol.MsgPairReject, new { }).ConfigureAwait(false);
             return;
@@ -1914,6 +1997,7 @@ public sealed class LocalShareService : ILocalShareService, IDisposable
         // ACCEPT entregado: registrar al iniciador con su huella VIVA y su
         // puerto de servicio (el del payload, no el efímero de la conexión).
         RegisterPairedDevice(pair.DeviceId, pair.DisplayName, remoteIp, pair.Port, clientThumbprint);
+        RecordPairingSuccess(remoteIp);
     }
 
     private string GetDeviceName(string deviceId)    {
