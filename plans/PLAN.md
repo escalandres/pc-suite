@@ -682,22 +682,6 @@ web.compareUrls    → { urlA, urlB } → { differences[] }
 ---
 
 
-## Futuro: mejoras de seguridad en Local Share (MITM)
-
-> Mejoras de defensa en profundidad para la mensajer�a y transferencia de
-> archivos en red local. El estado actual ya es robusto: TLS 1.2/1.3 con
-> mTLS, emparejamiento por comparaci�n num�rica (Bluetooth-style), pinning
-> de huella SHA-256, anti-replay por transferId y rate limiting de
-> emparejamiento. Las siguientes son endurecimientos opcionales:
-
-| Mejora | Estado | Notas |
-|---|---|---|
-| Revocaci�n de certificados (OCSP/CRL) | 🔲 Futuro | Activar `CertificateRevocationCheckMode` (hoy `NoCheck` por robustez offline en LAN). Detectar�a certificados revocados, pero a�ade latencia y fallos sin conectividad. |
-| HMAC a nivel de aplicaci�n sobre el texto del mensaje | 🔲 Futuro | Defensa en profundidad adicional sobre el canal TLS. Costo/beneficio bajo: TLS ya garantiza integridad. |
-| Acortar ventana de emparejamiento | 🔲 Futuro | Reducir el timeout de `PairDecisionTimeout` (120s) y el c�digo a 4 d�gitos con m�s reintentos, o a 8 d�gitos. Trade-off UX vs seguridad. |
-| Bloqueo por huella (no solo por IP) | ✅ Completado | Rate limiting ahora usa la huella del certificado (más robusto que por IP, que rota). Commit 752cfb5. | El rate limiting actual es por IP remota; un atacante con IP rotativa evita el bloqueo. Bloquear por huella del certificado (cuando no est� emparejado) ser�a m�s robusto. |
-| Auditor�a de conexiones desconocidas | ✅ Completado | El handshake TLS ya registra IP + huella de cada conexión; las transferencias de pares no emparejados se registran como "TRANSFER_REQUEST de {Ip} con huella no emparejada". | Registrar en el log local cada conexi�n TLS de un par no emparejado (IP, huella, timestamp) para detecci�n de escaneo. |
-
 ## Futuro: versiones multiplataforma (Mac / Linux / Android)
 
 > Visión registrada 2026-11-07. El núcleo (`PCSuite.Core` + `PCSuite.Contracts`) es
