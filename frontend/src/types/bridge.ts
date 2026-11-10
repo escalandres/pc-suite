@@ -51,6 +51,7 @@ export const OperationIds = {
   systemPickFiles: 'system.pickFiles',
   /** Diálogo nativo de UNA carpeta (Task 026): escaneo personalizado de ClamAV. */
   systemPickFolder: 'system.pickFolder',
+  systemAppendLog: 'system.appendLog',
   /** Portapapeles nativo del host — navigator.clipboard falla en WebView2 sin permiso. */
   systemWriteClipboard: 'system.writeClipboard',
   /** Task 033: Archivos — encriptar, hash, shredder, esteganografía. */

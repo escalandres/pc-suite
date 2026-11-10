@@ -31,6 +31,9 @@ public static class OperationIds
     /// </summary>
     public const string SystemPickFolder = "system.pickFolder";
 
+    /// <summary>Anexa un mensaje al log del frontend (%LOCALAPPDATA%\PCSuite\logs\frontend.log).</summary>
+    public const string SystemAppendLog = "system.appendLog";
+
     /// <summary>Devuelve los metadatos de todas las tools registradas.</summary>
     public const string ToolsList = "tools.list";
 

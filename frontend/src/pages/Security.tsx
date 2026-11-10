@@ -274,6 +274,11 @@ export function Security() {
     if (ipCountryCache.has(ip)) return;
     ipCountryCache.set(ip, '…');
     setGeoIpTick((t) => t + 1);
+    const log = (msg: string) => {
+      console.log(msg);
+      bridge.call(OperationIds.systemAppendLog, { message: msg }).catch(() => { /* noop */ });
+    };
+    log(`[GeoIP] start ${ip}`);
     try {
       const r = await fetch(`https://api.country.is/${ip}`);
       const text = await r.text();
@@ -281,13 +286,14 @@ export function Security() {
       try { code = (JSON.parse(text).country || '').trim(); } catch { code = text.trim(); }
       if (!r.ok || code.length > 3) {
         ipCountryCache.set(ip, '—');
-        alert(`Geo IP falló para ${ip}: HTTP ${r.status} → ${text.slice(0, 120)}`);
+        log(`[GeoIP] FAIL ${ip}: HTTP ${r.status} body=${text.slice(0, 120)}`);
       } else {
         ipCountryCache.set(ip, code);
+        log(`[GeoIP] OK ${ip}: ${code}`);
       }
     } catch (e) {
       ipCountryCache.set(ip, '—');
-      alert(`Geo IP error para ${ip}: ${e instanceof Error ? e.message : String(e)}`);
+      log(`[GeoIP] ERROR ${ip}: ${e instanceof Error ? e.message : String(e)}`);
     }
     setGeoIpTick((t) => t + 1);
   };

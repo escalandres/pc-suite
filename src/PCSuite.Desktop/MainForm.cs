@@ -342,6 +342,7 @@ public partial class MainForm : Form
                 new GetSystemInfoOperation(),
                 new SystemPickFilesOperation(this),
                 new SystemPickFolderOperation(this),
+                new SystemAppendLogOperation(),
                 new ClipboardWriteTextOperation(),
                 new ToolsListOperation(toolRegistry),
                 new ToolsSearchOperation(toolSearch),
