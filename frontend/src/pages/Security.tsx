@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -138,7 +138,11 @@ function renderConnectionRow(connection: ActiveConnectionResult, index: number, 
       <td className="px-3 py-1.5">
         <button
           type="button"
-          onClick={() => onGeoIp(connection.remoteAddress.split(':')[0])}
+          onClick={(e) => {
+            e.stopPropagation();
+            const ip = connection.remoteAddress.split(':')[0];
+            onGeoIp(ip);
+          }}
           className="rounded px-1.5 py-0.5 text-xs"
           style={{ background: 'var(--pcs-accent)', color: '#fff' }}
           title="Consultar país de esta IP (Geo IP)"
@@ -270,8 +274,10 @@ export function Security() {
   const [connectionFilter, setConnectionFilter] = useState<string>('all');
   const [geoIpTick, setGeoIpTick] = useState(0);
   void geoIpTick;
+  const geoIpInFlight = useRef(new Set<string>());
   const handleGeoIp = async (ip: string) => {
-    if (ipCountryCache.has(ip)) return;
+    if (ipCountryCache.has(ip) || geoIpInFlight.current.has(ip)) return;
+    geoIpInFlight.current.add(ip);
     ipCountryCache.set(ip, '…');
     setGeoIpTick((t) => t + 1);
     const log = (msg: string) => {
@@ -293,6 +299,7 @@ export function Security() {
       ipCountryCache.set(ip, '—');
       log(`[GeoIP] ERROR ${ip}: ${e instanceof Error ? e.message : String(e)}`);
     }
+    geoIpInFlight.current.delete(ip);
     setGeoIpTick((t) => t + 1);
   };
   /** Task 032: diff temporal de conexiones desde la última lectura */
