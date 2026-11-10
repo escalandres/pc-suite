@@ -446,6 +446,7 @@ public partial class MainForm : Form
                 new WindowsRunCommandOperation(windowsRepairService, jobManager),
                 new WindowsListProcessesOperation(),
                 new WindowsKillProcessOperation(),
+                new WindowsKillProcessOnPortOperation(),
                 new AiDetectOperation(aiService),
                 new AiInstallOperation(aiService),
                 new AiConvertOperation(aiService),

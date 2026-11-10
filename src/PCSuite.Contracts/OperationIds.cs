@@ -397,6 +397,9 @@ public static class OperationIds
     public const string WindowsListProcesses = "windows.listProcesses";
     public const string WindowsKillProcess = "windows.killProcess";
 
+    /// <summary>Mata los procesos que escuchan en un puerto TCP dado (elevado, UAC por operación).</summary>
+    public const string WindowsKillProcessOnPort = "windows.killProcessOnPort";
+
     // ---------------- Task 019: certificados ----------------
 
     /// <summary>Genera un certificado X.509 autofirmado (Task 19.1).</summary>

@@ -592,6 +592,24 @@ export function Security() {
                           }
                         >
                           {port.process ?? 'Sin datos'}
+                          {port.localPort > 0 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!confirm(`¿Detener el proceso en el puerto ${port.localPort}?`)) return;
+                                try {
+                                  await bridge.call(OperationIds.windowsKillProcessOnPort, { port: port.localPort }, 30_000);
+                                } catch (e) {
+                                  alert(e instanceof BridgeError ? e.message : String(e));
+                                }
+                              }}
+                              className="ml-2 rounded px-1.5 py-0.5 text-xs"
+                              style={{ background: 'var(--pcs-danger)', color: '#fff' }}
+                              title="Detener proceso en este puerto (UAC)"
+                            >
+                              Matar
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -72,6 +72,7 @@ export const OperationIds = {
   windowsRunCommand: 'windows.runCommand',
   windowsListProcesses: 'windows.listProcesses',
   windowsKillProcess: 'windows.killProcess',
+  windowsKillProcessOnPort: 'windows.killProcessOnPort',
   toolsList: 'tools.list',
   toolsSearch: 'tools.search',
   toolExecute: 'tool.execute',
