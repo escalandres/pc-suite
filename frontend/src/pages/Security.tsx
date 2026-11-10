@@ -535,6 +535,7 @@ export function Security() {
                       <th className="px-3 py-2 font-medium">Exposición</th>
                       <th className="px-3 py-2 font-medium">PID</th>
                       <th className="px-3 py-2 font-medium">Proceso</th>
+                      <th className="px-3 py-2 font-medium">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -592,6 +593,8 @@ export function Security() {
                           }
                         >
                           {port.process ?? 'Sin datos'}
+                        </td>
+                        <td className="px-3 py-1.5">
                           {port.localPort > 0 && (
                             <button
                               type="button"
@@ -603,7 +606,7 @@ export function Security() {
                                   alert(e instanceof BridgeError ? e.message : String(e));
                                 }
                               }}
-                              className="ml-2 rounded px-1.5 py-0.5 text-xs"
+                              className="rounded px-1.5 py-0.5 text-xs"
                               style={{ background: 'var(--pcs-danger)', color: '#fff' }}
                               title="Detener proceso en este puerto (UAC)"
                             >
