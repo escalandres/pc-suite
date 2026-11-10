@@ -278,22 +278,24 @@ export function Security() {
       console.log(msg);
       bridge.call(OperationIds.systemAppendLog, { message: msg }).catch(() => { /* noop */ });
     };
-    log(`[GeoIP] start ${ip}`);
+    const url = `https://api.country.is/${ip}`;
+    log(`[GeoIP] start ip=${ip} url=${url} params=none`);
     try {
-      const r = await fetch(`https://api.country.is/${ip}`);
+      const r = await fetch(url);
       const text = await r.text();
       let code = '';
       try { code = (JSON.parse(text).country || '').trim(); } catch { code = text.trim(); }
+      log(`[GeoIP] response ${ip}: status=${r.status} statusText=${r.statusText} headers=${JSON.stringify(Object.fromEntries(r.headers.entries()))} body=${text}`);
       if (!r.ok || code.length > 3) {
         ipCountryCache.set(ip, '—');
-        log(`[GeoIP] FAIL ${ip}: HTTP ${r.status} body=${text.slice(0, 120)}`);
+        log(`[GeoIP] FAIL ${ip}: HTTP ${r.status} body=${text.slice(0, 200)}`);
       } else {
         ipCountryCache.set(ip, code);
         log(`[GeoIP] OK ${ip}: ${code}`);
       }
     } catch (e) {
       ipCountryCache.set(ip, '—');
-      log(`[GeoIP] ERROR ${ip}: ${e instanceof Error ? e.message : String(e)}`);
+      log(`[GeoIP] ERROR ${ip}: ${e instanceof Error ? e.message : String(e)} stack=${e instanceof Error ? e.stack : ''}`);
     }
     setGeoIpTick((t) => t + 1);
   };
