@@ -263,18 +263,22 @@ export function Security() {
     if (!geoIpEnabled || !snapshot) return;
     const ips = [...new Set(snapshot.connections.map((c) => c.remoteAddress))]
       .filter((ip) => ip && !ip.startsWith('127.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.'));
-    ips.forEach((ip) => {
+ips.forEach((ip, idx) => {
       if (ipCountryCache.has(ip)) return;
       ipCountryCache.set(ip, '…');
-      fetch(`http://ip-api.com/json/${ip}?fields=countryCode`)
-        .then((r) => r.json())
-        .then((d) => {
-          ipCountryCache.set(ip, (d?.countryCode as string) || '—');
-          setSnapshot((s) => (s ? { ...s } : s));
-        })
-        .catch(() => {
-          ipCountryCache.set(ip, '—');
-        });
+      // Escalonar las peticiones para no saturar el límite de rate (ipapi.co: ~30 req/min).
+      setTimeout(() => {
+        fetch(`https://ipapi.co/${ip}/country_code/`)
+          .then((r) => r.text())
+          .then((text) => {
+            const code = text.trim();
+            ipCountryCache.set(ip, code && code.length <= 3 ? code : '—');
+            setSnapshot((s) => (s ? { ...s } : s));
+          })
+          .catch(() => {
+            ipCountryCache.set(ip, '—');
+          });
+      }, idx * 200);
     });
   }, [geoIpEnabled, snapshot]);
 
@@ -655,7 +659,7 @@ export function Security() {
                 <label
                   className="flex items-center gap-1 text-xs"
                   style={{ color: 'var(--pcs-text-muted)' }}
-                  title="Envía las IPs remotas a un servicio externo (ip-api.com) para obtener el país. Desactivado por defecto por privacidad."
+                  title="Envía las IPs remotas a un servicio externo (ipapi.co) para obtener el país. Desactivado por defecto por privacidad."
                 >
                   <input
                     type="checkbox"
