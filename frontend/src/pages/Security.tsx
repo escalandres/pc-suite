@@ -278,24 +278,20 @@ export function Security() {
       console.log(msg);
       bridge.call(OperationIds.systemAppendLog, { message: msg }).catch(() => { /* noop */ });
     };
-    const url = `https://api.country.is/${ip}`;
-    log(`[GeoIP] start ip=${ip} url=${url} params=none`);
+    log(`[GeoIP] start ip=${ip}`);
     try {
-      const r = await fetch(url);
-      const text = await r.text();
-      let code = '';
-      try { code = (JSON.parse(text).country || '').trim(); } catch { code = text.trim(); }
-      log(`[GeoIP] response ${ip}: status=${r.status} statusText=${r.statusText} headers=${JSON.stringify(Object.fromEntries(r.headers.entries()))} body=${text}`);
-      if (!r.ok || code.length > 3) {
-        ipCountryCache.set(ip, '—');
-        log(`[GeoIP] FAIL ${ip}: HTTP ${r.status} body=${text.slice(0, 200)}`);
-      } else {
+      const r = await bridge.call<{ country: string }>(OperationIds.systemGeoIp, { ip }, 15_000);
+      const code = (r?.country || '').trim();
+      if (code && code.length <= 3) {
         ipCountryCache.set(ip, code);
         log(`[GeoIP] OK ${ip}: ${code}`);
+      } else {
+        ipCountryCache.set(ip, '—');
+        log(`[GeoIP] FAIL ${ip}: respuesta inválida: ${JSON.stringify(r)}`);
       }
     } catch (e) {
       ipCountryCache.set(ip, '—');
-      log(`[GeoIP] ERROR ${ip}: ${e instanceof Error ? e.message : String(e)} stack=${e instanceof Error ? e.stack : ''}`);
+      log(`[GeoIP] ERROR ${ip}: ${e instanceof Error ? e.message : String(e)}`);
     }
     setGeoIpTick((t) => t + 1);
   };

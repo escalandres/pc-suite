@@ -34,6 +34,9 @@ public static class OperationIds
     /// <summary>Anexa un mensaje al log del frontend (%LOCALAPPDATA%\PCSuite\logs\frontend.log).</summary>
     public const string SystemAppendLog = "system.appendLog";
 
+    /// <summary>Consulta el país de una IP remota (Geo IP) vía backend (evita CSP/CORS del frontend).</summary>
+    public const string SystemGeoIp = "system.geoIp";
+
     /// <summary>Devuelve los metadatos de todas las tools registradas.</summary>
     public const string ToolsList = "tools.list";
 
