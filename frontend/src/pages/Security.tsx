@@ -100,11 +100,11 @@ function renderConnectionRow(connection: ActiveConnectionResult, index: number, 
       <td className="px-3 py-1.5 font-mono">
         {connection.localAddress}:{connection.localPort}
       </td>
-      <td className="px-3 py-1.5 font-mono">
-        {connection.remoteAddress}:{connection.remotePort}
-        {geoIpEnabled && ipCountryCache.get(connection.remoteAddress) && (
+      <td className="px-3 py-1.5 font-mono" title={`Puerto remoto: ${connection.remotePort}`}>
+        {connection.remoteAddress.split(':')[0]}
+        {geoIpEnabled && ipCountryCache.get(connection.remoteAddress.split(':')[0]) && (
           <span className="ml-1 text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
-            ({ipCountryCache.get(connection.remoteAddress)})
+            ({ipCountryCache.get(connection.remoteAddress.split(':')[0])})
           </span>
         )}
       </td>
@@ -261,7 +261,13 @@ export function Security() {
 
   useEffect(() => {
     if (!geoIpEnabled || !snapshot) return;
-    const ips = [...new Set(snapshot.connections.map((c) => c.remoteAddress))]
+    const ips = [...new Set(snapshot.connections.map((c) => {
+      // Quitar el puerto si la dirección lo incluye (ej. "1.2.3.4:443").
+      const addr = c.remoteAddress;
+      const idx = addr.lastIndexOf(':');
+      if (idx > 0 && /^\d+$/.test(addr.slice(idx + 1))) return addr.slice(0, idx);
+      return addr;
+    }))]
       .filter((ip) => ip && !ip.startsWith('127.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.'));
 ips.forEach((ip, idx) => {
       if (ipCountryCache.has(ip)) return;
