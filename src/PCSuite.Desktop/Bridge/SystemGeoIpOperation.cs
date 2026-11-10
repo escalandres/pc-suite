@@ -7,7 +7,7 @@ namespace PCSuite.Desktop.Bridge;
 /// <summary>
 /// system.geoIp — consulta el país de una IP remota (Geo IP) desde el backend,
 /// evitando las restricciones de CSP/CORS del frontend.
-/// Usa api.country.is (HTTPS, CORS-friendly) como proveedor.
+/// Usa ipapi.co (HTTPS) como proveedor.
 /// </summary>
 public sealed class SystemGeoIpOperation : IOperation
 {
@@ -31,22 +31,31 @@ public sealed class SystemGeoIpOperation : IOperation
 
         try
         {
-            using var resp = await Http.GetAsync($"https://api.country.is/{ip}", ct).ConfigureAwait(false);
+            using var resp = await Http.GetAsync($"https://ipapi.co/{ip}/country/", ct).ConfigureAwait(false);
             var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            string country = string.Empty;
-            try
+            string country = body.Trim();
+            // ipapi.co devuelve el código de país como texto plano (ej. "US").
+            // Si hay error, devuelve JSON con {"error":true,...}.
+            if (country.StartsWith("{"))
             {
-                using var doc = System.Text.Json.JsonDocument.Parse(body);
-                if (doc.RootElement.TryGetProperty("country", out var c))
-                    country = c.GetString() ?? string.Empty;
-            }
-            catch
-            {
-                country = body.Trim();
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(body);
+                    if (doc.RootElement.TryGetProperty("error", out var err) && err.GetBoolean())
+                    {
+                        var reason = doc.RootElement.TryGetProperty("reason", out var r) ? r.GetString() : "unknown";
+                        return OperationResult.Fail("error", $"ipapi.co error: {reason}");
+                    }
+                    if (doc.RootElement.TryGetProperty("country", out var c))
+                        country = c.GetString() ?? string.Empty;
+                    else if (doc.RootElement.TryGetProperty("country_code", out var cc))
+                        country = cc.GetString() ?? string.Empty;
+                }
+                catch { /* keep raw */ }
             }
 
-            country = country.Trim();
-            if (!resp.IsSuccessStatusCode || country.Length > 3)
+country = country.Trim();
+            if (!resp.IsSuccessStatusCode || country.Length == 0 || country.Length > 3)
             {
                 return OperationResult.Fail("error", $"HTTP {resp.StatusCode}: {body}");
             }
