@@ -275,10 +275,11 @@ export function Security() {
     ipCountryCache.set(ip, '…');
     setGeoIpTick((t) => t + 1);
     try {
-      const r = await fetch(`https://ipapi.co/${ip}/country_code/`);
+      const r = await fetch(`https://api.country.is/${ip}`);
       const text = await r.text();
-      const code = text.trim();
-      if (!r.ok || code.length > 3 || /error/i.test(code)) {
+      let code = '';
+      try { code = (JSON.parse(text).country || '').trim(); } catch { code = text.trim(); }
+      if (!r.ok || code.length > 3) {
         ipCountryCache.set(ip, '—');
         alert(`Geo IP falló para ${ip}: HTTP ${r.status} → ${text.slice(0, 120)}`);
       } else {
