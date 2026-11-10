@@ -5,9 +5,9 @@ using PCSuite.Core.Operations;
 namespace PCSuite.Desktop.Bridge;
 
 /// <summary>
-/// system.geoIp — consulta el país de una IP remota (Geo IP) desde el backend,
-/// evitando las restricciones de CSP/CORS del frontend.
-/// Usa ipapi.co (HTTPS) como proveedor.
+/// system.geoIp - consulta el país de una IP remota (Geo IP) desde el backend.
+/// Usa ip-api.com (HTTP, sin key, ~45 req/min) como proveedor. El backend no
+/// está sujeto a CSP/CORS del frontend.
 /// </summary>
 public sealed class SystemGeoIpOperation : IOperation
 {
@@ -25,36 +25,31 @@ public sealed class SystemGeoIpOperation : IOperation
         if (string.IsNullOrWhiteSpace(ip))
             return OperationResult.Fail("error", "IP vacía.");
 
-        // Validar que sea una IP (básico).
         if (!System.Net.IPAddress.TryParse(ip, out _))
             return OperationResult.Fail("error", "IP inválida.");
 
         try
         {
-            using var resp = await Http.GetAsync($"https://ipapi.co/{ip}/country/", ct).ConfigureAwait(false);
+            using var resp = await Http.GetAsync($"http://ip-api.com/json/{ip}?fields=countryCode,status,message", ct).ConfigureAwait(false);
             var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            string country = body.Trim();
-            // ipapi.co devuelve el código de país como texto plano (ej. "US").
-            // Si hay error, devuelve JSON con {"error":true,...}.
-            if (country.StartsWith("{"))
+            string country = string.Empty;
+            try
             {
-                try
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("status", out var st) && st.GetString() == "fail")
                 {
-                    using var doc = System.Text.Json.JsonDocument.Parse(body);
-                    if (doc.RootElement.TryGetProperty("error", out var err) && err.GetBoolean())
-                    {
-                        var reason = doc.RootElement.TryGetProperty("reason", out var r) ? r.GetString() : "unknown";
-                        return OperationResult.Fail("error", $"ipapi.co error: {reason}");
-                    }
-                    if (doc.RootElement.TryGetProperty("country", out var c))
-                        country = c.GetString() ?? string.Empty;
-                    else if (doc.RootElement.TryGetProperty("country_code", out var cc))
-                        country = cc.GetString() ?? string.Empty;
+                    var msg = doc.RootElement.TryGetProperty("message", out var m) ? m.GetString() : "unknown";
+                    return OperationResult.Fail("error", $"ip-api error: {msg}");
                 }
-                catch { /* keep raw */ }
+                if (doc.RootElement.TryGetProperty("countryCode", out var c))
+                    country = c.GetString() ?? string.Empty;
+            }
+            catch
+            {
+                country = body.Trim();
             }
 
-country = country.Trim();
+            country = country.Trim();
             if (!resp.IsSuccessStatusCode || country.Length == 0 || country.Length > 3)
             {
                 return OperationResult.Fail("error", $"HTTP {resp.StatusCode}: {body}");
