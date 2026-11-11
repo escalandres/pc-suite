@@ -179,9 +179,9 @@ function Card(props: { label: string; icon: LucideIcon; status: string; children
       style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}
       aria-label={props.label}
     >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <Icon size={16} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+          <Icon size={16} aria-hidden style={{ color: 'var(--pcs-accent)', flexShrink: 0 }} />
           {props.label}
         </h2>
         <StatusBadge status={props.status} />
