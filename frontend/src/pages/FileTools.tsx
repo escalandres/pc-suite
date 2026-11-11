@@ -900,7 +900,10 @@ function Fido2Panel() {
         setNotice({ kind: 'success', text: `Desencriptado con FIDO2 → ${result.outputPath}` });
       }
     } catch (e) {
-      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'Error FIDO2.' });
+      const msg = e instanceof BridgeError
+        ? e.message
+        : (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+      setNotice({ kind: 'error', text: msg || 'Error FIDO2.' });
     } finally {
       setBusy(false);
     }
