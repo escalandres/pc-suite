@@ -809,6 +809,11 @@ function Fido2Panel() {
   const [credentialId, setCredentialId] = useState<string | null>(() => {
     try { return localStorage.getItem('pcsuite.fido2.credentialId'); } catch { return null; }
   });
+
+  const log = (msg: string) => {
+    console.log(msg);
+    bridge.call(OperationIds.systemAppendLog, { message: `[FIDO2] ${msg}` }).catch(() => { /* noop */ });
+  };
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [inputPath, setInputPath] = useState('');
@@ -827,9 +832,11 @@ function Fido2Panel() {
     if (!supported) return;
     setBusy(true);
     setNotice(null);
+    log('register: start');
     try {
       const challenge = crypto.getRandomValues(new Uint8Array(32));
       const userId = crypto.getRandomValues(new Uint8Array(16));
+      log(`register: challenge=${bufToBase64(challenge.buffer)} userId=${bufToBase64(userId.buffer)}`);
       const cred = (await navigator.credentials.create({
         publicKey: {
           rp: { name: 'PCSuite', id: window.location.hostname || 'localhost' },
@@ -844,6 +851,7 @@ function Fido2Panel() {
 
       if (!cred) throw new Error('No se obtuvo credencial.');
       const ext = cred.getClientExtensionResults() as any;
+      log(`register: credId=${bufToBase64(cred.rawId)} ext=${JSON.stringify(ext)}`);
       if (!ext?.hmacCreateSecret) {
         throw new Error('La llave no soporta hmac-secret (se requiere YubiKey 5+ o Windows Hello).');
       }
@@ -851,7 +859,9 @@ function Fido2Panel() {
       localStorage.setItem('pcsuite.fido2.credentialId', id);
       setCredentialId(id);
       setNotice({ kind: 'success', text: 'Llave FIDO2 registrada correctamente.' });
+      log('register: success');
     } catch (e) {
+      log(`register: ERROR ${e instanceof Error ? e.name + ': ' + e.message : String(e)}`);
       setNotice({ kind: 'error', text: e instanceof Error ? e.message : 'Error al registrar.' });
     } finally {
       setBusy(false);
@@ -861,6 +871,7 @@ function Fido2Panel() {
   const deriveKey = async (): Promise<string | null> => {
     if (!credentialId) return null;
     const salt = new TextEncoder().encode('PCSuite FIDO2 file encryption v1');
+    log(`deriveKey: credentialId=${credentialId.slice(0, 12)}... salt=${bufToBase64(salt.buffer)}`);
     let cred: PublicKeyCredential | null = null;
     try {
       cred = (await navigator.credentials.get({
@@ -873,37 +884,41 @@ function Fido2Panel() {
         },
       })) as PublicKeyCredential | null;
     } catch (e) {
-      console.error('credentials.get failed:', e);
+      log(`deriveKey: credentials.get ERROR ${e instanceof Error ? e.name + ': ' + e.message : String(e)}`);
       return null;
     }
-    if (!cred) return null;
+    if (!cred) { log('deriveKey: no cred'); return null; }
     const ext = cred.getClientExtensionResults() as any;
-    console.log('getClientExtensionResults:', JSON.stringify(ext));
-    // Diferentes authenticators devuelven el secreto en rutas distintas.
+    log(`deriveKey: ext=${JSON.stringify(ext)}`);
     const secret =
       ext?.hmacGetSecret?.results?.hmac ||
       ext?.hmacGetSecret?.hmac ||
       ext?.results?.hmac;
     if (!secret) {
-      console.error('No hmac secret in extension results. Full cred:', cred);
+      log('deriveKey: no hmac secret in extension results');
       return null;
     }
-    return bufToBase64(secret);
+    const key = bufToBase64(secret);
+    log(`deriveKey: derived key length=${secret.byteLength} base64=${key.slice(0, 16)}...`);
+    return key;
   };
 
   const runAction = async () => {
     if (!inputPath.trim() || busy || !credentialId) return;
     setBusy(true);
     setNotice(null);
+    log(`runAction: mode=${mode} path=${inputPath.trim()}`);
     try {
       const key = await deriveKey();
-      if (!key) throw new Error('No se pudo derivar la clave de la llave FIDO2.');
+      if (!key) { log('runAction: deriveKey returned null'); throw new Error('No se pudo derivar la clave de la llave FIDO2.'); }
+      log(`runAction: derived key (base64 prefix)=${key.slice(0,16)}...`);
       if (mode === 'encrypt') {
         const result = await bridge.call<{ outputPath: string; sha256: string; kind?: string }>(
           OperationIds.filesFido2Encrypt,
           { inputPath: inputPath.trim(), password: key, deleteOriginal: deleteOriginal || undefined },
           5 * 60_000,
         );
+        log(`runAction: encrypt OK outputPath=${result.outputPath}`);
         setNotice({ kind: 'success', text: `Encriptado con FIDO2 → ${result.outputPath}` });
       } else {
         const result = await bridge.call<{ outputPath: string; sha256: string; kind?: string }>(
@@ -911,18 +926,16 @@ function Fido2Panel() {
           { inputPath: inputPath.trim(), password: key },
           5 * 60_000,
         );
+        log(`runAction: decrypt OK outputPath=${result.outputPath}`);
         setNotice({ kind: 'success', text: `Desencriptado con FIDO2 → ${result.outputPath}` });
       }
     } catch (e) {
-      const msg = e instanceof BridgeError
-        ? e.message
-        : (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
-      setNotice({ kind: 'error', text: msg || 'Error FIDO2.' });
+      log(`runAction: ERROR ${e instanceof Error ? e.name + ': ' + e.message : String(e)}`);
+      setNotice({ kind: 'error', text: e instanceof Error ? e.message : 'Error FIDO2.' });
     } finally {
       setBusy(false);
     }
   };
-
   const forget = () => {
     localStorage.removeItem('pcsuite.fido2.credentialId');
     setCredentialId(null);
