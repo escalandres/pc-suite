@@ -363,6 +363,12 @@ public static class OperationIds
     /// <summary>Desencripta un archivo .pcsuite-enc (Task 033).</summary>
     public const string FilesDecrypt = "files.decrypt";
 
+    /// <summary>Encripta un archivo con una clave derivada de FIDO2 (Task FIDO2 MVP).</summary>
+    public const string FilesFido2Encrypt = "files.fido2Encrypt";
+
+    /// <summary>Desencripta un archivo .pcsuite-enc con una clave derivada de FIDO2.</summary>
+    public const string FilesFido2Decrypt = "files.fido2Decrypt";
+
     /// <summary>Oculta texto o un archivo dentro de una imagen PNG (LSB, Task 033).</summary>
     public const string FilesStegoEmbed = "files.stegoEmbed";
 

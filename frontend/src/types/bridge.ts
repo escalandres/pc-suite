@@ -61,6 +61,8 @@ export const OperationIds = {
   filesStegoEmbed: 'files.stegoEmbed',
   filesStegoExtract: 'files.stegoExtract',
   filesStegoVerify: 'files.stegoVerify',
+  filesFido2Encrypt: 'files.fido2Encrypt',
+  filesFido2Decrypt: 'files.fido2Decrypt',
   filesShred: 'files.shred',
   filesHash: 'files.hash',
   /** Task 034: Cifrador — codificadores, hash de texto, AES, XOR. */

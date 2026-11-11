@@ -122,6 +122,27 @@ public sealed class FileSecurityService : IFileSecurityService
             await ComputeSha256Async(outputPath, cancellationToken));
     }
 
+    public Task<FileEncryptWithKeyResult> EncryptWithKeyAsync(
+        FileEncryptWithKeyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null) throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(request.KeyBase64))
+            throw new FileSecurityException("La clave no puede estar vacía.");
+        // Reutiliza el flujo de contraseña: la clave derivada (base64) se
+        // trata como contraseña. PBKDF2 añade overhead pero es seguro.
+        var password = request.KeyBase64;
+        var result = EncryptAsync(new FileEncryptRequest(
+            request.InputPath, password, request.OutputPath, request.DeleteOriginal), cancellationToken);
+        return WrapEncrypt(result);
+    }
+
+    private static async Task<FileEncryptWithKeyResult> WrapEncrypt(Task<FileEncryptResult> t)
+    {
+        var r = await t.ConfigureAwait(false);
+        return new FileEncryptWithKeyResult(r.OutputPath, r.Sha256, r.Kind);
+    }
+
     /// <summary>
     /// Task 033.5 — protege una CARPETA completa en un contenedor único
     /// .pcsuite-enc: [PCD1][salt][IV][AES-256-CBC de un ZIP en streaming].
@@ -302,6 +323,25 @@ public sealed class FileSecurityService : IFileSecurityService
         return new FileDecryptResult(
             outputPath,
             await ComputeSha256Async(outputPath, cancellationToken));
+    }
+
+    public Task<FileDecryptWithKeyResult> DecryptWithKeyAsync(
+        FileDecryptWithKeyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null) throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(request.KeyBase64))
+            throw new FileSecurityException("La clave no puede estar vacía.");
+        var password = request.KeyBase64;
+        var result = DecryptAsync(new FileDecryptRequest(
+            request.InputPath, password, request.OutputPath), cancellationToken);
+        return WrapDecrypt(result);
+    }
+
+    private static async Task<FileDecryptWithKeyResult> WrapDecrypt(Task<FileDecryptResult> t)
+    {
+        var r = await t.ConfigureAwait(false);
+        return new FileDecryptWithKeyResult(r.OutputPath, r.Sha256, r.Kind);
     }
 
     /// <summary>

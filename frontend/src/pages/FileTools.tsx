@@ -886,14 +886,14 @@ function Fido2Panel() {
       if (!key) throw new Error('No se pudo derivar la clave de la llave FIDO2.');
       if (mode === 'encrypt') {
         const result = await bridge.call<{ outputPath: string; sha256: string; kind?: string }>(
-          OperationIds.filesEncrypt,
+          OperationIds.filesFido2Encrypt,
           { inputPath: inputPath.trim(), password: key, deleteOriginal: deleteOriginal || undefined },
           5 * 60_000,
         );
         setNotice({ kind: 'success', text: `Encriptado con FIDO2 → ${result.outputPath}` });
       } else {
         const result = await bridge.call<{ outputPath: string; sha256: string; kind?: string }>(
-          OperationIds.filesDecrypt,
+          OperationIds.filesFido2Decrypt,
           { inputPath: inputPath.trim(), password: key },
           5 * 60_000,
         );

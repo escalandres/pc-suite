@@ -77,6 +77,10 @@ public sealed record FileDecryptWithKeyRequest(
     string? OutputPath = null);
 
 public sealed record FileDecryptWithKeyResult(string OutputPath, string Sha256, string Kind = "file");
+
+// --- Interfaz ---
+
+public interface IFileSecurityService
 {
     Task<FileEncryptResult> EncryptAsync(FileEncryptRequest request, CancellationToken cancellationToken = default);
     Task<FileDecryptResult> DecryptAsync(FileDecryptRequest request, CancellationToken cancellationToken = default);
