@@ -861,19 +861,33 @@ function Fido2Panel() {
   const deriveKey = async (): Promise<string | null> => {
     if (!credentialId) return null;
     const salt = new TextEncoder().encode('PCSuite FIDO2 file encryption v1');
-    const cred = (await navigator.credentials.get({
-      publicKey: {
-        challenge: crypto.getRandomValues(new Uint8Array(32)),
-        allowCredentials: [{ type: 'public-key', id: base64ToBuf(credentialId) }],
-        userVerification: 'preferred',
-        timeout: 60_000,
-        extensions: { hmacGetSecret: { salt1: salt } } as any,
-      },
-    })) as PublicKeyCredential | null;
+    let cred: PublicKeyCredential | null = null;
+    try {
+      cred = (await navigator.credentials.get({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          allowCredentials: [{ type: 'public-key', id: base64ToBuf(credentialId) }],
+          userVerification: 'preferred',
+          timeout: 60_000,
+          extensions: { hmacGetSecret: { salt1: salt } } as any,
+        },
+      })) as PublicKeyCredential | null;
+    } catch (e) {
+      console.error('credentials.get failed:', e);
+      return null;
+    }
     if (!cred) return null;
     const ext = cred.getClientExtensionResults() as any;
-    const secret = ext?.hmacGetSecret?.results?.hmac;
-    if (!secret) return null;
+    console.log('getClientExtensionResults:', JSON.stringify(ext));
+    // Diferentes authenticators devuelven el secreto en rutas distintas.
+    const secret =
+      ext?.hmacGetSecret?.results?.hmac ||
+      ext?.hmacGetSecret?.hmac ||
+      ext?.results?.hmac;
+    if (!secret) {
+      console.error('No hmac secret in extension results. Full cred:', cred);
+      return null;
+    }
     return bufToBase64(secret);
   };
 
