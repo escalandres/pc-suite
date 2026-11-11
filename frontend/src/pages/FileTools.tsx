@@ -871,36 +871,47 @@ function Fido2Panel() {
   const deriveKey = async (): Promise<string | null> => {
     if (!credentialId) return null;
     const salt = new TextEncoder().encode('PCSuite FIDO2 file encryption v1');
-    log(`deriveKey: credentialId=${credentialId.slice(0, 12)}... salt=${bufToBase64(salt.buffer)}`);
-    let cred: PublicKeyCredential | null = null;
-    try {
-      cred = (await navigator.credentials.get({
-        publicKey: {
-          challenge: crypto.getRandomValues(new Uint8Array(32)),
-          allowCredentials: [{ type: 'public-key', id: base64ToBuf(credentialId) }],
-          userVerification: 'required',
-          timeout: 60_000,
-          extensions: { hmacGetSecret: { salt1: salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) } } as any,
-        },
-      })) as PublicKeyCredential | null;
-    } catch (e) {
-      log(`deriveKey: credentials.get ERROR ${e instanceof Error ? e.name + ': ' + e.message : String(e)}`);
-      return null;
+    const saltBuf = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength);
+    log(`deriveKey: credentialId=${credentialId.slice(0, 12)}... saltLen=${salt.byteLength}`);
+    // Probar prf (estándar nuevo) y hmacGetSecret (legacy).
+    const extInputs = [
+      { prf: { eval: { first: saltBuf } } },
+      { hmacGetSecret: { salt1: saltBuf } },
+    ];
+    for (const extInput of extInputs) {
+      let cred: PublicKeyCredential | null = null;
+      try {
+        cred = (await navigator.credentials.get({
+          publicKey: {
+            challenge: crypto.getRandomValues(new Uint8Array(32)),
+            allowCredentials: [{ type: 'public-key', id: base64ToBuf(credentialId) }],
+            userVerification: 'required',
+            timeout: 60_000,
+            extensions: extInput as any,
+          },
+        })) as PublicKeyCredential | null;
+      } catch (e) {
+        log(`deriveKey: credentials.get ERROR with ${JSON.stringify(extInput)}: ${e instanceof Error ? e.name + ': ' + e.message : String(e)}`);
+        continue;
+      }
+      if (!cred) continue;
+      const ext = cred.getClientExtensionResults() as any;
+      log(`deriveKey: extInput=${JSON.stringify(extInput)} ext=${JSON.stringify(ext)}`);
+      const secret =
+        ext?.prf?.results?.first ||
+        ext?.prf?.results?.second ||
+        ext?.hmacGetSecret?.results?.hmac ||
+        ext?.hmacGetSecret?.results?.hmac1 ||
+        ext?.hmacGetSecret?.hmac ||
+        ext?.results?.hmac;
+      if (secret) {
+        const key = bufToBase64(secret);
+        log(`deriveKey: derived key length=${(secret as ArrayBuffer).byteLength} base64=${key.slice(0, 16)}... via ${JSON.stringify(extInput)}`);
+        return key;
+      }
     }
-    if (!cred) { log('deriveKey: no cred'); return null; }
-    const ext = cred.getClientExtensionResults() as any;
-    log(`deriveKey: ext=${JSON.stringify(ext)}`);
-    const secret =
-      ext?.hmacGetSecret?.results?.hmac ||
-      ext?.hmacGetSecret?.hmac ||
-      ext?.results?.hmac;
-    if (!secret) {
-      log('deriveKey: no hmac secret in extension results');
-      return null;
-    }
-    const key = bufToBase64(secret);
-    log(`deriveKey: derived key length=${secret.byteLength} base64=${key.slice(0, 16)}...`);
-    return key;
+    log('deriveKey: no hmac secret in any extension results');
+    return null;
   };
 
   const runAction = async () => {
