@@ -38,7 +38,7 @@ namespace PCSuite.Desktop;
 /// </summary>
 public partial class MainForm : Form
 {
-    private const string VirtualHost = "app.pcsuite.local";
+    private const string VirtualHost = "localhost";
 
     private const string MissingFrontendHtml = """
         <!doctype html>
@@ -729,7 +729,7 @@ public partial class MainForm : Form
             distDirectory,
             CoreWebView2HostResourceAccessKind.Allow);
 
-        var origin = $"https://{VirtualHost}";
+        var origin = $"http://{VirtualHost}";
         _allowedOrigins.Add(origin);
         _bridge.Attach(core, _allowedOrigins);
         _logger.LogInformation("Loading frontend from {Directory}", distDirectory);
