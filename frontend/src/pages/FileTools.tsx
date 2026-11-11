@@ -878,7 +878,7 @@ function Fido2Panel() {
         publicKey: {
           challenge: crypto.getRandomValues(new Uint8Array(32)),
           allowCredentials: [{ type: 'public-key', id: base64ToBuf(credentialId) }],
-          userVerification: 'preferred',
+          userVerification: 'required',
           timeout: 60_000,
           extensions: { hmacGetSecret: { salt1: salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) } } as any,
         },
