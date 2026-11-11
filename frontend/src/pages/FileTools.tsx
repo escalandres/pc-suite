@@ -880,7 +880,7 @@ function Fido2Panel() {
           allowCredentials: [{ type: 'public-key', id: base64ToBuf(credentialId) }],
           userVerification: 'preferred',
           timeout: 60_000,
-          extensions: { hmacGetSecret: { salt1: salt } } as any,
+          extensions: { hmacGetSecret: { salt1: salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) } } as any,
         },
       })) as PublicKeyCredential | null;
     } catch (e) {
