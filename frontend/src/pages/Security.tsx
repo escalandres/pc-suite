@@ -276,28 +276,19 @@ export function Security() {
   void geoIpTick;
   const geoIpInFlight = useRef(new Set<string>());
   const handleGeoIp = async (ip: string) => {
-    if (ipCountryCache.has(ip) || geoIpInFlight.current.has(ip)) return;
-    geoIpInFlight.current.add(ip);
+    if (ipCountryCache.has(ip)) return;
     ipCountryCache.set(ip, '…');
     setGeoIpTick((t) => t + 1);
-    const log = (msg: string) => {
-      console.log(msg);
-      bridge.call(OperationIds.systemAppendLog, { message: msg }).catch(() => { /* noop */ });
-    };
-    log(`[GeoIP] start ip=${ip}`);
     try {
       const r = await bridge.call<{ country: string }>(OperationIds.systemGeoIp, { ip }, 15_000);
       const code = (r?.country || '').trim();
       if (code && code.length <= 3) {
         ipCountryCache.set(ip, code);
-        log(`[GeoIP] OK ${ip}: ${code}`);
       } else {
         ipCountryCache.set(ip, '—');
-        log(`[GeoIP] FAIL ${ip}: respuesta inválida: ${JSON.stringify(r)}`);
       }
-    } catch (e) {
+    } catch {
       ipCountryCache.set(ip, '—');
-      log(`[GeoIP] ERROR ${ip}: ${e instanceof Error ? e.message : String(e)}`);
     }
     geoIpInFlight.current.delete(ip);
     setGeoIpTick((t) => t + 1);
