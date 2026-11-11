@@ -1001,7 +1001,7 @@ function Fido2Panel() {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setMode('encrypt')}
+                  onClick={() => { setMode('encrypt'); setInputPath(''); setDeleteOriginal(false); setNotice(null); }}
                   className="rounded-md border px-3 py-1 text-xs font-medium"
                   style={{
                     borderColor: 'var(--pcs-border)',
@@ -1013,7 +1013,7 @@ function Fido2Panel() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMode('decrypt')}
+                  onClick={() => { setMode('decrypt'); setInputPath(''); setDeleteOriginal(false); setNotice(null); }}
                   className="rounded-md border px-3 py-1 text-xs font-medium"
                   style={{
                     borderColor: 'var(--pcs-border)',
