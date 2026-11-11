@@ -61,12 +61,27 @@ public sealed record StegoExtractResult(
 public sealed record StegoVerifyRequest(string ImagePath);
 public sealed record StegoVerifyResult(bool HasHiddenData, int EstimatedSizeBytes, bool IsText);
 
-// --- Interfaz ---
+// --- FIDO2 (llave de hardware) ---
 
-public interface IFileSecurityService
+public sealed record FileEncryptWithKeyRequest(
+    string InputPath,
+    string KeyBase64,
+    string? OutputPath = null,
+    bool? DeleteOriginal = null);
+
+public sealed record FileEncryptWithKeyResult(string OutputPath, string Sha256, string Kind = "file");
+
+public sealed record FileDecryptWithKeyRequest(
+    string InputPath,
+    string KeyBase64,
+    string? OutputPath = null);
+
+public sealed record FileDecryptWithKeyResult(string OutputPath, string Sha256, string Kind = "file");
 {
     Task<FileEncryptResult> EncryptAsync(FileEncryptRequest request, CancellationToken cancellationToken = default);
     Task<FileDecryptResult> DecryptAsync(FileDecryptRequest request, CancellationToken cancellationToken = default);
+    Task<FileEncryptWithKeyResult> EncryptWithKeyAsync(FileEncryptWithKeyRequest request, CancellationToken cancellationToken = default);
+    Task<FileDecryptWithKeyResult> DecryptWithKeyAsync(FileDecryptWithKeyRequest request, CancellationToken cancellationToken = default);
     Task<FileShredResult> ShredAsync(FileShredRequest request, CancellationToken cancellationToken = default);
     Task<FileHashResult> HashAsync(string path, CancellationToken cancellationToken = default);
     Task<StegoEmbedResult> StegoEmbedAsync(StegoEmbedRequest request, CancellationToken cancellationToken = default);

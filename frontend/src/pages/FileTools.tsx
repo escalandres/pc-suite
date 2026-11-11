@@ -4,6 +4,7 @@ import {
   FolderOpen,
   Hash,
   Image as ImageIcon,
+  KeyRound,
   Lock,
   ShieldAlert,
   Trash2,
@@ -39,7 +40,7 @@ function passwordStrength(pwd: string): { label: string; color: string } {
 
 export function FileTools() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<'encrypt' | 'hash' | 'shred' | 'stego'>('encrypt');
+  const [tab, setTab] = useState<'encrypt' | 'hash' | 'shred' | 'stego' | 'fido2'>('encrypt');
 
   return (
     <div className="space-y-6">
@@ -58,6 +59,7 @@ export function FileTools() {
             { id: 'hash', labelKey: 'pages.files.tabHash', icon: Hash },
             { id: 'shred', labelKey: 'pages.files.tabShred', icon: Trash2 },
             { id: 'stego', labelKey: 'pages.files.tabStego', icon: ImageIcon },
+  { id: 'fido2', labelKey: 'pages.files.tabFido2', icon: KeyRound },
           ] as const
         ).map(({ id, labelKey, icon: Icon }) => (
           <button
@@ -82,6 +84,7 @@ export function FileTools() {
       {tab === 'hash' && <HashPanel />}
       {tab === 'shred' && <ShredPanel />}
       {tab === 'stego' && <StegoPanel />}
+      {tab === 'fido2' && <Fido2Panel />}
     </div>
   );
 }
@@ -781,5 +784,275 @@ function StegoPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+
+// --- FIDO2 (llave de hardware) ---
+
+function bufToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function base64ToBuf(b64: string): ArrayBuffer {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function Fido2Panel() {
+  const [supported, setSupported] = useState<boolean | null>(null);
+  const [credentialId, setCredentialId] = useState<string | null>(() => {
+    try { return localStorage.getItem('pcsuite.fido2.credentialId'); } catch { return null; }
+  });
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [inputPath, setInputPath] = useState('');
+  const [mode, setMode] = useState<'encrypt' | 'decrypt'>('encrypt');
+  const [deleteOriginal, setDeleteOriginal] = useState(false);
+
+  useEffect(() => {
+    setSupported(
+      typeof window !== 'undefined' &&
+      !!window.PublicKeyCredential &&
+      typeof navigator?.credentials?.create === 'function',
+    );
+  }, []);
+
+  const register = async () => {
+    if (!supported) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const userId = crypto.getRandomValues(new Uint8Array(16));
+      const cred = (await navigator.credentials.create({
+        publicKey: {
+          rp: { name: 'PCSuite', id: window.location.hostname || 'localhost' },
+          user: { id: userId, name: 'pcsuite-user', displayName: 'PCSuite user' },
+          challenge,
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+          authenticatorSelection: { userVerification: 'preferred', residentKey: 'preferred' },
+          timeout: 60_000,
+          extensions: { hmacCreateSecret: true } as any,
+        },
+      })) as PublicKeyCredential | null;
+
+      if (!cred) throw new Error('No se obtuvo credencial.');
+      const ext = cred.getClientExtensionResults() as any;
+      if (!ext?.hmacCreateSecret) {
+        throw new Error('La llave no soporta hmac-secret (se requiere YubiKey 5+ o Windows Hello).');
+      }
+      const id = bufToBase64(cred.rawId);
+      localStorage.setItem('pcsuite.fido2.credentialId', id);
+      setCredentialId(id);
+      setNotice({ kind: 'success', text: 'Llave FIDO2 registrada correctamente.' });
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof Error ? e.message : 'Error al registrar.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deriveKey = async (): Promise<string | null> => {
+    if (!credentialId) return null;
+    const salt = new TextEncoder().encode('PCSuite FIDO2 file encryption v1');
+    const cred = (await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: base64ToBuf(credentialId) }],
+        userVerification: 'preferred',
+        timeout: 60_000,
+        extensions: { hmacGetSecret: { salt1: salt } } as any,
+      },
+    })) as PublicKeyCredential | null;
+    if (!cred) return null;
+    const ext = cred.getClientExtensionResults() as any;
+    const secret = ext?.hmacGetSecret?.results?.hmac;
+    if (!secret) return null;
+    return bufToBase64(secret);
+  };
+
+  const runAction = async () => {
+    if (!inputPath.trim() || busy || !credentialId) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const key = await deriveKey();
+      if (!key) throw new Error('No se pudo derivar la clave de la llave FIDO2.');
+      if (mode === 'encrypt') {
+        const result = await bridge.call<{ outputPath: string; sha256: string; kind?: string }>(
+          OperationIds.filesEncrypt,
+          { inputPath: inputPath.trim(), password: key, deleteOriginal: deleteOriginal || undefined },
+          5 * 60_000,
+        );
+        setNotice({ kind: 'success', text: `Encriptado con FIDO2 → ${result.outputPath}` });
+      } else {
+        const result = await bridge.call<{ outputPath: string; sha256: string; kind?: string }>(
+          OperationIds.filesDecrypt,
+          { inputPath: inputPath.trim(), password: key },
+          5 * 60_000,
+        );
+        setNotice({ kind: 'success', text: `Desencriptado con FIDO2 → ${result.outputPath}` });
+      }
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof BridgeError ? e.message : 'Error FIDO2.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const forget = () => {
+    localStorage.removeItem('pcsuite.fido2.credentialId');
+    setCredentialId(null);
+    setNotice({ kind: 'success', text: 'Llave olvidada. Registra de nuevo para usar.' });
+  };
+
+  return (
+    <section className="space-y-4 rounded-lg border p-4" style={{ background: 'var(--pcs-surface)', borderColor: 'var(--pcs-border)' }}>
+      <div className="flex items-center gap-2">
+        <KeyRound size={16} aria-hidden style={{ color: 'var(--pcs-accent)' }} />
+        <h2 className="text-sm font-semibold">FIDO2 (llave de hardware)</h2>
+      </div>
+
+      {supported === false && (
+        <p className="text-xs" style={{ color: 'var(--pcs-danger)' }}>
+          Este navegador/host no soporta WebAuthn. Usa un navegador moderno o Windows Hello.
+        </p>
+      )}
+
+      {supported && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            {!credentialId ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={register}
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-white"
+                style={{ background: 'var(--pcs-accent)' }}
+              >
+                {busy ? 'Registrando…' : 'Registrar llave FIDO2'}
+              </button>
+            ) : (
+              <>
+                <span className="text-xs" style={{ color: 'var(--pcs-success)' }}>
+                  Llave registrada: {credentialId.slice(0, 12)}…
+                </span>
+                <button
+                  type="button"
+                  onClick={forget}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium"
+                  style={{ background: 'var(--pcs-surface-2)', color: 'var(--pcs-text)' }}
+                >
+                  Olvidar llave
+                </button>
+              </>
+            )}
+          </div>
+
+          {credentialId && (
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode('encrypt')}
+                  className="rounded-md border px-3 py-1 text-xs font-medium"
+                  style={{
+                    borderColor: 'var(--pcs-border)',
+                    background: mode === 'encrypt' ? 'var(--pcs-accent)' : 'var(--pcs-surface)',
+                    color: mode === 'encrypt' ? '#fff' : 'var(--pcs-text)',
+                  }}
+                >
+                  Encriptar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('decrypt')}
+                  className="rounded-md border px-3 py-1 text-xs font-medium"
+                  style={{
+                    borderColor: 'var(--pcs-border)',
+                    background: mode === 'decrypt' ? 'var(--pcs-accent)' : 'var(--pcs-surface)',
+                    color: mode === 'decrypt' ? '#fff' : 'var(--pcs-text)',
+                  }}
+                >
+                  Desencriptar
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 rounded-md border px-2 py-1 text-sm"
+                  style={{ borderColor: 'var(--pcs-border)', background: 'var(--pcs-surface)', color: 'var(--pcs-text)' }}
+                  placeholder="Ruta del archivo"
+                  value={inputPath}
+                  onChange={(e) => setInputPath(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const result = await bridge.call<{ cancelled: boolean; paths: string[] }>(
+                        OperationIds.systemPickFiles,
+                        { multiselect: false },
+                        10 * 60_000,
+                      );
+                      if (!result.cancelled && result.paths.length > 0) setInputPath(result.paths[0]);
+                    } catch { /* best-effort */ }
+                  }}
+                  className="rounded-md border px-3 py-1 text-xs font-medium"
+                  style={{ borderColor: 'var(--pcs-border)', color: 'var(--pcs-text)', background: 'var(--pcs-surface)' }}
+                >
+                  Elegir archivo
+                </button>
+              </div>
+
+              {mode === 'encrypt' && (
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={deleteOriginal}
+                    onChange={(e) => setDeleteOriginal(e.target.checked)}
+                  />
+                  Borrar original tras encriptar
+                </label>
+              )}
+
+              <button
+                type="button"
+                disabled={busy || !inputPath.trim()}
+                onClick={runAction}
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-white"
+                style={{ background: 'var(--pcs-accent)' }}
+              >
+                {busy ? 'Procesando…' : mode === 'encrypt' ? 'Encriptar con FIDO2' : 'Desencriptar con FIDO2'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {notice && (
+        <div
+          className="rounded-md border px-3 py-2 text-xs"
+          style={{
+            borderColor: notice.kind === 'success' ? 'var(--pcs-success)' : 'var(--pcs-danger)',
+            color: notice.kind === 'success' ? 'var(--pcs-success)' : 'var(--pcs-danger)',
+          }}
+        >
+          {notice.text}
+        </div>
+      )}
+
+      <p className="text-xs" style={{ color: 'var(--pcs-text-muted)' }}>
+        Usa la extensión hmac-secret de FIDO2 para derivar una clave AES-256 a partir de la llave de hardware.
+        Requiere una llave compatible (YubiKey 5+, Windows Hello). La clave derivada se usa como contraseña del
+        cifrado AES-256 existente (.pcsuite-enc).
+      </p>
+    </section>
   );
 }

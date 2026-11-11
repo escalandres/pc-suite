@@ -212,6 +212,7 @@
       "shredError": "No se pudo borrar el archivo.",
       "shredStandard": "3 pasadas: aleatorio → aleatorio → ceros → borrar. Estándar DoD 5220.22-M simplificado.",
       "tabStego": "Esteganografía",
+      "tabFido2": "FIDO2",
       "stegoTitle": "Ocultar datos en una imagen",
       "stegoImage": "Imagen portadora",
       "stegoPayloadText": "Texto a ocultar",

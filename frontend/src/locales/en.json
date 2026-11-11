@@ -212,6 +212,7 @@
       "shredError": "Failed to shred the file.",
       "shredStandard": "3 passes: random → random → zeros → delete. Simplified DoD 5220.22-M standard.",
       "tabStego": "Steganography",
+      "tabFido2": "FIDO2",
       "stegoTitle": "Hide data in an image",
       "stegoImage": "Carrier image",
       "stegoPayloadText": "Text to hide",
