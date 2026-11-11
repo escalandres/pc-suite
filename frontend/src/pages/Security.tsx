@@ -122,7 +122,7 @@ function renderConnectionRow(connection: ActiveConnectionResult, index: number, 
       <td className="px-3 py-1.5">
         {connection.reviewNote ? (
           <span
-            className="rounded-full px-2 py-0.5 text-xs font-medium"
+            className="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
             style={{
               background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
               color: 'var(--pcs-warning)',
@@ -957,7 +957,7 @@ export function Security() {
                         <td className="px-3 py-1.5">
                           {entry.reviewNote ? (
                             <span
-                              className="rounded-full px-2 py-0.5 text-xs font-medium"
+                              className="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
                               style={{
                                 background: 'color-mix(in srgb, var(--pcs-warning) 16%, transparent)',
                                 color: 'var(--pcs-warning)',
